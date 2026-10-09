@@ -8,6 +8,7 @@ import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
 import RightPanel, { type PanelTab } from '../components/RightPanel'
 import { DropZone, ImportButton, useImport } from '../components/ImportDrop'
+import ApprovalsPanel from '../panels/ApprovalsPanel'
 import AskPanel from '../panels/AskPanel'
 import PermissionsPanel from '../panels/PermissionsPanel'
 import { FolderContext, noun, useFolder, type FolderCtx } from '../lib/folderContext'
@@ -154,7 +155,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
           ask: <AskPanel onShowApprovals={() => onPanel('approvals')} />,
           timeline: <Placeholder label="Timeline" />,
           permissions: <PermissionsPanel />,
-          approvals: <Placeholder label="Approvals" />,
+          approvals: <ApprovalsPanel />,
           audit: <Placeholder label="Audit log" />,
         }}
       />
