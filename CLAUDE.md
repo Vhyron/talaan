@@ -9,7 +9,7 @@ Talaan: a local-AI notes app for sensitive client files (HR investigation cases,
 - [docs/](docs/README.md): product brief, scope, permission model, architecture, models, demo script, rules. **These docs are the spec, so read the relevant one before implementing a feature.**
 - [demo-data/](demo-data/README.md): synthetic HR and clinic folders plus the 9 ground-truth questions used to test retrieval, sealing and prompt-injection defense. All data is fake.
 - [tickets/](tickets/README.md): work split into four tracks (A core & policy, B AI & retrieval, C frontend, D voice/demo/ship), with milestones and a status board. When working on a ticket, follow its "Done when" and update its status on the board.
-- `backend/`, `frontend/`: not created yet. Follow the proposed layout in [docs/04-architecture.md](docs/04-architecture.md).
+- `backend/`, `frontend/`: layout in [docs/04-architecture.md](docs/04-architecture.md#repo-layout). Every file access goes through `backend/app/policy/paths.py`; every model action goes through `backend/app/policy/engine.py`.
 
 ## Stack (locked)
 
@@ -18,7 +18,7 @@ Talaan: a local-AI notes app for sensitive client files (HR investigation cases,
 - Model runtime: **Ollama** via its OpenAI-compatible API, with a configurable base URL
 - Storage: plain Markdown/PDF files on disk, one SQLite `index.db` per folder (FTS + embeddings as blobs, similarity with numpy), plus one `app.db` for grants, audit log and conversations
 - PDF: PyMuPDF · Transcription: faster-whisper
-- Models: see [docs/05-models.md](docs/05-models.md). Default chat `gemma4:e4b`, embeddings `qwen3-embedding:0.6b` on every tier
+- Models: see [docs/05-models.md](docs/05-models.md). Default chat `gemma4:e4b`, embeddings `qwen3-embedding:0.6b` on every tier, until B1 pins the final tags
 
 ## Commands (target, once scaffolded)
 
@@ -39,7 +39,7 @@ These rules are the product's core claim and the judges will probe them. Don't w
 5. **Grants and audit log live in `app.db`, outside all folders.** The model has no tool that can touch them. Only the user approves actions, via the UI.
 6. **Audit everything** per folder: questions, answers, proposed actions, decisions, executions, using the fields in [docs/03-permissions-and-sealing.md](docs/03-permissions-and-sealing.md).
 7. **Answers cite sources** (file name + position). Contradictions are flagged for human review, never decided by the model.
-8. **Out-of-scope questions** (another client, or nothing relevant retrieved) get a refusal like "I can only see Case 2026-014." Don't guess.
+8. **Out-of-scope questions** (a name not in this folder, or nothing retrieved above the relevance threshold) get "I can only see {folder name}." built from the open folder, never hardcoded. Don't guess. Rules in [docs/03](docs/03-permissions-and-sealing.md#scope-refusal).
 
 ## Ollama gotchas
 

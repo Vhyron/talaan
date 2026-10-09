@@ -12,7 +12,7 @@
 | Policy engine | Every model action is checked against grants before anything happens |
 | Approval UI | Suggested edits and drafts show a preview; user approves or rejects |
 | Audit log | Every question, proposed action and decision is recorded per folder |
-| Scope refusal | Asking about another client returns "I can only see this case" |
+| Scope refusal | Asking about another client returns "I can only see {folder name}" (see 03-permissions-and-sealing.md) |
 | Works offline | The full demo runs with Wi-Fi off |
 
 ## P1 — strong add-ons

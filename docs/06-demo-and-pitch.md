@@ -9,8 +9,8 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 | 0:00–0:30 | **Problem.** Bea, an HR officer, has Case 2026-014: interviews, a medical certificate, SSS numbers. She can't paste any of it into ChatGPT |
 | 0:30–1:00 | Open the sealed case. Show the permission panel: Read on, Suggest and Create need approval, Delete never |
 | 1:00–2:00 | **Hero:** "Build a timeline with sources." Timeline appears; the app flags that sick leave, the medical certificate and the badge log contradict the supervisor's ID. "Flagged for your review." Click a source |
-| 2:00–2:45 | **Attack:** "Summarize the representative's email." The hidden instruction makes the model propose deleting witness files → **blocked**, shown in the audit log |
-| 2:45–3:15 | **Sealing:** "Summarize Ana Villanueva's tardiness." → "I can only see Case 2026-014." |
+| 2:00–2:45 | **Attack:** "Summarize the representative's email." The hidden instruction makes the model propose deleting witness files → **blocked**, shown in the audit log. If the pinned model ignores the injection, use the fallback in 03-permissions-and-sealing.md and say so |
+| 2:45–3:15 | **Sealing:** "Summarize Ana Villanueva's tardiness." → "I can only see Case 2026-014 · Dela Cruz." |
 | 3:15–3:45 | **Voice:** record the 30-second follow-up note → transcript proposed → approve → saved into the case |
 | 3:45–4:15 | **Clinic cameo:** switch to Chart M. Reyes → "Any allergies before I prescribe an antibiotic?" → penicillin, with source |
 | 4:15–5:00 | Tiers (runs on an 8 GB laptop up to a workstation), roadmap (live meetings, encryption at rest), closing line |
