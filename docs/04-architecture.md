@@ -105,16 +105,12 @@ talaan/
 | POST | `/folders/{id}/transcribe` | Audio → transcript draft (needs Create) |
 | GET | `/system/tier` | Detected hardware tier and recommended models |
 
-## Run locally (target README for judges)
+## Run locally
 
-Model tags below are the pre-bake-off defaults. **Replace them with the tags pinned in B1** (see 05-models.md) before submission.
+Full setup, configuration, tests, demo reset and troubleshooting: **[09-runbook.md](09-runbook.md)**. In short:
 
 ```bash
-# 1. models
-ollama pull gemma4:e4b
-ollama pull qwen3-embedding:0.6b
-# 2. backend
+ollama pull gemma4:e4b && ollama pull qwen3-embedding:0.6b   # tags pinned in B1
 cd backend && uv sync && uv run uvicorn app.main:app --reload
-# 3. frontend
-cd frontend && npm install && npm run dev
+cd frontend && npm ci && npm run dev
 ```

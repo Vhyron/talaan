@@ -18,6 +18,7 @@
 | [06-demo-and-pitch.md](06-demo-and-pitch.md) | 5-minute demo script, judge Q&A prep, submission checklist |
 | [07-rules-and-compliance.md](07-rules-and-compliance.md) | Hackathon rules that affect us and how we comply |
 | [08-open-questions.md](08-open-questions.md) | Decisions still needed before task breakdown |
+| [09-runbook.md](09-runbook.md) | Install, run, test, reset demo data, pre-demo checklist, troubleshooting |
 | [../demo-data/](../demo-data/README.md) | Synthetic HR and clinic case files plus ground-truth test questions |
 
 ## Locked decisions

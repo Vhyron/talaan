@@ -3,7 +3,7 @@
 React + Vite + TypeScript + Tailwind. Fonts are bundled (no CDNs) so the app works offline.
 
 ```bash
-npm install
+npm ci                 # clean install from package-lock.json
 npm run dev            # http://localhost:5173, proxies /api to the backend
 ```
 

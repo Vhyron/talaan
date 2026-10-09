@@ -20,12 +20,16 @@ Talaan: a local-AI notes app for sensitive client files (HR investigation cases,
 - PDF: PyMuPDF · Transcription: faster-whisper
 - Models: see [docs/05-models.md](docs/05-models.md). Default chat `gemma4:e4b`, embeddings `qwen3-embedding:0.6b` on every tier, until B1 pins the final tags
 
-## Commands (target, once scaffolded)
+## Commands
+
+Full runbook (setup, demo data, reset, troubleshooting): [docs/09-runbook.md](docs/09-runbook.md).
 
 ```bash
 ollama pull gemma4:e4b && ollama pull qwen3-embedding:0.6b
 cd backend && uv sync && uv run uvicorn app.main:app --reload   # API + /docs
-cd frontend && npm install && npm run dev
+cd frontend && npm ci && npm run dev
+cd backend && uv run pytest                                     # tests
+cd frontend && npx tsc -b && npm run lint && npm run build      # checks
 ```
 
 ## Non-negotiable rules
