@@ -103,9 +103,9 @@ class Grants(BaseModel):
     suggest_edits: Grant = Grant.NEEDS_APPROVAL
     create_drafts: Grant = Grant.NEEDS_APPROVAL
     delete: Grant = Grant.NEVER
-    # Whether the home-page chat (the one cross-Space reader) may search this Space. Off until the
-    # user turns it on, so a Space is sealed by default even from the home chat.
-    home_chat: bool = False
+    # Whether the home-page chat (the one cross-Space reader, read only) may search this Space.
+    # On for new Spaces; the user can turn it off to seal a Space even from the home chat.
+    home_chat: bool = True
 
 
 # --- Policy outcome --------------------------------------------------------

@@ -92,7 +92,7 @@ export default function PermissionsPanel() {
           <input
             type="checkbox"
             role="switch"
-            checked={grants?.home_chat ?? false}
+            checked={grants?.home_chat ?? true}
             disabled={!grants || saving === 'home_chat'}
             onChange={(e) => change('home_chat', e.target.checked)}
             className="h-4 w-4 accent-brand"

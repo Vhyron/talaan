@@ -3,7 +3,7 @@
 Unlike the folder chat (ask.py), this reads across client folders by design. It stays
 local (same Ollama models) and is deliberately limited:
 - read-only: no action call, so nothing in any file can trigger an edit, draft or delete;
-- only Spaces the user included in the home chat (Grants.home_chat, off by default) are
+- only Spaces the user included in the home chat (Grants.home_chat, on for new Spaces) are
   searched, and each one's Read grant still applies: a Space set to Never is not searched;
 - every passage is tagged with its folder, and the model must say which client each fact
   belongs to;

@@ -10,14 +10,14 @@ from app.main import app
 c = TestClient(app)
 F = "Lakbay-Logistics-Inc"
 DEFAULTS = {"read": "allow", "suggest_edits": "needs_approval", "create_drafts": "needs_approval", "delete": "never",
-            "home_chat": False}
+            "home_chat": True}
 
 
 def test_home_chat_toggle_is_logged():
-    assert c.put(f"/folders/{F}/grants", json={**DEFAULTS, "home_chat": True}).json()["home_chat"] is True
-    assert c.get(f"/folders/{F}/grants").json()["home_chat"] is True
+    assert c.put(f"/folders/{F}/grants", json={**DEFAULTS, "home_chat": False}).json()["home_chat"] is False
+    assert c.get(f"/folders/{F}/grants").json()["home_chat"] is False
     [ev] = [e for e in c.get(f"/folders/{F}/audit").json() if e["action"] == "home_chat"]
-    assert (ev["actor"], ev["event"], ev["decision"]) == ("user", "grant_change", "on")
+    assert (ev["actor"], ev["event"], ev["decision"]) == ("user", "grant_change", "off")
 
 
 def test_default_grants():
@@ -91,7 +91,7 @@ def test_stored_read_needs_approval_counts_as_never():
 
 def test_new_space_never_inherits_a_trashed_spaces_grants(talaan_home):
     old = c.post("/folders", json={"name": "Acme", "mode": "case"}).json()
-    c.put(f"/folders/{old['id']}/grants", json={**DEFAULTS, "delete": "allow", "home_chat": True})
+    c.put(f"/folders/{old['id']}/grants", json={**DEFAULTS, "delete": "allow", "home_chat": False})
     c.delete(f"/folders/{old['id']}")
     new = c.post("/folders", json={"name": "Acme", "mode": "case"}).json()
     assert new["id"] != old["id"] and new["name"] == "Acme"
