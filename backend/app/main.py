@@ -14,6 +14,7 @@ from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
 from app import folders, index
+from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
 from app.llm import selection, trace
@@ -103,9 +104,10 @@ def ask(folder_id: str, body: AskRequest) -> AskResponse:
 
 
 @app.post("/folders/{folder_id}/timeline")
-def timeline(folder_id: str) -> TimelineResponse:
-    _folder(folder_id)
-    return fx.TIMELINE
+def timeline(folder_id: str, refresh: bool = False) -> TimelineResponse:
+    """Dated events and flags for human review, every one with sources. Cached per index
+    version and chat model; `refresh=true` rebuilds anyway."""
+    return case_timeline.build(_folder(folder_id), refresh)
 
 
 # --- Grants, proposals, audit (A3–A5) -----------------------------------------

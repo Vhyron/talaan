@@ -18,7 +18,6 @@ def test_every_route_responds():
     assert c.get(f"/folders/{F}/files/2026-10-02_open-items.md").status_code == 200
     assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"# hi")}).status_code == 200
     assert c.post(f"/folders/{F}/index").status_code == 200
-    assert c.post(f"/folders/{F}/timeline").json()["flags"]
     assert c.get(f"/folders/{F}/grants").json()["delete"] == "never"
     assert c.get(f"/folders/{F}/proposals").status_code == 200
     assert c.get(f"/folders/{F}/audit").status_code == 200

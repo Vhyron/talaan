@@ -248,6 +248,15 @@ def retrieve(folder_id: str, query: str, k: int | None = 8) -> list[Hit]:
     return hits
 
 
+def all_chunks(folder_id: str) -> list[Hit]:
+    """Every chunk of this folder in reading order (file, page, line), for whole-folder tasks
+    like the B5 timeline. Unranked: similarity None, score 0."""
+    with closing(_db(folder_id)) as db:
+        rows = db.execute("SELECT path, start_line, end_line, text, page FROM chunks"
+                          " ORDER BY path, COALESCE(page, 0), start_line, id").fetchall()
+    return [Hit(path, start, end, text, page, None, False, 0.0) for path, start, end, text, page in rows]
+
+
 def search_text(folder_id: str, query: str, k: int = 8) -> str:
     """`search` action result: the best passages, each tagged with file and lines."""
     return "\n\n".join(f"[{h.path}:{h.start_line}-{h.end_line}]\n{h.text}" for h in retrieve(folder_id, query, k))
