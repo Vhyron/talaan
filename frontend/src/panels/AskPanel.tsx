@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, SquarePen } from 'lucide-react'
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import ChatMarkdown from '../components/ChatMarkdown'
 import Mascot from '../components/Mascot'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
@@ -82,13 +83,12 @@ function historyOf(messages: Msg[]): Turn[] {
   return turns.slice(-HISTORY_TURNS)
 }
 
-/** Turn "… [S1] … [S2]" into text with inline source chips. */
-function withChips(answer: string, sources: Source[]): ReactNode[] {
-  return answer.split(/(\[S\d+\])/g).map((part, i) => {
-    const m = part.match(/^\[S(\d+)\]$/)
-    const src = m && sources[Number(m[1]) - 1]
-    return src ? <SourceChip key={i} source={src} n={Number(m[1])} /> : part
-  })
+/** "[S1]" in an answer becomes a clickable source chip. */
+function chipFor(sources: Source[]) {
+  return (n: number) => {
+    const src = sources[n - 1]
+    return src && <SourceChip source={src} n={n} />
+  }
 }
 
 export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
@@ -256,10 +256,10 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             )}
             {messages.map((m, i) => {
               if (m.role === 'user') {
-                return <div key={i} className="ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 text-white">{m.text}</div>
+                return <div key={i} className="ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 leading-6 break-words whitespace-pre-wrap text-white">{m.text}</div>
               }
               if (m.role === 'error') {
-                return <div key={i} className="rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 text-warn-text">{m.text}</div>
+                return <div key={i} className="rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 break-words whitespace-pre-wrap text-warn-text">{m.text}</div>
               }
               return <Answer key={i} res={m.res} proposalStatus={m.proposalStatus} onShowApprovals={onShowApprovals} />
             })}
@@ -299,7 +299,7 @@ function LiveAnswer({ live, elapsed }: { live: Live; elapsed: number }) {
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <Loader2 size={12} className="animate-spin" /> {answer ? 'Writing the answer' : live.status}… {elapsed}s
       </p>
-      {answer && <p className="leading-6">{answer}<span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-text-bottom" /></p>}
+      {answer && <ChatMarkdown text={answer} typing />}
     </div>
   )
 }
@@ -346,7 +346,7 @@ function Answer({ res, proposalStatus, onShowApprovals }: {
     return (
       <div className="flex gap-2 rounded-xl border border-line bg-white px-3 py-2 text-muted">
         <Lock size={15} className="mt-0.5 shrink-0" />
-        <span className="font-medium">{res.answer}</span>
+        <span className="font-medium whitespace-pre-wrap">{res.answer}</span>
       </div>
     )
   }
@@ -354,7 +354,7 @@ function Answer({ res, proposalStatus, onShowApprovals }: {
   const decided = o?.status === 'pending' && proposalStatus ? DECIDED[proposalStatus] : undefined
   return (
     <div className="space-y-2 rounded-xl bg-white px-3 py-2">
-      <p className="leading-6">{withChips(res.answer, res.sources)}</p>
+      <ChatMarkdown text={res.answer} cite={chipFor(res.sources)} />
 
       {o?.status === 'blocked' && (
         <div className="flex gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">

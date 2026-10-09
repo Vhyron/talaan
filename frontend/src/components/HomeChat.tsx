@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowDown, Clock, Library, MessageSquare, Minimize2, RotateCcw, SendHorizontal, WifiOff } from 'lucide-react'
 import type { Folder, Source } from '../api/types'
@@ -8,6 +8,7 @@ import ChatHistory from '../panels/ChatHistory'
 import { fileLabel } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import Mascot from './Mascot'
+import ChatMarkdown from './ChatMarkdown'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 
 /** A citation from the home chat: names its folder and opens the file there with the lines highlighted. */
@@ -28,12 +29,11 @@ function GlobalSourceChip({ source, n, folders }: { source: Source; n: number; f
   )
 }
 
-function withChips(answer: string, sources: Source[], folders: Folder[]): ReactNode[] {
-  return answer.split(/(\[S\d+\])/g).map((part, i) => {
-    const m = part.match(/^\[S(\d+)\]$/)
-    const src = m && sources[Number(m[1]) - 1]
-    return src ? <GlobalSourceChip key={i} source={src} n={Number(m[1])} folders={folders} /> : part
-  })
+function chipFor(sources: Source[], folders: Folder[]) {
+  return (n: number) => {
+    const src = sources[n - 1]
+    return src && <GlobalSourceChip source={src} n={n} folders={folders} />
+  }
 }
 
 function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
@@ -200,12 +200,12 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
           <div ref={list} className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-3 text-sm" aria-live="polite">
             {messages.map((m, i) =>
               m.role === 'user' ? (
-                <div key={i} className="chat-in ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 break-words text-white">{m.text}</div>
+                <div key={i} className="chat-in ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 leading-6 break-words whitespace-pre-wrap text-white">{m.text}</div>
               ) : m.role === 'error' ? (
-                <div key={i} className="chat-in rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 text-warn-text">{m.text}</div>
+                <div key={i} className="chat-in rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 break-words whitespace-pre-wrap text-warn-text">{m.text}</div>
               ) : (
-                <div key={i} className={`chat-in rounded-xl bg-white px-3 py-2 leading-6 break-words ${m.res.refused ? 'text-muted' : ''}`}>
-                  {withChips(m.res.answer, m.res.sources, folders)}
+                <div key={i} className={`chat-in rounded-xl bg-white px-3 py-2 ${m.res.refused ? 'text-muted' : ''}`}>
+                  <ChatMarkdown text={m.res.answer} cite={chipFor(m.res.sources, folders)} />
                 </div>
               ),
             )}
