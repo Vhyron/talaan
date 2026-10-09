@@ -44,7 +44,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | review |
 | [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | review |
 | [C4](C4-permission-panel.md) | Permission panel | C | P0 | 1h | C2 | review |
-| [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | todo |
+| [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | review |
 | [C6](C6-audit-log-view.md) | Audit log view and export | C | P0 | 1h | C2 | todo |
 | [C7](C7-timeline-view.md) | Timeline view | C | P0 | 1.5h | C2 | todo |
 | [D1](D1-transcription-backend.md) | Transcription backend | D | P1 | 2h | A1, A4 | todo |
