@@ -46,8 +46,9 @@ function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
 }) {
   const [question, setQuestion] = useState('')
   const input = useRef<HTMLTextAreaElement>(null)
-  const send = () => {
-    const q = question.trim()
+  // `spoken`: a voice question, added to anything already typed.
+  const send = (spoken?: string) => {
+    const q = (spoken ? `${question.trimEnd()} ${spoken}` : question).trim()
     if (!q || busy) return
     setQuestion('')
     onAsk(q)
@@ -65,8 +66,8 @@ function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
         placeholder={placeholder}
         className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none"
       />
-      <HoldToTalk onText={(t) => { setQuestion((q) => (q.trim() ? `${q.trimEnd()} ${t}` : t)); input.current?.focus() }} />
-      <button onClick={send} disabled={busy || !question.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+      <HoldToTalk onSend={(t) => (busy ? setQuestion((q) => `${q.trimEnd()} ${t}`.trim()) : send(t))} />
+      <button onClick={() => send()} disabled={busy || !question.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
         <SendHorizontal size={16} />
       </button>
     </div>

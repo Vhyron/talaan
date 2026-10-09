@@ -132,6 +132,12 @@ def test_dictate_without_folder(fake_whisper):
     assert c.post("/voice/dictate", files={"audio": ("q.webm", b"a")}, data={"folder_id": "nope"}).status_code == 404
 
 
+def test_dictate_wake_biases_toward_tala(fake_whisper):
+    c.post("/voice/dictate", files={"audio": ("wake.wav", b"audio")}, data={"folder_id": F, "wake": "true"})
+    [(_, hotwords)] = fake_whisper
+    assert hotwords.startswith("Hey Tala, Tala Tala") and "Bea Lim" in hotwords
+
+
 def test_transcription_never_downloads(monkeypatch):
     """Normal use loads from the local cache only; only --download may fetch."""
     import faster_whisper

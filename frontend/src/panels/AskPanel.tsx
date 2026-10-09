@@ -92,7 +92,11 @@ function withChips(answer: string, sources: Source[]): ReactNode[] {
   })
 }
 
-export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
+export default function AskPanel({ onShowApprovals, onShow }: {
+  onShowApprovals: () => void
+  /** Open the Ask card: a voice question can arrive while it's closed. */
+  onShow?: () => void
+}) {
   const { folder, currentPath, dir, openDir, version, bump } = useFolder()
   const index = useIndexStatus()
   const scope = chatScope(currentPath, dir)
@@ -149,8 +153,9 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     }).catch(() => {})
   }, [folder.id, sessionId, waiting, version, update])
 
-  async function send() {
-    const q = question.trim()
+  // `spoken`: a voice question, added to anything already typed.
+  async function send(spoken?: string) {
+    const q = (spoken ? `${question.trimEnd()} ${spoken}` : question).trim()
     if (!q || busy || index.state === 'indexing') return
     const history = historyOf(messages)
     setQuestion('')
@@ -286,9 +291,13 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
               />
               <HoldToTalk
                 folderId={folder.id}
-                onText={(t) => { setQuestion((q) => (q.trim() ? `${q.trimEnd()} ${t}` : t)); input.current?.focus() }}
+                onSend={(t) => {
+                  onShow?.() // "Hey Tala" may be heard while the Ask card is closed
+                  if (busy || index.state === 'indexing') setQuestion((q) => `${q.trimEnd()} ${t}`.trim()) // ask when ready
+                  else void send(t)
+                }}
               />
-              <button onClick={send} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+              <button onClick={() => void send()} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
                 <SendHorizontal size={16} />
               </button>
             </div>
