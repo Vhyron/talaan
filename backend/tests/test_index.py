@@ -191,3 +191,16 @@ def test_live_retrieval_finds_expected_sources(folder, question, expected, withi
     index.build_index(folder)
     ranked = [h.path for h in index.retrieve(folder, question)]
     assert expected <= set(ranked[:within]), ranked
+
+
+def test_vectors_of_another_size_are_skipped_then_re_embedded(talaan_home):
+    # A stale index (another embedder wrote 128-dim vectors) must not crash retrieval.
+    index.build_index(R)
+    with _db(talaan_home, R) as db:
+        db.execute("UPDATE chunks SET embedding = zeroblob(512)")
+    hits = index.retrieve(R, "penicillin allergy")
+    assert hits and all(h.similarity is None for h in hits)  # keyword search still answers
+    with _db(talaan_home, R) as db:
+        assert db.execute("SELECT COUNT(*) FROM chunks WHERE embedding IS NOT NULL").fetchone()[0] == 0
+    index.build_index(R)
+    assert any(h.similarity is not None for h in index.retrieve(R, "penicillin allergy"))

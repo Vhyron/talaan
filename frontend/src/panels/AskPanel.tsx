@@ -7,6 +7,7 @@ import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
 import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
+import { movedPath, onRenamed } from '../lib/renamed'
 import ChatHistory from './ChatHistory'
 
 type Msg =
@@ -35,6 +36,16 @@ function useFolderChat(folderId: string) {
     chatByFolder.set(folderId, next)
     if (mounted.current) setChat(next)
   }, [folderId])
+  // Sources in the chat follow a file rename (the server already updated the saved chats).
+  useEffect(() => onRenamed(({ folderId: fid, from, to }) => {
+    if (fid !== folderId) return
+    update((c) => ({
+      ...c,
+      messages: c.messages.map((m) => m.role !== 'assistant' ? m : {
+        ...m, res: { ...m.res, sources: m.res.sources.map((src) => ({ ...src, path: movedPath(src.path, from, to) })) },
+      }),
+    }))
+  }), [folderId, update])
   return [chat, update] as const
 }
 

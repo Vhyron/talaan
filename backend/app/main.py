@@ -17,8 +17,7 @@ from app import config
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
-from app import chats
-from app import folders, index
+from app import chats, folders, global_ask, index, rename, trash
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
@@ -26,6 +25,7 @@ from app.llm import client, selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
+    FolderRename, GlobalAskRequest, PathRef, PathRename, TrashItem,
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
@@ -120,6 +120,50 @@ def list_dirs(folder_id: str) -> list[str]:
     return folders.list_dirs(folder_id)
 
 
+@app.patch("/folders/{folder_id}")
+def rename_folder(folder_id: str, body: FolderRename) -> Folder:
+    """Change the folder's display name. Its id (and so its grants, audit and chat) stays."""
+    return rename.rename_folder(folder_id, body.name)
+
+
+@app.post("/folders/{folder_id}/rename")
+async def rename_path(folder_id: str, body: PathRename) -> dict[str, str]:
+    """Rename a file or subfolder (user only; the model has no rename action). Re-indexes."""
+    new = await run_in_threadpool(rename.rename_path, folder_id, body.path, body.name)
+    return {"path": new}
+
+
+# --- Trash (user only; the model's own `delete` stays a proposal under the Delete grant) ----
+
+
+@app.delete("/folders/{folder_id}")
+def trash_folder(folder_id: str) -> TrashItem:
+    """Move a whole folder to the Trash. Its grants, audit log and chats stay in app.db."""
+    return trash.trash_folder(folder_id)
+
+
+@app.post("/folders/{folder_id}/trash")
+async def trash_path(folder_id: str, body: PathRef) -> TrashItem:
+    """Move a file or subfolder to the Trash (re-indexes the folder)."""
+    return await run_in_threadpool(trash.trash_path, folder_id, body.path)
+
+
+@app.get("/trash")
+def list_trash() -> list[TrashItem]:
+    return trash.list_items()
+
+
+@app.post("/trash/{tid}/restore")
+async def restore_trash(tid: str) -> TrashItem:
+    return await run_in_threadpool(trash.restore, tid)
+
+
+@app.delete("/trash/{tid}", status_code=204)
+def purge_trash(tid: str) -> None:
+    """Delete for good. The audit log keeps the record."""
+    trash.purge(tid)
+
+
 @app.post("/folders/{folder_id}/dirs", status_code=201)
 def create_dir(folder_id: str, body: DirCreate) -> dict:
     return {"path": folders.create_dir(folder_id, body.path)}
@@ -148,6 +192,27 @@ def build_index(folder_id: str) -> IndexStatus:
     still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
     return IndexStatus(**index.build_index(folder_id))
+
+
+@app.post("/ask")
+def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
+    """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder.
+    Saved as one thread: `session_id` continues it, none starts a new one (replacing the old)."""
+    if body.session_id:
+        chats.check(chats.ALL, body.session_id)
+    else:
+        chats.clear_home()
+    res = global_ask.ask_all(body.question, body.history)
+    res.session_id = body.session_id or chats.new_id()
+    chats.save_turn(chats.ALL, res.session_id, body.question, res)
+    return res
+
+
+@app.get("/chat")
+def home_chat() -> ChatSession | None:
+    """The home-page chat thread, saved so it survives navigation and restarts."""
+    latest = chats.list_sessions(chats.ALL)
+    return chats.get_session(chats.ALL, latest[0].id) if latest else None
 
 
 @app.post("/folders/{folder_id}/ask")
