@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, Trash2, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
@@ -158,7 +158,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
                 const active = f.id === activeId
                 return (
                   <div key={f.id}>
-                    <Row depth={0} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
+                    <Row depth={0} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><MoveToTrash kind="folder" folderId={f.id} path="" name={f.name} active={active} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
                       <button
                         onClick={() => tree.toggle(f.id)}
                         className="grid h-6 w-5 shrink-0 place-items-center rounded hover:bg-panel"
@@ -187,6 +187,13 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
         })}
       </nav>
       <div className="shrink-0 border-t border-line p-3">
+        <button
+          onClick={() => { nav.setOpen(false); navigate('/trash') }}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
+          title="Deleted files and folders: restore or delete for good"
+        >
+          <Trash2 size={15} /> Trash
+        </button>
         <button
           onClick={() => { nav.setOpen(false); importDialog.open() }}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
@@ -265,7 +272,7 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         const open = !tree.collapsedDirs.has(key)
         return (
           <div key={d.path}>
-            <Row depth={depth} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
+            <Row depth={depth} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><MoveToTrash kind="subfolder" folderId={folderId} path={d.path} name={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
               <button
                 onClick={() => tree.toggleDir(key)}
                 className="flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug"
@@ -286,7 +293,7 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         )
       })}
       {node.files.map((path) => (
-        <Row key={path} depth={depth} selected={path === currentPath} actions={<Rename kind="file" folderId={folderId} path={path} current={path.split('/').pop() ?? path} />}>
+        <Row key={path} depth={depth} selected={path === currentPath} actions={<><Rename kind="file" folderId={folderId} path={path} current={path.split('/').pop() ?? path} /><MoveToTrash kind="file" folderId={folderId} path={path} name={fileLabel(path)} /></>}>
           <button
             onClick={() => onOpenFile(path)}
             title={path}
@@ -491,4 +498,68 @@ function Rename({ kind, folderId, path, current }: { kind: 'folder' | 'subfolder
     if (!pointerIsDown) return cancel()
     document.addEventListener('pointerup', () => setTimeout(cancel, 0), { once: true })
   }
+}
+
+/**
+ * Move a folder, subfolder or file to the Trash, after an inline confirm. It can be restored
+ * from the Trash page. Only the user can do this; the AI's own delete stays a proposal
+ * governed by the Delete permission.
+ */
+function MoveToTrash({ kind, folderId, path, name, active }: {
+  kind: 'folder' | 'subfolder' | 'file'; folderId: string; path: string; name: string; active?: boolean
+}) {
+  const tree = useTree()
+  const navigate = useNavigate()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function trash() {
+    setBusy(true)
+    try {
+      if (kind === 'folder') await api.trashFolder(folderId)
+      else await api.trashPath(folderId, path)
+      setConfirming(false)
+      tree.changed()
+      if (kind === 'folder' && active) navigate('/')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => { setConfirming(true); setError(null) }}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-red-700 lg:hidden lg:group-hover:grid lg:group-focus-within:grid"
+        aria-label={`Move ${name} to Trash`}
+        title={`Delete ${kind}`}
+      >
+        <Trash2 size={13} />
+      </button>
+      {confirming && (
+        <div
+          className="basis-full px-2 pb-1.5"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setConfirming(false) } }}
+        >
+          <div role="alertdialog" aria-label={`Move ${name} to Trash?`} className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+            <p>
+              Move <span className="font-semibold break-words">{name}</span> to Trash?
+              {kind === 'folder' ? ' The whole folder goes; its permissions, audit log and chats are kept.' : ''} You can restore it from Trash.
+            </p>
+            {error && <p role="alert" className="mt-1 text-red-700">{error}</p>}
+            <div className="mt-1.5 flex gap-1">
+              <button autoFocus onClick={trash} disabled={busy} className="rounded bg-red-700 px-2 py-1 font-semibold text-white disabled:opacity-50">
+                {busy ? 'Moving…' : 'Move to Trash'}
+              </button>
+              <button onClick={() => setConfirming(false)} className="rounded px-2 py-1 hover:bg-white">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
 }

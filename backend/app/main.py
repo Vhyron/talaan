@@ -17,7 +17,7 @@ from app import config
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
-from app import chats, folders, global_ask, index, rename
+from app import chats, folders, global_ask, index, rename, trash
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
@@ -25,7 +25,7 @@ from app.llm import client, selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    FolderRename, GlobalAskRequest, PathRename,
+    FolderRename, GlobalAskRequest, PathRef, PathRename, TrashItem,
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
@@ -123,6 +123,37 @@ async def rename_path(folder_id: str, body: PathRename) -> dict[str, str]:
     """Rename a file or subfolder (user only; the model has no rename action). Re-indexes."""
     new = await run_in_threadpool(rename.rename_path, folder_id, body.path, body.name)
     return {"path": new}
+
+
+# --- Trash (user only; the model's own `delete` stays a proposal under the Delete grant) ----
+
+
+@app.delete("/folders/{folder_id}")
+def trash_folder(folder_id: str) -> TrashItem:
+    """Move a whole folder to the Trash. Its grants, audit log and chats stay in app.db."""
+    return trash.trash_folder(folder_id)
+
+
+@app.post("/folders/{folder_id}/trash")
+async def trash_path(folder_id: str, body: PathRef) -> TrashItem:
+    """Move a file or subfolder to the Trash (re-indexes the folder)."""
+    return await run_in_threadpool(trash.trash_path, folder_id, body.path)
+
+
+@app.get("/trash")
+def list_trash() -> list[TrashItem]:
+    return trash.list_items()
+
+
+@app.post("/trash/{tid}/restore")
+async def restore_trash(tid: str) -> TrashItem:
+    return await run_in_threadpool(trash.restore, tid)
+
+
+@app.delete("/trash/{tid}", status_code=204)
+def purge_trash(tid: str) -> None:
+    """Delete for good. The audit log keeps the record."""
+    trash.purge(tid)
 
 
 @app.post("/folders/{folder_id}/dirs", status_code=201)

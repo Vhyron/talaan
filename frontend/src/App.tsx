@@ -5,6 +5,7 @@ import type { Folder } from './api/types'
 import TopBar from './components/TopBar'
 import FoldersPage from './pages/FoldersPage'
 import FolderPage from './pages/FolderPage'
+import TrashPage from './pages/TrashPage'
 import SettingsPage from './pages/SettingsPage'
 import { NavContext } from './lib/nav'
 import { TreeContext, type TreeCtx } from './lib/tree'
@@ -69,6 +70,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={() => { refresh(); changed() }} />} />
           <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
+          <Route path="/trash" element={<TrashPage folders={folders} error={error} />} />
           <Route path="/settings" element={<SettingsPage onModelChanged={() => setModelVersion((v) => v + 1)} />} />
         </Routes>
       </div>

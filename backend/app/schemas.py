@@ -159,6 +159,22 @@ class AskResponse(BaseModel):
     session_id: str | None = None  # the saved chat this turn belongs to
 
 
+class TrashItem(BaseModel):
+    """Something the user moved to the Trash: a file, a subfolder or a whole folder."""
+
+    id: str
+    folder_id: str
+    folder_name: str
+    kind: Literal["file", "dir", "folder"]
+    path: str  # where it was, folder-relative ("" for a whole folder)
+    name: str
+    deleted_at: datetime
+
+
+class PathRef(BaseModel):
+    path: str = Field(min_length=1)
+
+
 class FolderRename(BaseModel):
     name: str = Field(min_length=1, max_length=120)
 
@@ -203,7 +219,7 @@ class Proposal(BaseModel):
 
 AuditEventType = Literal[
     "question", "answer", "proposed_action", "decision", "executed", "grant_change", "session_renamed", "session_deleted",
-    "rename",
+    "rename", "deleted", "restored", "purged",
 ]
 
 

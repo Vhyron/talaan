@@ -73,7 +73,7 @@ export type Proposal = {
 
 export type AuditEventType =
   | 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change'
-  | 'session_renamed' | 'session_deleted' | 'rename'
+  | 'session_renamed' | 'session_deleted' | 'rename' | 'deleted' | 'restored' | 'purged'
 export type AuditEvent = {
   id: number
   timestamp: string
@@ -164,4 +164,15 @@ export type VoiceStatus = {
   problem: 'library' | 'model' | null
   message: string | null
   fix: string | null
+}
+
+/** Something the user moved to the Trash. `path` is where it was ("" for a whole folder). */
+export type TrashItem = {
+  id: string
+  folder_id: string
+  folder_name: string
+  kind: 'file' | 'dir' | 'folder'
+  path: string
+  name: string
+  deleted_at: string
 }

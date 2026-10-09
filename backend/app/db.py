@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages (session_id, id);
+CREATE TABLE IF NOT EXISTS trash (
+    id          TEXT PRIMARY KEY,
+    folder_id   TEXT NOT NULL,
+    folder_name TEXT NOT NULL,
+    kind        TEXT NOT NULL CHECK (kind IN ('file', 'dir', 'folder')),
+    path        TEXT NOT NULL,  -- where it was, folder-relative ('' for a whole folder)
+    name        TEXT NOT NULL,
+    deleted_at  TEXT NOT NULL
+);
 DROP TABLE IF EXISTS conversations;  -- the old single-thread table, never written
 """
 

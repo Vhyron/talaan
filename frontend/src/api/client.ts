@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, Turn,
+  AppSettings, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, TrashItem, Turn,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -53,6 +53,12 @@ export const api = {
   renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
   /** Rename a file or subfolder in place; `name` is the new last segment. */
   renamePath: (id: string, path: string, name: string) => send<{ path: string }>('POST', `${f(id)}/rename`, { path, name }),
+  /** Trash (user only): move a folder, file or subfolder there; restore or delete for good. */
+  trashFolder: (id: string) => send<TrashItem>('DELETE', f(id)),
+  trashPath: (id: string, path: string) => send<TrashItem>('POST', `${f(id)}/trash`, { path }),
+  trash: () => json<TrashItem[]>('/trash'),
+  restore: (tid: string) => send<TrashItem>('POST', `/trash/${encodeURIComponent(tid)}/restore`),
+  purge: (tid: string) => req(`/trash/${encodeURIComponent(tid)}`, { method: 'DELETE' }).then(() => undefined),
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
