@@ -103,3 +103,33 @@ def test_history_is_passed_as_context(model):
     history = [{"role": "user", "content": "Who is allergic to penicillin?"}, {"role": "assistant", "content": "M Reyes [S1]."}]
     ask("What else is in that chart?", history=history)
     assert "Earlier in this conversation" in model.calls[0][1]["content"]
+
+
+# --- saved home thread ------------------------------------------------------
+
+
+def test_home_thread_is_saved_and_continued(model):
+    model.reply = {"answer": "x", "refused": False}
+    assert c.get("/chat").json() is None
+    sid = ask("first")["session_id"]
+    assert sid and ask("second", session_id=sid)["session_id"] == sid
+    thread = c.get("/chat").json()
+    assert thread["id"] == sid and [m["content"] for m in thread["messages"] if m["role"] == "user"] == ["first", "second"]
+
+
+def test_new_home_thread_replaces_the_old_one_but_audit_stays(model):
+    model.reply = {"answer": "Penicillin [S1].", "refused": False}
+    old = ask("penicillin allergy")["session_id"]
+    new = ask("badge entry")["session_id"]
+    assert new != old and c.get("/chat").json()["id"] == new
+    assert any(e["reason"] == "Home chat (all folders): penicillin allergy" for e in c.get(f"/folders/{CHART}/audit").json())
+
+
+def test_home_thread_is_not_a_folder_chat(model):
+    model.reply = {"answer": "x", "refused": False}
+    sid = ask("first")["session_id"]
+    for f in (CASE, CHART):
+        assert c.get(f"/folders/{f}/chats").json() == []
+        assert c.get(f"/folders/{f}/chats/{sid}").status_code == 404
+    assert c.get("/folders/*/chats").status_code == 404
+    assert c.post("/ask", json={"question": "x", "session_id": "nope"}).status_code == 404

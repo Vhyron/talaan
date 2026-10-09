@@ -1,6 +1,5 @@
 import type {
-  ChatMessage, Turn,
-  AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  AppSettings, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, Turn,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -58,13 +57,18 @@ export const api = {
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
   /** Home-page chat across every folder the AI may read (read-only). */
-  askAll: (question: string, history: Turn[] = []) =>
-    send<AskResponse>('POST', '/ask', { question, history }),
-  /** Saved chat session: a folder's, or the home chat's when `id` is null. */
-  chat: (id: string | null) => json<ChatMessage[]>(id ? `${f(id)}/chat` : '/chat'),
-  clearChat: (id: string | null) => req(id ? `${f(id)}/chat` : '/chat', { method: 'DELETE' }).then(() => undefined),
+  /** Home chat across all folders. `session_id` continues the saved thread; null starts a new one. */
+  askAll: (question: string, history: Turn[] = [], session_id: string | null = null) =>
+    send<AskResponse>('POST', '/ask', { question, history, session_id }),
+  /** The saved home chat thread, if any. */
+  homeChat: () => json<ChatSession | null>('/chat'),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
+  chats: (id: string, q = '') => json<ChatSessionSummary[]>(`${f(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+  chat: (id: string, sid: string) => json<ChatSession>(`${f(id)}/chats/${encodeURIComponent(sid)}`),
+  renameChat: (id: string, sid: string, title: string) =>
+    send<ChatSessionSummary>('PATCH', `${f(id)}/chats/${encodeURIComponent(sid)}`, { title }),
+  deleteChat: (id: string, sid: string) => req(`${f(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),

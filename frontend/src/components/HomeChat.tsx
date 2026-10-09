@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Library, MessageSquare, RotateCcw, SendHorizontal, WifiOff, X } from 'lucide-react'
-import { api } from '../api/client'
 import type { Folder, Source } from '../api/types'
-import { askIn, clearSession, HOME_CHAT_OPEN, useChatSession } from '../lib/chatSession'
+import { askHome, HOME_CHAT_OPEN, newHomeChat, useHomeChat } from '../lib/chatSession'
 import { fileLabel } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
@@ -68,13 +67,13 @@ function QuestionBox({ busy, rows, autoFocus, onAsk }: { busy: boolean; rows: nu
  * session is saved, so it is still there after opening a source and coming back.
  */
 export default function HomeChat({ folders }: { folders: Folder[] }) {
-  const { messages, busy, since } = useChatSession(null)
+  const { messages, busy, since } = useHomeChat()
   const [open, setOpen] = usePersistentFlag(HOME_CHAT_OPEN, false)
   const elapsed = useElapsed(busy, since)
   const end = useRef<HTMLDivElement>(null)
   const ask = (q: string) => {
     setOpen(true)
-    askIn(null, q, (history) => api.askAll(q, history))
+    askHome(q)
   }
 
   useEffect(() => {
@@ -121,7 +120,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
           <header className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line bg-white pr-1 pl-3">
             <Library size={13} className="text-brand-text" />
             <span className="mr-auto truncate text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">All folders</span>
-            <button onClick={() => clearSession(null)} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted hover:bg-panel hover:text-ink disabled:opacity-40" title="Start a new chat (the audit log keeps its record)">
+            <button onClick={newHomeChat} disabled={busy} className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text-muted hover:bg-panel hover:text-ink disabled:opacity-40" title="Start a new chat (replaces this one; the audit log keeps its record)">
               <RotateCcw size={12} /> New chat
             </button>
             <button onClick={() => setOpen(false)} className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink" aria-label="Close all-folders chat">

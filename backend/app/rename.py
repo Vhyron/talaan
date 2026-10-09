@@ -12,7 +12,7 @@ import json
 
 from fastapi import HTTPException
 
-from app import audit, folders, index
+from app import audit, chats, folders, index
 from app.db import connect
 from app.folders import META, clean_rel_path
 from app.policy import PathOutsideFolder, rel, resolve_in_folder
@@ -95,17 +95,17 @@ def _update_proposals(folder_id: str, old: str, new: str) -> None:
 
 
 def _update_chats(folder_id: str, old: str, new: str) -> None:
-    """Saved chat sources (this folder's session, and home-chat sources from this folder)."""
+    """Saved chat sources: this folder's chats, and home-chat sources from this folder."""
     with connect() as db:
         rows = db.execute(
-            "SELECT id, scope, response FROM chat_messages WHERE response IS NOT NULL AND scope IN (?, '__all__')",
-            (folder_id,),
+            "SELECT id, folder_id, response FROM chat_messages WHERE response IS NOT NULL AND folder_id IN (?, ?)",
+            (folder_id, chats.ALL),
         ).fetchall()
         for r in rows:
             res = json.loads(r["response"])
             changed = False
             for s in res.get("sources", []):
-                if r["scope"] == "__all__" and s.get("folder_id") != folder_id:
+                if r["folder_id"] == chats.ALL and s.get("folder_id") != folder_id:
                     continue
                 moved = _moved(s.get("path", ""), old, new)
                 if moved:

@@ -27,12 +27,12 @@ def audit(fid):
 def test_folder_rename_keeps_id_grants_audit_and_chat():
     grants = c.get(f"/folders/{CHART}/grants").json() | {"suggest_edits": "never"}
     c.put(f"/folders/{CHART}/grants", json=grants)
-    chats.append(CHART, "q", AskResponse(answer="a"))
+    chats.save_turn(CHART, "s1", "q", AskResponse(answer="a"))
     r = c.patch(f"/folders/{CHART}", json={"name": "Chart · Maria Reyes"})
     assert r.status_code == 200 and r.json()["id"] == CHART and r.json()["name"] == "Chart · Maria Reyes"
     assert next(f for f in c.get("/folders").json() if f["id"] == CHART)["name"] == "Chart · Maria Reyes"
     assert c.get(f"/folders/{CHART}/grants").json()["suggest_edits"] == "never"
-    assert len(c.get(f"/folders/{CHART}/chat").json()) == 2
+    assert c.get(f"/folders/{CHART}/chats/s1").json()["message_count"] == 2
     assert any(e["event"] == "rename" and "Chart · Maria Reyes" in e["reason"] for e in audit(CHART))
 
 
@@ -71,12 +71,12 @@ def test_pending_proposal_follows_the_file():
 def test_saved_chat_sources_follow_the_file():
     target = sorted(p for p in files(CHART) if p.endswith(".md"))[0]
     src = Source(path=target, start=1, end=2, snippet="")
-    chats.append(CHART, "q", AskResponse(answer="a [S1]", sources=[src]))
-    chats.append(chats.ALL, "q", AskResponse(answer="a [S1]", sources=[src.model_copy(update={"folder_id": CHART})]))
-    chats.append(chats.ALL, "q", AskResponse(answer="b [S1]", sources=[src.model_copy(update={"folder_id": CASE})]))
+    chats.save_turn(CHART, "s1", "q", AskResponse(answer="a [S1]", sources=[src]))
+    chats.save_turn(chats.ALL, "h1", "q", AskResponse(answer="a [S1]", sources=[src.model_copy(update={"folder_id": CHART})]))
+    chats.save_turn(chats.ALL, "h1", "q", AskResponse(answer="b [S1]", sources=[src.model_copy(update={"folder_id": CASE})]))
     c.post(f"/folders/{CHART}/rename", json={"path": target, "name": "x.md"})
-    assert c.get(f"/folders/{CHART}/chat").json()[1]["response"]["sources"][0]["path"] == "x.md"
-    home = [m["response"]["sources"][0] for m in c.get("/chat").json() if m["response"]]
+    assert c.get(f"/folders/{CHART}/chats/s1").json()["messages"][1]["response"]["sources"][0]["path"] == "x.md"
+    home = [m["response"]["sources"][0] for m in c.get("/chat").json()["messages"] if m["response"]]
     assert home[0]["path"] == "x.md"
     assert home[1]["path"] == target  # same path in another folder: untouched
 

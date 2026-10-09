@@ -47,16 +47,42 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_sessions (
+    id           TEXT PRIMARY KEY,
+    folder_id    TEXT NOT NULL,
+    title        TEXT NOT NULL,
+    title_source TEXT NOT NULL DEFAULT 'question',  -- question | model | user
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_sessions_folder ON chat_sessions (folder_id, updated_at);
 CREATE TABLE IF NOT EXISTS chat_messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    scope      TEXT NOT NULL,          -- folder id, or __all__ for the home-page chat
+    session_id TEXT NOT NULL,
+    folder_id  TEXT NOT NULL,
     role       TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
     content    TEXT NOT NULL,
-    response   TEXT,                   -- the assistant's full AskResponse (sources, outcome) as JSON
+    response   TEXT,  -- AskResponse JSON for assistant turns
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS chat_messages_scope ON chat_messages (scope, id);
+CREATE INDEX IF NOT EXISTS chat_messages_session ON chat_messages (session_id, id);
+DROP TABLE IF EXISTS conversations;  -- the old single-thread table, never written
 """
+
+
+def _drop_presession_chats(conn: sqlite3.Connection) -> None:
+    """A pre-release chat_messages without sessions (a `scope` column; never on dev) would break
+    SCHEMA's index on session_id: drop it first so SCHEMA recreates it."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(chat_messages)")}
+    if cols and "session_id" not in cols:
+        conn.execute("DROP TABLE chat_messages")
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Columns added after a table first shipped (CREATE TABLE IF NOT EXISTS won't add them)."""
+    cols = {r["name"] for r in conn.execute("PRAGMA table_info(audit)")}
+    if "session_id" not in cols:
+        conn.execute("ALTER TABLE audit ADD COLUMN session_id TEXT")
 
 
 @contextmanager
@@ -66,7 +92,9 @@ def connect() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(config.APP_DB)
     conn.row_factory = sqlite3.Row
     try:
+        _drop_presession_chats(conn)
         conn.executescript(SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:

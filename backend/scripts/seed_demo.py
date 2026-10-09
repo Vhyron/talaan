@@ -59,10 +59,11 @@ def clear_state(folder_ids: list[str]) -> None:
     """Default grants, no proposals, no audit, no chat history for these folders."""
     marks = ",".join("?" * len(folder_ids))
     with connect() as db:
-        for table in ("grants", "audit", "proposals"):
+        for table in ("grants", "audit", "proposals", "chat_messages", "chat_sessions"):
             db.execute(f"DELETE FROM {table} WHERE folder_id IN ({marks})", folder_ids)
-        # Chat sessions: these folders' own, and the home chat's (it quotes demo folders).
-        db.execute(f"DELETE FROM chat_messages WHERE scope IN ({marks}, ?)", [*folder_ids, chats.ALL])
+        # The home chat thread quotes demo folders: clear it too.
+        db.execute("DELETE FROM chat_messages WHERE folder_id = ?", (chats.ALL,))
+        db.execute("DELETE FROM chat_sessions WHERE folder_id = ?", (chats.ALL,))
     for fid in folder_ids:
         init_grants(fid)
 

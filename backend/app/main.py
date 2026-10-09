@@ -1,15 +1,19 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
+import logging
 import tempfile
+import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
+from app import config
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
@@ -17,18 +21,38 @@ from app import chats, folders, global_ask, index, rename
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
-from app.llm import selection, trace
+from app.llm import client, selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    ChatMessage, FolderRename, GlobalAskRequest, PathRename,
+    FolderRename, GlobalAskRequest, PathRename,
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
+    AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
     Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
 
-app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Chat model + embedder ready before the first question, and kept loaded while the app runs.
+    threading.Thread(target=client.warm, daemon=True, name="ollama-warm").start()
+    yield
+    client.release()
+
+
+app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.",
+              lifespan=lifespan)
+
+if config.LLM_LIVE_LOG:  # dev/demo: say in the terminal which models Ollama has loaded, as it changes
+    client.watch_models()
+
+    class _QuietPolling(logging.Filter):
+        """Hide the Settings page polling from the access log so the live model output stays readable."""
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            return not any(p in record.getMessage() for p in ("/system/llm-log", "GET /health"))
+
+    logging.getLogger("uvicorn.access").addFilter(_QuietPolling())
 
 app.add_middleware(
     CORSMiddleware,
@@ -133,41 +157,34 @@ def build_index(folder_id: str) -> IndexStatus:
 
 @app.post("/ask")
 def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
-    """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder."""
+    """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder.
+    Saved as one thread: `session_id` continues it, none starts a new one (replacing the old)."""
+    if body.session_id:
+        chats.check(chats.ALL, body.session_id)
+    else:
+        chats.clear_home()
     res = global_ask.ask_all(body.question, body.history)
-    chats.append(chats.ALL, body.question, res)
+    res.session_id = body.session_id or chats.new_id()
+    chats.save_turn(chats.ALL, res.session_id, body.question, res)
     return res
 
 
 @app.get("/chat")
-def home_chat() -> list[ChatMessage]:
-    """The home-page chat session, saved so it survives navigation and restarts."""
-    return chats.load(chats.ALL)
-
-
-@app.delete("/chat", status_code=204)
-def clear_home_chat() -> None:
-    chats.clear(chats.ALL)
+def home_chat() -> ChatSession | None:
+    """The home-page chat thread, saved so it survives navigation and restarts."""
+    latest = chats.list_sessions(chats.ALL)
+    return chats.get_session(chats.ALL, latest[0].id) if latest else None
 
 
 @app.post("/folders/{folder_id}/ask")
-def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    res = ask_mod.ask(folder_id, body.question, body.path, body.history)
-    chats.append(folder_id, body.question, res)
+def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse:
+    """Saved to a chat: `session_id` continues one, none starts a new one (returned in the response)."""
+    res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id)
+    # First turn: title the chat after the answer is sent. Not after a refusal, which is decided in
+    # code without the model, so the LLM log shows no model call for an out-of-scope question.
+    if body.session_id is None and res.session_id and not res.refused:
+        tasks.add_task(chats.auto_title, folder_id, res.session_id, body.question)
     return res
-
-
-@app.get("/folders/{folder_id}/chat")
-def folder_chat(folder_id: str) -> list[ChatMessage]:
-    """This folder's chat session. Only this folder's chat ever loads it."""
-    _folder(folder_id)
-    return chats.load(folder_id)
-
-
-@app.delete("/folders/{folder_id}/chat", status_code=204)
-def clear_folder_chat(folder_id: str) -> None:
-    _folder(folder_id)
-    chats.clear(folder_id)
 
 
 @app.post("/folders/{folder_id}/timeline")
@@ -175,6 +192,35 @@ def timeline(folder_id: str, refresh: bool = False) -> TimelineResponse:
     """Dated events and flags for human review, every one with sources. Cached per index
     version and chat model; `refresh=true` rebuilds anyway."""
     return case_timeline.build(_folder(folder_id), refresh)
+
+
+# --- Chat sessions (C8) -------------------------------------------------------
+# User-only: the model has no action that reaches saved chats.
+
+
+@app.get("/folders/{folder_id}/chats")
+def list_chats(folder_id: str, q: str | None = None) -> list[ChatSessionSummary]:
+    _folder(folder_id)
+    return chats.list_sessions(folder_id, q)
+
+
+@app.get("/folders/{folder_id}/chats/{sid}")
+def get_chat(folder_id: str, sid: str) -> ChatSession:
+    _folder(folder_id)
+    return chats.get_session(folder_id, sid)
+
+
+@app.patch("/folders/{folder_id}/chats/{sid}")
+def rename_chat(folder_id: str, sid: str, body: ChatRename) -> ChatSessionSummary:
+    _folder(folder_id)
+    return chats.rename(folder_id, sid, body.title)
+
+
+@app.delete("/folders/{folder_id}/chats/{sid}", status_code=204)
+def delete_chat(folder_id: str, sid: str) -> None:
+    """Removes the chat only. The audit log keeps every question and answer."""
+    _folder(folder_id)
+    chats.delete(folder_id, sid)
 
 
 # --- Grants, proposals, audit (A3–A5) -----------------------------------------

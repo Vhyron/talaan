@@ -34,7 +34,7 @@ export type Source = { path: string; start: number; end: number; snippet: string
 /** An earlier chat turn, sent so follow-ups make sense. Context only, never a source. */
 export type Turn = { role: 'user' | 'assistant'; content: string }
 /** `path` is the file open in the viewer; the backend re-checks it against the folder. */
-export type AskRequest = { question: string; path?: string; history?: Turn[] }
+export type AskRequest = { question: string; path?: string; history?: Turn[]; session_id?: string | null }
 
 /** Result of building or refreshing a folder's index. */
 export type IndexStatus = {
@@ -48,15 +48,14 @@ export type IndexStatus = {
   errors: string[]
 }
 /** `answer` references sources as [S1], [S2]… in `sources` order. */
-/** A saved chat message; assistant messages carry the full response. */
-export type ChatMessage = { role: 'user' | 'assistant'; content: string; response: AskResponse | null }
-
 export type AskResponse = {
   answer: string
   sources: Source[]
   refused: boolean
   outcome: Outcome | null
   proposal_id: string | null
+  /** the saved chat this turn belongs to */
+  session_id: string | null
 }
 
 export type ProposalStatus = 'pending' | 'approved' | 'rejected' | 'stale'
@@ -72,7 +71,9 @@ export type Proposal = {
   created_at: string
 }
 
-export type AuditEventType = 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change' | 'rename'
+export type AuditEventType =
+  | 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change'
+  | 'session_renamed' | 'session_deleted' | 'rename'
 export type AuditEvent = {
   id: number
   timestamp: string
@@ -84,7 +85,19 @@ export type AuditEvent = {
   decision: string | null
   reason: string | null
   model_tag: string | null
+  session_id: string | null
 }
+
+export type ChatSessionSummary = { id: string; title: string; created_at: string; updated_at: string; message_count: number }
+/** A saved turn. `proposal_status` is the proposal's status now, not when it was proposed. */
+export type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  response: AskResponse | null
+  proposal_status: ProposalStatus | null
+  created_at: string
+}
+export type ChatSession = ChatSessionSummary & { messages: ChatMessage[] }
 
 export type TimelineEvent = { date: string; time: string | null; description: string; sources: Source[] }
 export type TimelineFlag = { description: string; sources: Source[] }

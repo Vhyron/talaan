@@ -17,7 +17,7 @@ from typing import Annotated
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, TypeAdapter
 
-from app import audit, folders, index
+from app import audit, chats, config, folders, index
 from app.index import INDEXED_TYPES, Hit
 from app.llm import client
 from app.policy import engine
@@ -283,13 +283,20 @@ def outcome_text(o: Outcome) -> str:
     return f"That was blocked: {o.reason or what}. Nothing was changed."
 
 
-def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = ()) -> AskResponse:
+def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = (),
+        session_id: str | None = None) -> AskResponse:
     folder = folders.get_folder(folder_id)
-    audit.log_event(folder_id, "user", "question", reason=question)
+    if session_id:
+        chats.check(folder_id, session_id)  # 404 for an unknown chat or another folder's
+    sid = session_id or chats.new_id()
+    audit.log_event(folder_id, "user", "question", reason=question, session_id=sid)
 
     def reply(resp: AskResponse, tag: str | None = None) -> AskResponse:
+        """Every answer, refusal and policy outcome is audited and saved to the chat."""
+        resp.session_id = sid
         audit.log_event(folder_id, "model", "answer", reason=resp.answer, model_tag=tag,
-                        decision="refused" if resp.refused else None)
+                        decision="refused" if resp.refused else None, session_id=sid)
+        chats.save_turn(folder_id, sid, question, resp)
         return resp
 
     if get_grants(folder_id).read == Grant.NEVER:
@@ -306,6 +313,13 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     prev = next((t.content for t in reversed(history) if t.role == "user"), "")
     hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None)
     if out_of_scope(folder_id, question, hits, relevance=focus is None):
+        if config.LLM_LIVE_LOG:  # the terminal otherwise shows only an embed, which looks like nothing ran
+            missing = [n for n in names_in(question) if not index.contains(folder_id, n)]
+            sims = [h.similarity for h in hits if h.similarity is not None]
+            why = (f"name not in this folder: {', '.join(missing)}" if missing else
+                   "nothing retrieved" if not hits else
+                   f"best match {max(sims):.2f} < {MIN_SCORE} and no keyword hit" if sims else "no relevant match")
+            client.live_note(f"[ask] {question[:60]!r} refused before the model: {why}")
         return reply(AskResponse(answer=refusal(folder), refused=True))
 
     chosen: list[Hit] = []

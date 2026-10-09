@@ -1,33 +1,25 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { api } from '../api/client'
-import type { AskResponse, ChatMessage, Turn } from '../api/types'
+import type { AskResponse, ChatSession, Turn } from '../api/types'
 import { movedPath, onRenamed } from './renamed'
 import { usePersistentFlag } from './usePersistentFlag'
 
 /**
- * Chat sessions that outlive the page. The server saves every exchange in app.db (one
- * session per folder, one for the home chat); this store caches them for the tab and
- * keeps track of a question still being answered, so leaving a chat mid-answer and
- * coming back shows the wait and then the answer.
- *
- * `scope` is a folder id, or null for the home chat.
+ * The home-page chat (all folders), kept outside the page. The server saves the thread in
+ * app.db; this store caches it for the tab and tracks a question still being answered, so
+ * opening a source and coming back mid-answer shows the wait and then the answer.
+ * (Folder chats keep their own saved sessions: see panels/AskPanel.)
  */
 export type Msg = { role: 'user'; text: string } | { role: 'assistant'; res: AskResponse } | { role: 'error'; text: string }
 
-type Session = { messages: Msg[]; busy: boolean; loaded: boolean; since: number }
+type Thread = { sessionId: string | null; messages: Msg[]; busy: boolean; loaded: boolean; since: number }
 
 const HISTORY_TURNS = 4
-const HOME = '__all__'
-const sessions = new Map<string, Session>()
+let thread: Thread = { sessionId: null, messages: [], busy: false, loaded: false, since: 0 }
 const listeners = new Set<() => void>()
-const EMPTY: Session = { messages: [], busy: false, loaded: false, since: 0 }
 
-const key = (scope: string | null) => scope ?? HOME
-const get = (scope: string | null) => sessions.get(key(scope)) ?? EMPTY
-
-function set(scope: string | null, change: Partial<Session> | ((s: Session) => Partial<Session>)) {
-  const s = get(scope)
-  sessions.set(key(scope), { ...s, ...(typeof change === 'function' ? change(s) : change) })
+function set(change: Partial<Thread> | ((t: Thread) => Partial<Thread>)) {
+  thread = { ...thread, ...(typeof change === 'function' ? change(thread) : change) }
   listeners.forEach((l) => l())
 }
 
@@ -36,68 +28,59 @@ function subscribe(l: () => void) {
   return () => listeners.delete(l)
 }
 
-// Cached sources follow a rename (the server already updated the saved sessions).
-onRenamed(({ folderId, from, to }) => {
-  for (const scope of [folderId, null]) {
-    set(scope, (s) => ({
-      messages: s.messages.map((m) => m.role !== 'assistant' ? m : {
-        ...m,
-        res: { ...m.res, sources: m.res.sources.map((src) =>
-          scope === null && src.folder_id !== folderId ? src : { ...src, path: movedPath(src.path, from, to) }) },
-      }),
-    }))
-  }
-})
+const fromSaved = (s: ChatSession): Msg[] =>
+  s.messages.map((m) => (m.role === 'assistant' && m.response ? { role: 'assistant', res: m.response } : { role: 'user', text: m.content }))
 
-const fromSaved = (saved: ChatMessage[]): Msg[] =>
-  saved.map((m) => (m.role === 'assistant' && m.response ? { role: 'assistant', res: m.response } : { role: 'user', text: m.content }))
+// Cached sources follow a file rename (the server already updated the saved thread).
+onRenamed(({ folderId, from, to }) => set((t) => ({
+  messages: t.messages.map((m) => m.role !== 'assistant' ? m : {
+    ...m,
+    res: { ...m.res, sources: m.res.sources.map((s) => s.folder_id === folderId ? { ...s, path: movedPath(s.path, from, to) } : s) },
+  }),
+})))
 
 /** Earlier turns sent with the next question, so follow-ups make sense. */
-export function historyOf(messages: Msg[]): Turn[] {
+function historyOf(messages: Msg[]): Turn[] {
   const turns: Turn[] = []
   for (const m of messages) {
     if (m.role === 'user') turns.push({ role: 'user', content: m.text })
-    else if (m.role === 'assistant' && !m.res.refused && !m.res.outcome) turns.push({ role: 'assistant', content: m.res.answer })
+    else if (m.role === 'assistant' && !m.res.refused) turns.push({ role: 'assistant', content: m.res.answer })
   }
   return turns.slice(-HISTORY_TURNS)
 }
 
-function load(scope: string | null) {
-  if (get(scope).loaded || get(scope).busy) return
-  set(scope, { loaded: true })
-  api.chat(scope)
-    .then((saved) => set(scope, (s) => (s.busy ? {} : { messages: fromSaved(saved) })))
-    .catch(() => set(scope, { loaded: false }))
+function load() {
+  if (thread.loaded || thread.busy) return
+  set({ loaded: true })
+  api.homeChat()
+    .then((s) => set((t) => (t.busy || !s ? {} : { sessionId: s.id, messages: fromSaved(s) })))
+    .catch(() => set({ loaded: false }))
 }
 
-/** Ask in this session. Keeps running (and lands in the session) if the chat unmounts. */
-export async function askIn(scope: string | null, question: string, ask: (history: Turn[]) => Promise<AskResponse>) {
-  if (get(scope).busy) return undefined
-  const history = historyOf(get(scope).messages)
-  set(scope, (s) => ({ busy: true, since: Date.now(), messages: [...s.messages, { role: 'user', text: question }] }))
+/** Ask across all folders. Keeps running (and lands in the thread) if the chat unmounts. */
+export async function askHome(question: string) {
+  if (thread.busy) return
+  const history = historyOf(thread.messages)
+  set((t) => ({ busy: true, since: Date.now(), messages: [...t.messages, { role: 'user', text: question }] }))
   try {
-    const res = await ask(history)
-    set(scope, (s) => ({ messages: [...s.messages, { role: 'assistant', res }] }))
-    return res
+    const res = await api.askAll(question, history, thread.sessionId)
+    set((t) => ({ sessionId: res.session_id ?? t.sessionId, messages: [...t.messages, { role: 'assistant', res }] }))
   } catch (e) {
-    set(scope, (s) => ({ messages: [...s.messages, { role: 'error', text: (e as Error).message }] }))
-    return undefined
+    set((t) => ({ messages: [...t.messages, { role: 'error', text: (e as Error).message }] }))
   } finally {
-    set(scope, { busy: false })
+    set({ busy: false })
   }
 }
 
-/** Start a new chat: clears the saved session (the audit log keeps its own record). */
-export async function clearSession(scope: string | null) {
-  if (get(scope).busy) return
-  set(scope, { messages: [] })
-  await api.clearChat(scope).catch(() => undefined)
+/** Start a new home chat; the next question replaces the saved thread (audit logs keep it all). */
+export function newHomeChat() {
+  if (!thread.busy) set({ sessionId: null, messages: [] })
 }
 
-export function useChatSession(scope: string | null) {
-  const session = useSyncExternalStore(subscribe, () => get(scope))
-  useEffect(() => load(scope), [scope])
-  return session
+export function useHomeChat() {
+  const t = useSyncExternalStore(subscribe, () => thread)
+  useEffect(load, [])
+  return t
 }
 
 /** Remembers whether the home page's floating chat card is open. */
@@ -105,7 +88,7 @@ export const HOME_CHAT_OPEN = 'talaan.homeChat.open'
 
 /** Whether the home chat card is showing, so the page can make room for it on wide screens. */
 export function useHomeChatShown(): boolean {
-  const { messages, busy } = useChatSession(null)
+  const { messages, busy } = useHomeChat()
   const [open] = usePersistentFlag(HOME_CHAT_OPEN, false)
   return open && (messages.length > 0 || busy)
 }

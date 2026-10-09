@@ -63,7 +63,9 @@ User question
 
 ## Audit log fields
 
-`timestamp, folder_id, actor (user|model), event (question|answer|proposed_action|decision|executed|grant_change), action, path, decision, reason, model_tag`
+`timestamp, folder_id, actor (user|model), event (question|answer|proposed_action|decision|executed|grant_change|session_renamed|session_deleted), action, path, decision, reason, model_tag, session_id`
+
+`session_id` ties `question` and `answer` rows to the saved Ask chat they came from. Renaming or deleting a saved chat is logged (actor user, title in `reason`). Deleting a chat removes it from the chat history only: the audit log is append-only and keeps every question and answer.
 
 `decision` is `allow`, `needs_approval` or `never` for the engine, and `approved` or `rejected` for the user. A `grant_change` stores the new grant value in `decision`; it is a settings change, not a blocked action.
 
