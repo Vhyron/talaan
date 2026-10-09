@@ -1,28 +1,88 @@
-import { Link } from 'react-router-dom'
-import { Lock } from 'lucide-react'
-import type { Folder } from '../api/types'
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Lock, Plus } from 'lucide-react'
+import { api } from '../api/client'
+import type { Folder, Mode } from '../api/types'
+import Sidebar from '../components/Sidebar'
 
-export default function FoldersPage({ folders }: { folders: Folder[] }) {
+export default function FoldersPage({ folders, error, onCreated }: {
+  folders: Folder[]
+  error: string | null
+  onCreated: () => void
+}) {
+  const [creating, setCreating] = useState<Mode | null>(null)
+
   return (
-    <div className="overflow-y-auto px-10 py-8">
-      <h1 className="text-3xl font-extrabold tracking-tight">Your folders</h1>
-      <p className="mt-1 text-muted">Each folder is sealed. The AI only sees the one you open.</p>
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-        {folders.map((f) => (
-          <li key={f.id}>
-            <Link
-              to={`/folders/${encodeURIComponent(f.id)}`}
-              className="block rounded-xl border border-line p-4 hover:border-brand hover:bg-brand-soft/40"
-            >
-              <span className="rounded bg-panel px-1.5 py-0.5 text-[11px] font-semibold uppercase">{f.mode}</span>
-              <p className="mt-2 font-bold">{f.name}</p>
-              <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
-                <Lock size={11} /> Opened {new Date(f.created_at).toLocaleDateString()}
-              </p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <div className="flex min-h-0 flex-1">
+      <Sidebar folders={folders} error={error} />
+      <div className="min-w-0 flex-1 overflow-y-auto px-10 py-8">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="mr-auto">
+            <h1 className="text-3xl font-extrabold tracking-tight">Your folders</h1>
+            <p className="mt-1 text-muted">Each folder is sealed. The AI only sees the one you open.</p>
+          </div>
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
+            <Plus size={16} /> New Case
+          </button>
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('chart')}>
+            <Plus size={16} /> New Chart
+          </button>
+        </div>
+
+        {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
+
+        <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+          {folders.map((f) => (
+            <li key={f.id}>
+              <Link
+                to={`/folders/${encodeURIComponent(f.id)}`}
+                className="block rounded-xl border border-line p-4 hover:border-brand hover:bg-brand-soft/40"
+              >
+                <span className="rounded bg-panel px-1.5 py-0.5 text-[11px] font-semibold uppercase">{f.mode}</span>
+                <p className="mt-2 font-bold">{f.name}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
+                  <Lock size={11} /> Opened {new Date(f.created_at).toLocaleDateString()}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
+  )
+}
+
+function NewFolder({ mode, onDone, onCancel }: { mode: Mode; onDone: () => void; onCancel: () => void }) {
+  const noun = mode === 'case' ? 'Case' : 'Chart'
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    try {
+      const folder = await api.createFolder({ name: name.trim(), mode })
+      onDone()
+      navigate(`/folders/${encodeURIComponent(folder.id)}`)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel p-4">
+      <label className="text-sm font-semibold" htmlFor="folder-name">New {noun}</label>
+      <input
+        id="folder-name"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={mode === 'case' ? 'e.g. Case 2026-021 Santos' : 'e.g. Chart J. Cruz'}
+        className="min-w-64 flex-1 rounded-full border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
+      />
+      <button className="btn-primary" disabled={!name.trim()}>Create {noun}</button>
+      <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
+      {error && <p className="w-full text-sm text-red-700">{error}</p>}
+    </form>
   )
 }
