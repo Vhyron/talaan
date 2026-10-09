@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
@@ -20,7 +20,7 @@ from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
+    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
     Proposal, SystemTier, TimelineResponse,
 )
 
@@ -78,9 +78,27 @@ def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
     return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"))
 
 
+@app.get("/folders/{folder_id}/dirs")
+def list_dirs(folder_id: str) -> list[str]:
+    """Subfolders, folder-relative (`.talaan/` hidden). Empty ones included."""
+    return folders.list_dirs(folder_id)
+
+
+@app.post("/folders/{folder_id}/dirs", status_code=201)
+def create_dir(folder_id: str, body: DirCreate) -> dict:
+    return {"path": folders.create_dir(folder_id, body.path)}
+
+
 @app.post("/folders/{folder_id}/import")
-async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
-    return await folders.import_files(folder_id, files)
+async def import_files(
+    folder_id: str,
+    files: list[UploadFile],
+    dest: str = Form(""),
+    keep_paths: bool = Form(False),
+) -> list[FileEntry]:
+    """Add files under `dest` (a subfolder, "" = top level). `keep_paths` recreates each
+    upload's own subfolders, for importing a whole folder from disk."""
+    return await folders.import_files(folder_id, files, dest=dest, keep_paths=keep_paths)
 
 
 # --- Index, ask, timeline (B3–B5) ---------------------------------------------

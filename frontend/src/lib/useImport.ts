@@ -1,29 +1,30 @@
 import { useState } from 'react'
 import { api } from '../api/client'
 import { useFolder } from './folderContext'
+import { useTree } from './tree'
+import { splitImportable, type Upload } from './upload'
 
-export const ACCEPT = ['.md', '.txt', '.pdf']
-const ok = (f: File) => ACCEPT.some((ext) => f.name.toLowerCase().endsWith(ext))
-
-/** Import files into the open folder, then re-index it. */
+/** Import into the open folder (optionally a subfolder), then re-index it. */
 export function useImport() {
   const { folder, refreshFiles, bump } = useFolder()
+  const tree = useTree()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
-  async function importFiles(list: FileList | File[]) {
-    const files = Array.from(list)
-    const accepted = files.filter(ok)
-    const skipped = files.length - accepted.length
+  /** `keepPaths`: recreate dropped folders' subfolders (used for drag-and-drop). */
+  async function importUploads(uploads: Upload[], opts: { dest?: string; keepPaths?: boolean } = {}) {
+    const { accepted, skipped } = splitImportable(uploads)
     if (!accepted.length) return setMessage('Only .md, .txt and .pdf files can be imported.')
     setBusy(true)
     setMessage(null)
     try {
-      const saved = await api.importFiles(folder.id, accepted)
+      const saved = await api.importFiles(folder.id, accepted, opts)
       await api.reindex(folder.id).catch(() => undefined) // index may not exist yet (B3)
       refreshFiles()
+      tree.changed()
       bump()
-      setMessage(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}.`)
+      const where = opts.dest ? ` into ${opts.dest}` : ''
+      setMessage(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${where}${skipped.length ? `, skipped ${skipped.length}` : ''}.`)
     } catch (e) {
       setMessage((e as Error).message)
     } finally {
@@ -31,5 +32,5 @@ export function useImport() {
     }
   }
 
-  return { importFiles, busy, message, clear: () => setMessage(null) }
+  return { importUploads, busy, message, clear: () => setMessage(null) }
 }

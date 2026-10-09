@@ -87,6 +87,65 @@ def list_files(folder_id: str) -> list[FileEntry]:
     return out
 
 
+def list_dirs(folder_id: str) -> list[str]:
+    """Subfolders inside a client folder (`.talaan/` hidden), folder-relative."""
+    root = folder_root(folder_id)
+    out = []
+    for p in sorted(root.rglob("*")):
+        if not p.is_dir() or ".talaan" in p.relative_to(root).parts:
+            continue
+        try:
+            out.append(rel(root, resolve_in_folder(root, rel(root, p))))
+        except (PathOutsideFolder, ValueError):
+            continue  # symlinked directory leaving the folder
+    return out
+
+
+# One path segment of a user-made subfolder or imported file: no separators,
+# no characters Windows forbids, not hidden ("." prefix), not "." or "..".
+_SEGMENT = re.compile(r'^(?!\.)[^\\/:*?"<>|\x00-\x1f]{1,80}$')
+
+
+def clean_rel_path(path: str) -> str:
+    """Normalise a client-supplied relative path, or raise 400.
+
+    Empty segments and "." are dropped; "..", hidden segments and illegal names are refused.
+    """
+    parts = [p.strip() for p in path.replace("\\", "/").split("/") if p.strip() not in ("", ".")]
+    for p in parts:
+        if p == ".." or not _SEGMENT.match(p):
+            raise HTTPException(400, f"Not an allowed name: {p!r}")
+    return "/".join(parts)
+
+
+def create_dir(folder_id: str, path: str) -> str:
+    root = folder_root(folder_id)
+    clean = clean_rel_path(path)
+    if not clean:
+        raise HTTPException(400, "Give the subfolder a name")
+    try:
+        target = resolve_in_folder(root, clean)
+    except PathOutsideFolder:
+        raise HTTPException(403, "That path is outside this folder")
+    if target.exists():
+        raise HTTPException(409, "A file or subfolder with that name already exists")
+    target.mkdir(parents=True)
+    return rel(root, target)
+
+
+def _dest_dir(root: Path, dest: str) -> Path:
+    clean = clean_rel_path(dest)
+    if not clean:
+        return root
+    try:
+        d = resolve_in_folder(root, clean)
+    except PathOutsideFolder:
+        raise HTTPException(403, "That path is outside this folder")
+    if not d.is_dir():
+        raise HTTPException(404, f"No subfolder {clean!r} in this folder")
+    return d
+
+
 def file_path(folder_id: str, path: str) -> Path:
     root = folder_root(folder_id)
     try:
@@ -98,25 +157,40 @@ def file_path(folder_id: str, path: str) -> Path:
     return target
 
 
-def _free_name(root: Path, filename: str) -> Path:
-    base = Path(filename).name  # strip any directory parts from the client
+def _free_name(directory: Path, base: str) -> Path:
     stem, suffix = Path(base).stem, Path(base).suffix
-    candidate, n = root / base, 1
+    candidate, n = directory / base, 1
     while candidate.exists():
         n += 1
-        candidate = root / f"{stem} ({n}){suffix}"
+        candidate = directory / f"{stem} ({n}){suffix}"
     return candidate
 
 
-async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
+async def import_files(folder_id: str, files: list[UploadFile], dest: str = "", keep_paths: bool = False) -> list[FileEntry]:
+    """Save uploads into `dest` (a subfolder, "" for the top level). Never overwrites.
+
+    With `keep_paths`, each upload's own relative path (e.g. "Interviews/r-santos.md",
+    from a dropped folder) is recreated under `dest`; otherwise directories are stripped.
+    """
     root = folder_root(folder_id)
     bad = [f.filename for f in files if Path(f.filename or "").suffix.lower() not in IMPORT_TYPES]
     if bad:
         raise HTTPException(415, f"Only .md, .txt and .pdf can be imported: {', '.join(map(str, bad))}")
+    base_dir = _dest_dir(root, dest)
+    base_rel = "" if base_dir == root else rel(root, base_dir)
     saved = []
     for f in files:
-        target = _free_name(root, f.filename or "upload.txt")
-        resolve_in_folder(root, target.name)
+        name = (f.filename or "upload.txt").replace("\\", "/")
+        sub = clean_rel_path(name) if keep_paths else clean_rel_path(name.rsplit("/", 1)[-1])
+        if not sub:
+            raise HTTPException(400, f"Not an allowed file name: {f.filename!r}")
+        try:
+            # Seals the whole destination, including symlinked subfolders and .talaan/.
+            wanted = resolve_in_folder(root, f"{base_rel}/{sub}" if base_rel else sub)
+        except PathOutsideFolder:
+            raise HTTPException(403, "That path is outside this folder")
+        wanted.parent.mkdir(parents=True, exist_ok=True)
+        target = _free_name(wanted.parent, wanted.name)
         target.write_bytes(await f.read())
         st = target.stat()
         saved.append(FileEntry(path=rel(root, target), size=st.st_size, mtime=datetime.fromtimestamp(st.st_mtime)))

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { api } from '../api/client'
 import type { FileEntry, Folder } from '../api/types'
@@ -10,6 +10,7 @@ import VoiceNote from '../components/VoiceNote'
 import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
 import { DropZone, ImportButton } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
+import { useTree } from '../lib/tree'
 import ApprovalsPanel from '../panels/ApprovalsPanel'
 import AskPanel from '../panels/AskPanel'
 import AuditPanel from '../panels/AuditPanel'
@@ -29,30 +30,49 @@ export default function FolderPage({ folders, error }: { folders: Folder[]; erro
       </div>
     )
   }
-  // Keyed by folder: switching folders resets tabs, chat and highlights.
+  // Keyed by folder: switching folders resets chat and highlights; tabs are remembered.
   return <FolderView key={folder.id} folder={folder} folders={folders} error={error} />
 }
 
 type Tabs = { paths: string[]; active: number }
 
+// Open tabs per folder for this session, so switching between folders keeps them.
+const tabsByFolder = new Map<string, Tabs>()
+
 function FolderView({ folder, folders, error }: { folder: Folder; folders: Folder[]; error: string | null }) {
+  const tree = useTree()
+  const location = useLocation()
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [tabs, setTabs] = useState<Tabs>({ paths: [], active: 0 })
+  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: 0 })
   const [highlight, setHighlight] = useState<Highlight>(null)
   const [panel, setPanel] = useState<PanelTab>('ask')
   // Phones show one view at a time: the document or the selected panel.
   const [mobileView, setMobileView] = useState<'doc' | 'panel'>('doc')
   const [version, setVersion] = useState(0)
 
-  const refreshFiles = useCallback(() => {
-    api.files(folder.id).then(setFiles).catch(() => setFiles([]))
-  }, [folder.id])
-
-  useEffect(refreshFiles, [refreshFiles])
-
-  // Open the first file once the list arrives.
+  // Any change to files or subfolders (import, approval, new subfolder) bumps
+  // tree.version; this view and every open sidebar tree refetch from that.
   useEffect(() => {
-    if (files.length) setTabs((t) => (t.paths.length ? t : { paths: [files[0].path], active: 0 }))
+    api.files(folder.id).then(setFiles).catch(() => setFiles([]))
+  }, [folder.id, tree.version])
+  const refreshFiles = tree.changed
+
+  const { expand } = tree
+  useEffect(() => expand(folder.id), [expand, folder.id])
+
+  useEffect(() => {
+    tabsByFolder.set(folder.id, tabs)
+  }, [folder.id, tabs])
+
+  // Drop tabs for files that no longer exist; open the first file if nothing is open.
+  useEffect(() => {
+    if (!files.length) return
+    const exists = new Set(files.map((f) => f.path))
+    setTabs((t) => {
+      const paths = t.paths.filter((p) => exists.has(p))
+      if (!paths.length) return { paths: [files[0].path], active: 0 }
+      return paths.length === t.paths.length ? t : { paths, active: Math.min(t.active, paths.length - 1) }
+    })
   }, [files])
 
   const openSource = useCallback((path: string, start?: number, end?: number) => {
@@ -63,6 +83,12 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     setHighlight(start ? { start, end: end ?? start } : null)
     setMobileView('doc')
   }, [])
+
+  // A file clicked in another folder's sidebar tree arrives as navigation state.
+  const requested = (location.state as { open?: string } | null)?.open
+  useEffect(() => {
+    if (requested) openSource(requested)
+  }, [requested, location.key, openSource])
 
   const select = (i: number) => {
     setTabs((t) => ({ ...t, active: i }))
@@ -127,12 +153,11 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         folders={folders}
         error={error}
         activeId={folder.id}
-        files={files}
         currentPath={current}
         onOpenFile={(p) => openSource(p)}
         footer={
           <>
-            <ImportButton onFiles={imp.importFiles} busy={imp.busy} />
+            <ImportButton onFiles={(u) => imp.importUploads(u)} busy={imp.busy} />
             {imp.message && (
               <button className="mt-1 px-2 text-left text-xs text-muted" onClick={imp.clear}>{imp.message}</button>
             )}
@@ -140,7 +165,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         }
       />
 
-      <DropZone onFiles={imp.importFiles} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
+      <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-xs sm:px-4">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
             <Lock size={11} className="shrink-0" />
