@@ -5,16 +5,22 @@ import type { AuditEvent } from '../api/types'
 import { useFolder } from '../lib/folderContext'
 import { timeOf } from '../lib/format'
 
-const isBlocked = (e: AuditEvent) => e.decision === 'never'
+// A user setting a grant to Never is a settings change, not a blocked action.
+const isBlocked = (e: AuditEvent) => e.decision === 'never' && e.event !== 'grant_change'
 
 function tone(e: AuditEvent): string {
   if (isBlocked(e)) return 'bg-red-50 text-red-900'
+  if (e.event === 'grant_change') return ''
   if (e.decision === 'needs_approval') return 'bg-warn-soft/70 text-warn-text'
   return ''
 }
 
-function badge(decision: string | null) {
+function badge(e: AuditEvent) {
+  const { decision } = e
   if (!decision) return null
+  if (e.event === 'grant_change') {
+    return <span className="rounded bg-panel px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap">set to {decision.replace('_', ' ')}</span>
+  }
   const cls =
     decision === 'never' ? 'bg-red-700 text-white'
       : decision === 'needs_approval' ? 'bg-warn-soft text-warn-text'
@@ -85,7 +91,7 @@ export default function AuditPanel() {
                     {e.event.replace('_', ' ')}{e.action && <> · <b>{e.action.replace('_', ' ')}</b></>}
                     {e.path && <span className="block truncate font-mono text-[10px]" title={e.path}>{e.path}</span>}
                   </td>
-                  <td className="border-b border-line px-2 py-1.5">{badge(e.decision)}</td>
+                  <td className="border-b border-line px-2 py-1.5">{badge(e)}</td>
                   <td className="border-b border-line px-2 py-1.5 break-words">{e.reason}</td>
                 </tr>
               ))}
