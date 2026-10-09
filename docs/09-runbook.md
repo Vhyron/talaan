@@ -115,6 +115,26 @@ Open **http://localhost:5173/settings** (or click the model chip in the top bar)
 
 The backend terminal prints the same calls as `[llm]` lines. API: `GET /system/tier`, `PUT /system/model`, `GET /system/llm-log`.
 
+### Watching the model live (terminal)
+
+```powershell
+# Talaan live log: prompt, "processing prompt" status, streamed thinking + answer, timings,
+# model load/unload lines and why a question was refused before the model
+cd backend
+$env:LLM_LIVE_PROMPT="1"; uv run uvicorn app.main:app --reload   # LLM_LIVE_LOG="1" = same without the prompt
+
+# Ollama's own server log (model loads, GPU/memory, request timings), no restart needed
+Get-Content "$env:LOCALAPPDATA\Ollama\server.log" -Wait -Tail 50
+
+# More detail: quit Ollama from the tray icon, then run the server in debug mode
+$env:OLLAMA_DEBUG="1"; ollama serve
+
+# Which models are loaded right now
+ollama ps
+```
+
+Ollama's own log never shows the model's output or thinking; use the Talaan live log for that. Greetings like "hello" are refused before the model (nothing in the folder matches), so they print only an `embed` line and the refusal reason.
+
 ## 5. Test
 
 ```powershell
