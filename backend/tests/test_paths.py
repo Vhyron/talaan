@@ -35,6 +35,9 @@ def folder(tmp_path):
         "\\\\server\\share\\x.md",
         ".talaan/index.db",
         "sub/../.talaan/index.db",
+        ".TALAAN/index.db",
+        ".Talaan/index.db",
+        "sub/../.TaLaAn/index.db",
         "note.md\x00.txt",
     ],
 )

@@ -15,6 +15,7 @@ proposals or the audit log.
 """
 
 import json
+import threading
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -123,7 +124,17 @@ def handle(
     return Outcome(status="executed", action=name, path=path, result=result)
 
 
+# One decision at a time: a double-clicked Approve (or two tabs) must not pass the
+# "still pending?" check twice and execute the same proposal twice.
+_decide = threading.Lock()
+
+
 def approve(pid: str) -> Outcome:
+    with _decide:
+        return _approve(pid)
+
+
+def _approve(pid: str) -> Outcome:
     """User approved a proposal in the UI. Re-checks everything before executing."""
     proposal, old_mtime = _pending(pid)
     folder_id, action = proposal.folder_id, proposal.action
@@ -159,6 +170,11 @@ def approve(pid: str) -> Outcome:
 
 
 def reject(pid: str) -> Outcome:
+    with _decide:
+        return _reject(pid)
+
+
+def _reject(pid: str) -> Outcome:
     proposal, _ = _pending(pid)
     action = proposal.action
     path = getattr(action, "path", None)

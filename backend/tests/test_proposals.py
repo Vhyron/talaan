@@ -103,3 +103,14 @@ def test_grant_revoked_before_approval(folder):
 
 def test_unknown_proposal():
     assert c.post("/proposals/nope/approve").status_code == 404
+
+
+def test_concurrent_approvals_execute_once(folder):
+    from concurrent.futures import ThreadPoolExecutor
+
+    pid, _ = propose_edit(folder)
+    with ThreadPoolExecutor(4) as pool:
+        codes = sorted(pool.map(lambda _: c.post(f"/proposals/{pid}/approve").status_code, range(4)))
+    assert codes == [200, 409, 409, 409]
+    executed = [e for e in c.get(f"/folders/{F}/audit").json() if e["event"] == "executed"]
+    assert len(executed) == 1

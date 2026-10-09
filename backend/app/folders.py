@@ -12,7 +12,7 @@ from fastapi import HTTPException, UploadFile
 
 from app import config
 from app.policy import PathOutsideFolder, rel, resolve_in_folder
-from app.policy.grants import init_grants
+from app.policy.grants import has_history, init_grants
 from app.schemas import FileEntry, Folder, FolderCreate
 
 IMPORT_TYPES = {".md", ".txt", ".pdf"}
@@ -71,10 +71,15 @@ def _slug(name: str) -> str:
 
 
 def create_folder(body: FolderCreate) -> Folder:
-    folder_id = _slug(body.name)
-    path = _root() / folder_id
+    base = _slug(body.name)
+    path = _root() / base
     if path.exists():
         raise HTTPException(409, "A folder with that name already exists")
+    # A trashed folder keeps its id, grants, audit and chats: give the new one a fresh id.
+    folder_id, n = base, 2
+    while has_history(folder_id) or (_root() / folder_id).exists():
+        folder_id, n = f"{base}-{n}", n + 1
+    path = _root() / folder_id
     path.mkdir(parents=True)
     _write_meta(path, Folder(id=folder_id, name=body.name, mode=body.mode, created_at=datetime.now()))
     (path / README).write_text(README_TEMPLATE.format(name=body.name), encoding="utf-8")

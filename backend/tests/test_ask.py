@@ -437,3 +437,12 @@ def test_draft_proposed_in_a_case_lands_in_that_case(model):
 def test_refusal_does_not_double_a_trailing_period():
     assert ask_mod.refusal(ask_mod.Scope("Lakbay Logistics Inc.")) == "I can only see Lakbay Logistics Inc."
     assert ask_mod.refusal(ask_mod.Scope("Chart M Reyes")) == "I can only see Chart M Reyes."
+
+
+def test_files_added_outside_the_app_are_searched(model, talaan_home):
+    model.reply = {"answer": "x", "refused": False}
+    ask(CASE, "What is still open?")  # the index exists now
+    (talaan_home / "folders" / CASE / D / "2026-10-05_note.md").write_text(
+        "Witness Zaldy Mangubat saw the forklift.\n", encoding="utf-8")
+    r = ask(CASE, "What did Zaldy Mangubat see?")  # a stale index would refuse: name not in this folder
+    assert not r["refused"] and "Zaldy Mangubat saw the forklift" in model.calls[-1][1]["content"]
