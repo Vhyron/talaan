@@ -63,6 +63,8 @@ export type AskResponse = {
   answer: string
   sources: Source[]
   refused: boolean
+  /** why a refusal happened; `answer` stays "I can only see X." */
+  detail?: string | null
   outcome: Outcome | null
   proposal_id: string | null
   /** the saved chat this turn belongs to */
