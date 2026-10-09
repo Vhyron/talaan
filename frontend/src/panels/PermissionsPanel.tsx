@@ -65,8 +65,8 @@ export default function PermissionsPanel() {
                 {value === 'never' && <Lock size={14} className="text-red-700" aria-label="Never" />}
               </div>
               <p className="mt-0.5 text-xs text-muted">{help}</p>
-              <div role="radiogroup" aria-label={label} className="mt-2 grid grid-cols-3 gap-1 rounded-full bg-panel p-1">
-                {OPTIONS.map((o) => (
+              <div role="radiogroup" aria-label={label} className={`mt-2 grid ${key === 'read' ? 'grid-cols-2' : 'grid-cols-3'} gap-1 rounded-full bg-panel p-1`}>
+                {OPTIONS.filter((o) => key !== 'read' || o.value !== 'needs_approval').map((o) => (
                   <button
                     key={o.value}
                     role="radio"

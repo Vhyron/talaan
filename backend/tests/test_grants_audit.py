@@ -72,3 +72,28 @@ def test_app_db_is_outside_every_folder(talaan_home):
     log_event(F, "user", "question")
     assert (talaan_home / "app.db").is_file()
     assert not list((talaan_home / "folders").rglob("app.db"))
+
+
+def test_read_cannot_need_approval():
+    """There is no approval step for reading, so Read is Allow or Never (anything else fails closed)."""
+    r = c.put(f"/folders/{F}/grants", json={**DEFAULTS, "read": "needs_approval"})
+    assert r.status_code == 422 and c.get(f"/folders/{F}/grants").json()["read"] == "allow"
+
+
+def test_stored_read_needs_approval_counts_as_never():
+    from app.db import connect
+
+    with connect() as db:
+        db.execute('INSERT OR REPLACE INTO grants (folder_id, read, suggest_edits, create_drafts, "delete")'
+                   " VALUES (?, 'needs_approval', 'needs_approval', 'needs_approval', 'never')", (F,))
+    assert c.get(f"/folders/{F}/grants").json()["read"] == "never"
+
+
+def test_new_space_never_inherits_a_trashed_spaces_grants(talaan_home):
+    old = c.post("/folders", json={"name": "Acme", "mode": "case"}).json()
+    c.put(f"/folders/{old['id']}/grants", json={**DEFAULTS, "delete": "allow", "home_chat": True})
+    c.delete(f"/folders/{old['id']}")
+    new = c.post("/folders", json={"name": "Acme", "mode": "case"}).json()
+    assert new["id"] != old["id"] and new["name"] == "Acme"
+    assert c.get(f"/folders/{new['id']}/grants").json() == DEFAULTS
+    assert c.get(f"/folders/{new['id']}/audit").json() == []

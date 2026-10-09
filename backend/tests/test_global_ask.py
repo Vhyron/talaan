@@ -194,3 +194,17 @@ def test_failed_answer_takes_the_question_back(model, monkeypatch):
     assert c.post("/ask", json={"question": "anyone?"}).status_code == 503
     thread = c.get("/chat").json()
     assert thread is None or all(m["content"] != "anyone?" for m in thread["messages"])
+
+
+def test_wrong_shaped_answer_is_not_a_crash(model):
+    model.reply = {"answer": None}
+    r = c.post("/ask", json={"question": "penicillin allergy"})
+    assert r.status_code == 200 and r.json()["answer"].startswith("The model did not return a usable answer")
+
+
+def test_audit_written_in_every_included_folder(model):
+    """Each included Space's file list is in the prompt, so each one is audited, matched or not."""
+    model.reply = {"answer": "Penicillin [S1].", "refused": False}
+    ask("penicillin allergy")
+    for fid in (CASE, CHART, VILLA):
+        assert any(e["event"] == "question" for e in c.get(f"/folders/{fid}/audit").json())

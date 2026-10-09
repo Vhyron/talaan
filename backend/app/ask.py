@@ -404,8 +404,9 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     if get_grants(folder_id).read == Grant.NEVER:
         return reply(AskResponse(answer="Reading is turned off for this folder."))
 
-    if index.index_version(folder_id) == 0:  # never built: an empty index would look like "out of scope"
-        index.build_index(folder_id)
+    # Incremental (a no-op when nothing changed): also picks up files added or edited outside the app,
+    # which a stale index would otherwise answer as "out of scope".
+    index.build_index(folder_id)
 
     is_action = is_action_request(question)
     # With a file open, every question is about that file: it is the whole scope.

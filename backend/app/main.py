@@ -361,7 +361,10 @@ def get_grants(folder_id: str) -> Grants:
 @app.put("/folders/{folder_id}/grants")
 def put_grants(folder_id: str, body: Grants) -> Grants:
     _folder(folder_id)
-    return grants.set_grants(folder_id, body)
+    try:
+        return grants.set_grants(folder_id, body)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
 
 
 @app.get("/folders/{folder_id}/proposals")

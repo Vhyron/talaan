@@ -27,7 +27,8 @@ def resolve_in_folder(folder_root: Path, rel_path: str) -> Path:
     target = (root / decoded).resolve()  # follows symlinks
     if target == root or not target.is_relative_to(root):
         raise PathOutsideFolder(rel_path)
-    if HIDDEN_DIRS & set(target.relative_to(root).parts):
+    # casefold: macOS and Windows filesystems are case-insensitive, so `.TALAAN` is `.talaan`
+    if HIDDEN_DIRS & {p.casefold() for p in target.relative_to(root).parts}:
         raise PathOutsideFolder(rel_path)
     return target
 

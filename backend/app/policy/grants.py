@@ -2,7 +2,7 @@
 
 from app.audit import log_event
 from app.db import connect
-from app.schemas import Grants
+from app.schemas import Grant, Grants
 
 FIELDS = ("read", "suggest_edits", "create_drafts", "delete")
 
@@ -12,10 +12,21 @@ def get_grants(folder_id: str) -> Grants:
         row = db.execute("SELECT * FROM grants WHERE folder_id = ?", (folder_id,)).fetchone()
     if row is None:
         return Grants()  # defaults: read allow, suggest/create need approval, delete never
-    return Grants(**{k: row[k] for k in FIELDS}, home_chat=bool(row["home_chat"]))
+    g = Grants(**{k: row[k] for k in FIELDS}, home_chat=bool(row["home_chat"]))
+    if g.read == Grant.NEEDS_APPROVAL:  # Read is Allow or Never; fail closed on an older stored value
+        g.read = Grant.NEVER
+    return g
+
+
+def has_history(folder_id: str) -> bool:
+    """Whether an id was ever used (a live or trashed folder), so a new folder never inherits its grants."""
+    with connect() as db:
+        return db.execute("SELECT 1 FROM grants WHERE folder_id = ? COLLATE NOCASE", (folder_id,)).fetchone() is not None
 
 
 def set_grants(folder_id: str, new: Grants) -> Grants:
+    if new.read == Grant.NEEDS_APPROVAL:
+        raise ValueError("Read can only be Allow or Never")
     old = get_grants(folder_id)
     with connect() as db:
         db.execute(

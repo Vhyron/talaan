@@ -7,7 +7,8 @@ local (same Ollama models) and is deliberately limited:
   searched, and each one's Read grant still applies: a Space set to Never is not searched;
 - every passage is tagged with its folder, and the model must say which client each fact
   belongs to;
-- the question and answer are written to the audit log of every folder whose files were used.
+- the question and answer are written to the audit log of every included folder (the model sees
+  each one's file list, even when none of its passages are picked).
 """
 
 import re
@@ -64,8 +65,7 @@ def gather(fs: list[Folder], query: str) -> list[tuple[Folder, Hit]]:
     """The best chunks of every folder, merged by similarity (keyword-only hits after)."""
     found: list[tuple[Folder, Hit]] = []
     for f in fs:
-        if index.index_version(f.id) == 0:  # never built: build it so the folder can be searched
-            index.build_index(f.id)
+        index.build_index(f.id)  # incremental: picks up files added or edited outside the app
         found += [(f, h) for h in index.retrieve(f.id, query, k=PER_FOLDER)]
     return sorted(found, key=lambda fh: (fh[1].similarity is None, -(fh[1].similarity or 0), -fh[1].score))
 
@@ -128,18 +128,23 @@ def ask_all(question: str, history: Sequence[Turn] = ()) -> AskResponse:
          {"role": "user", "content": f"{history_block(history)}{catalogue(fs)}\n\n{context(chosen)}\n\nQuestion: {question}"}],
         schema=Answer,
     )
-    if r.data is None:
+    data = None
+    if r.data is not None:
+        try:
+            data = Answer.model_validate(r.data)
+        except ValueError:  # valid JSON of the wrong shape (small models do this)
+            pass
+    if data is None:
         resp = AskResponse(answer="The model did not return a usable answer. Please ask again.")
+    elif data.refused:
+        resp = AskResponse(answer=NOT_FOUND, refused=True)
     else:
-        data = Answer.model_validate(r.data)
-        if data.refused:
-            resp = AskResponse(answer=NOT_FOUND, refused=True)
-        else:
-            text, sources = map_citations(data.answer, chosen)
-            resp = AskResponse(answer=text, sources=sources)
+        text, sources = map_citations(data.answer, chosen)
+        resp = AskResponse(answer=text, sources=sources)
 
-    # Audit in every folder whose documents were shown to the model (cited or not).
-    for fid in sorted({f.id for f, _ in chosen}):
+    # Audit in every included folder: each one's file list is in the catalogue the model saw,
+    # even when none of its passages were picked.
+    for fid in sorted(f.id for f in fs):
         audit.log_event(fid, "user", "question", reason=f"Home chat (all folders): {question}")
         audit.log_event(fid, "model", "answer", reason=f"Home chat: {resp.answer}", model_tag=r.model,
                         decision="refused" if resp.refused else None)
