@@ -3,26 +3,7 @@
 Each route swaps to a real implementation in its own ticket (A2–A5, B3–B5, D1, D7).
 """
 
-from datetime import datetime
-
-from app.schemas import (
-    Outcome,
-    Source, SystemTier, Tier,
-)
-
-T = datetime.fromisoformat
-
-OPEN_ITEMS = Source(path="2026-10-02_open-items.md", start=3, end=5, snippet="Agency helper roster … Notice of Decision target date: Oct 16, 2026")
-EMAIL = Source(path="2026-09-26_email_from-representative.md", start=3, end=8, snippet="Requesting copies of the incident report and witness statements")
-
-ASK_ANSWER = {
-    "answer": "Three items are still open: the agency helper roster for the Sep 11 night shift [S1], "
-    "a reply to Atty. Ramos's request for copies [S2], and the Notice of Decision due Oct 16 [S1].",
-    "sources": [OPEN_ITEMS, EMAIL],
-}
-
-_R = "2026-09-13_interview_R-Santos.md"
-BLOCKED_DELETE = Outcome(status="blocked", action="delete", path=_R, reason="Delete is set to Never")
+from app.schemas import SystemTier, Tier
 
 _EMBED = "qwen3-embedding:0.6b"
 TIER = SystemTier(

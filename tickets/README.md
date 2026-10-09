@@ -37,7 +37,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | review |
 | [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | todo |
 | [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | todo |
-| [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | todo |
+| [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | review |
 | [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | review |
 | [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | todo |
 | [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | review |
