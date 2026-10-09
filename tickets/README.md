@@ -30,7 +30,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | ID | Title | Track | Pri | Est | Depends on | Status |
 |---|---|---|---|---|---|---|
 | [A1](A1-backend-scaffold-and-schemas.md) | Backend scaffold and shared schemas | A | P0 | 1h | — | review |
-| [A2](A2-folders-files-path-sealing.md) | Folders, files and path sealing | A | P0 | 2h | A1 | todo |
+| [A2](A2-folders-files-path-sealing.md) | Folders, files and path sealing | A | P0 | 2h | A1 | review |
 | [A3](A3-app-db-grants-audit.md) | app.db: grants and audit log | A | P0 | 1.5h | A1 | todo |
 | [A4](A4-policy-engine.md) | Policy engine and action execution | A | P0 | 2h | A2, A3 | todo |
 | [A5](A5-proposals-approval-flow.md) | Proposals and approval flow | A | P0 | 1.5h | A4 | todo |

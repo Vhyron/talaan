@@ -6,42 +6,11 @@ Each route swaps to a real implementation in its own ticket (A2–A5, B3–B5, D
 from datetime import datetime
 
 from app.schemas import (
-    AuditEvent, FileEntry, Folder, Outcome, Proposal, ProposeEditAction,
+    AuditEvent, Outcome, Proposal, ProposeEditAction,
     Source, SystemTier, Tier, TimelineEvent, TimelineFlag, TimelineResponse,
 )
 
 T = datetime.fromisoformat
-
-FOLDERS = [
-    Folder(id="Case-2026-014_Dela-Cruz", name="Case 2026-014 · Dela Cruz", mode="case", created_at=T("2026-09-12T09:00:00")),
-    Folder(id="Case-2026-019_Villanueva", name="Case 2026-019 · Villanueva", mode="case", created_at=T("2026-10-01T09:00:00")),
-    Folder(id="Chart_M-Reyes", name="Chart · M. Reyes", mode="chart", created_at=T("2026-08-03T09:00:00")),
-    Folder(id="Chart_A-Bautista", name="Chart · A. Bautista", mode="chart", created_at=T("2026-07-14T09:00:00")),
-]
-
-FILES = [
-    FileEntry(path=p, size=1200, mtime=T("2026-10-02T17:00:00"))
-    for p in [
-        "00_case-intake.md",
-        "2026-09-11_medical-certificate.md",
-        "2026-09-12_incident-report.md",
-        "2026-09-13_interview_R-Santos.md",
-        "2026-09-14_interview_L-Fernandez.md",
-        "2026-09-15_notice-to-explain.md",
-        "2026-09-19_employee-explanation.md",
-        "2026-09-24_hearing-minutes.md",
-        "2026-09-26_email_from-representative.md",
-        "2026-10-02_open-items.md",
-    ]
-]
-
-FILE_CONTENT = """# Open Items — Case 2026-014
-
-- [ ] Agency helper roster for Sep 11 night shift — requested Sep 25, no reply yet
-- [ ] Respond to Atty. Ramos's request for copies (Sep 26 email)
-- [ ] Notice of Decision target date: Oct 16, 2026
-- [x] Hearing held Sep 24
-"""
 
 OPEN_ITEMS = Source(path="2026-10-02_open-items.md", start=3, end=5, snippet="Agency helper roster … Notice of Decision target date: Oct 16, 2026")
 EMAIL = Source(path="2026-09-26_email_from-representative.md", start=3, end=8, snippet="Requesting copies of the incident report and witness statements")
