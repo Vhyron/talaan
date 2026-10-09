@@ -1,0 +1,97 @@
+# 04 · Architecture and tech stack
+
+Chosen for speed of building and ease of debugging over a 20-hour hackathon, not for familiarity.
+
+## Stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Backend | **Python + FastAPI** | All AI pieces are mature Python libraries: Ollama client, faster-whisper, PyMuPDF, numpy. FastAPI's auto-generated `/docs` page lets you call every endpoint by hand, so the AI and policy engine can be debugged without a UI and frontend/backend can be built in parallel. Pydantic defines the action schema once: sent to the model and used to validate its output |
+| Frontend | **React + Vite + Tailwind** | Instant hot reload. The browser network tab shows every request and response, so bugs are easy to place on one side or the other |
+| Model runtime | **Ollama** | Headless, one command per model, verbose logs with `OLLAMA_DEBUG=1`, `ollama ps` shows loaded models, JSON-schema-constrained output, embeddings endpoint. Code against its OpenAI-compatible API with a configurable base URL so LM Studio is a config swap |
+| Storage | **Plain Markdown files + one SQLite file per folder** | SQLite full-text search for keywords, embeddings stored as blobs, similarity computed with numpy. No vector DB service to crash; any `.db` opens in a SQLite viewer; deleting a client = deleting one folder |
+| PDF text | PyMuPDF | Fast, reliable text extraction |
+| Transcription | faster-whisper | Runs on CPU, int8, timestamps |
+| Python env | **uv** | Locked, fast installs; judges reproduce in a few commands |
+| Delivery | **Localhost web app** | Rules don't require packaging, only reproduction instructions |
+
+### Rejected
+
+| Option | Why not |
+|---|---|
+| Tauri | Rust compile times and debugging the Rust/web bridge |
+| Electron | Packaging overhead; Node lacks the Python AI libraries, so we'd still run a Python process |
+| Streamlit / Gradio | Rerun-on-interaction model makes multi-step approval flows hard to debug; limited UI hurts demo quality |
+| Forking marka.md | "Pre-existing project" is a dispute trigger; must be substantially built during the hackathon |
+
+## What the index does
+
+The index lets the app find the right passages fast. Each document is split into chunks; each chunk gets a keyword entry and an embedding (numbers representing meaning). A question retrieves the best-matching chunks, and only those go to the model, tagged with file and position for citations.
+
+**One index per folder makes sealing physical:** retrieval can't reach another client's chunks. Conversations, grants and the audit log are stored separately in the app database.
+
+## Data layout
+
+```
+~/Talaan/
+  folders/
+    Case-2026-014_Dela-Cruz/      <- user files (plain Markdown, PDFs)
+      .talaan/index.db            <- this folder's index only
+    Chart_M-Reyes/
+      .talaan/index.db
+  app.db                          <- grants, audit log, conversations (outside all folders)
+```
+
+The policy engine never exposes `.talaan/` or `app.db` to the model.
+
+## Repo layout (proposal)
+
+```
+talaan/
+  backend/
+    app/
+      main.py            FastAPI app and routes
+      schemas.py         Pydantic models, incl. the action schema
+      policy/            grants, decisions, path sealing
+      index/             chunking, embeddings, SQLite search
+      llm/               Ollama client, prompts, tool calls
+      transcribe/        faster-whisper wrapper
+      audit/             audit log writer and reader
+      system/            hardware tier detection
+    pyproject.toml
+  frontend/
+    src/
+      pages/             Folders, Folder view, Setup
+      components/        Ask panel, Sources, Permission panel, Approval diff, Audit log, Recorder
+  demo-data/
+  docs/
+  README.md              setup + run instructions for judges
+```
+
+## API (draft)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET / POST | `/folders` | List or create folders |
+| POST | `/folders/{id}/import` | Add files |
+| POST | `/folders/{id}/index` | Build or refresh the index |
+| POST | `/folders/{id}/ask` | Question → answer with sources, or proposed action |
+| POST | `/folders/{id}/timeline` | Timeline with sources |
+| GET / PUT | `/folders/{id}/grants` | Read or change permissions |
+| GET | `/folders/{id}/proposals` | Pending actions awaiting approval |
+| POST | `/proposals/{pid}/approve` · `/reject` | User decision |
+| GET | `/folders/{id}/audit` | Audit log |
+| POST | `/folders/{id}/transcribe` | Audio → transcript draft (needs Create) |
+| GET | `/system/tier` | Detected hardware tier and recommended models |
+
+## Run locally (target README for judges)
+
+```bash
+# 1. models
+ollama pull gemma4:e4b
+ollama pull qwen3-embedding:0.6b
+# 2. backend
+cd backend && uv sync && uv run uvicorn app.main:app --reload
+# 3. frontend
+cd frontend && npm install && npm run dev
+```
