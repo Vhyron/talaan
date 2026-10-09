@@ -26,6 +26,7 @@ function title(e: AuditEvent): string {
   if (e.event === 'answer') return 'Answer given'
   if (e.event === 'session_renamed') return 'Chat renamed'
   if (e.event === 'session_deleted') return 'Chat deleted'
+  if (e.event === 'file_deleted') return 'File deleted'
   const action = ACTION_NOUN[e.action ?? ''] ?? (e.action ? words(e.action) : 'action')
   if (e.event === 'proposed_action') return `Proposed ${action}`
   if (e.event === 'executed') return `Executed ${action}`
