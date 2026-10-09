@@ -49,11 +49,40 @@ function historyOf(messages: Msg[]): Turn[] {
   return turns.slice(-HISTORY_TURNS)
 }
 
+const POLL_MS = 3000
+const GIVE_UP_MS = 10 * 60_000 // an answer this late means the server stopped (e.g. restarted)
+
+/** The saved thread ends with a question and no answer: it's still being answered (the page
+ * was reloaded mid-answer). Show the wait, and poll until the answer is saved. */
+function awaitAnswer(s: ChatSession) {
+  const last = s.messages[s.messages.length - 1]
+  const askedAt = new Date(last.created_at).getTime()
+  if (Date.now() - askedAt > GIVE_UP_MS) {
+    set((t) => ({ messages: [...t.messages, { role: 'error', text: 'This question was never answered. Please ask again.' }] }))
+    return
+  }
+  set({ busy: true, since: askedAt })
+  const poll = () => api.homeChat()
+    .then((now) => {
+      const done = now && now.id === s.id && now.messages[now.messages.length - 1]?.role === 'assistant'
+      if (done) set({ busy: false, messages: fromSaved(now) })
+      else if (now?.id !== s.id) set({ busy: false }) // replaced meanwhile (a new chat elsewhere)
+      else if (Date.now() - askedAt > GIVE_UP_MS) set((t) => ({ busy: false, messages: [...t.messages, { role: 'error', text: 'No answer arrived. Please ask again.' }] }))
+      else setTimeout(poll, POLL_MS)
+    })
+    .catch(() => setTimeout(poll, POLL_MS))
+  setTimeout(poll, POLL_MS)
+}
+
 function load() {
   if (thread.loaded || thread.busy) return
   set({ loaded: true })
   api.homeChat()
-    .then((s) => set((t) => (t.busy || !s ? {} : { sessionId: s.id, messages: fromSaved(s) })))
+    .then((s) => {
+      if (thread.busy || !s || !s.messages.length) return
+      set({ sessionId: s.id, messages: fromSaved(s) })
+      if (s.messages[s.messages.length - 1].role === 'user') awaitAnswer(s)
+    })
     .catch(() => set({ loaded: false }))
 }
 

@@ -222,9 +222,17 @@ def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
         chats.check(chats.ALL, body.session_id)
     else:
         chats.clear_home()
-    res = global_ask.ask_all(body.question, body.history)
-    res.session_id = body.session_id or chats.new_id()
-    chats.save_turn(chats.ALL, res.session_id, body.question, res)
+    # The question is saved first, so a reload while the model is still answering shows it
+    # (the page then waits for the answer). If answering fails, the question is taken back.
+    sid = body.session_id or chats.new_id()
+    qid = chats.save_question(chats.ALL, sid, body.question)
+    try:
+        res = global_ask.ask_all(body.question, body.history)
+    except BaseException:
+        chats.drop_message(qid)
+        raise
+    res.session_id = sid
+    chats.save_answer(chats.ALL, sid, res)
     return res
 
 
