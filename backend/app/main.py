@@ -402,19 +402,12 @@ def audit_export(folder_id: str, format: Literal["json", "csv"] = "json") -> Res
 # --- Voice (D1) and system (D7) ------------------------------------------------
 
 
-@app.post("/folders/{folder_id}/transcribe")
-async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
-    """Audio -> local transcript -> create_draft through the policy engine.
-
-    The transcript is never written directly: with the default grants it becomes a
-    proposal the user approves, and with Create drafts set to Never it is blocked.
-    """
-    root = folders.folder_root(folder_id)
+async def _transcribe_upload(folder_id: str | None, audio: UploadFile) -> "voice.Transcript":
+    """Transcribe an upload on this laptop. Names from `folder_id`'s own files (if given) help spelling."""
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in voice.AUDIO_TYPES:
         raise HTTPException(415, f"Audio must be one of: {', '.join(sorted(voice.AUDIO_TYPES))}")
 
-    recorded = datetime.now()
     # The upload is staged outside every client folder and deleted right after.
     with tempfile.TemporaryDirectory(prefix="talaan-audio-") as tmp:
         staged = Path(tmp) / f"audio{suffix}"
@@ -423,7 +416,7 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
             folders.file_path(folder_id, f.path).read_text(encoding="utf-8", errors="replace")
             for f in folders.list_files(folder_id)
             if f.path.endswith((".md", ".txt"))
-        ]
+        ] if folder_id else []
         try:
             transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, voice.folder_vocabulary(texts))
         except voice.whisper.TooShort as e:
@@ -433,14 +426,43 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
 
     if not transcript.text:
         raise HTTPException(422, "No speech detected in the recording")
+    return transcript
+
+
+@app.post("/folders/{folder_id}/transcribe")
+async def transcribe(folder_id: str, audio: UploadFile, dir: str = Form("")) -> Outcome:
+    """Audio -> local transcript -> create_draft through the policy engine.
+
+    `dir` is the subfolder that was open when recording ("" = the Space's top level);
+    the draft is proposed there. The transcript is never written directly: with the
+    default grants it becomes a proposal the user approves, and with Create drafts set
+    to Never it is blocked.
+    """
+    root = folders.folder_root(folder_id)
+    subdir = folders.scope_dir(folder_id, dir) or ""  # same sealing checks as every path
+    recorded = datetime.now()
+    transcript = await _transcribe_upload(folder_id, audio)
 
     action = CreateDraftAction(
         action="create_draft",
-        path=voice.draft_name(root, recorded),
+        path=voice.draft_name(root, recorded, subdir),
         content=voice.to_markdown(transcript, recorded),
         reason=f"Voice note ({transcript.duration:.0f}s) transcribed on this laptop",
     )
     return engine.handle(folder_id, action, model_tag=transcript.model)
+
+
+@app.post("/voice/dictate")
+async def dictate(audio: UploadFile, folder_id: str | None = Form(None)) -> dict[str, str]:
+    """Hold-to-talk for the chat box: audio -> text, on this laptop.
+
+    Nothing is saved or proposed; the text only goes anywhere if the user sends it as a
+    question, which is audited then. With `folder_id`, names from that Space's own files
+    help spelling (never another Space's).
+    """
+    if folder_id:
+        folders.folder_root(folder_id)  # 404 for an unknown Space
+    return {"text": (await _transcribe_upload(folder_id, audio)).text}
 
 
 @app.get("/system/voice")
