@@ -93,7 +93,7 @@ All open source.
 
 | Area | Libraries |
 |---|---|
-| Backend | FastAPI, Pydantic, Uvicorn, python-multipart, faster-whisper (CTranslate2), PyAV, httpx (Ollama client), psutil (hardware tier detection), PyMuPDF (PDF text extraction), SQLite (Python standard library) |
+| Backend | FastAPI, Pydantic, Uvicorn, python-multipart, faster-whisper (CTranslate2), PyAV, httpx (Ollama client), psutil (hardware tier detection), PyMuPDF (PDF text extraction), NumPy (embedding similarity), SQLite with FTS5 (Python standard library) |
 | Backend tests | pytest, httpx |
 | Frontend | React, React DOM, React Router, Vite, Tailwind CSS, react-markdown, remark-gfm, lucide-react (icons), Fontsource (Noto Sans, JetBrains Mono, bundled locally) |
 | Frontend tooling | TypeScript, ESLint, typescript-eslint |
