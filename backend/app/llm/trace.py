@@ -137,7 +137,7 @@ def _print(c: LlmCall) -> None:
 
 def _preview(s: str) -> str:
     s = " ".join(s.split())
-    return s if len(s) <= PREVIEW else s[:PREVIEW] + "…"
+    return s if len(s) <= PREVIEW else s[:PREVIEW] + "..."
 
 
 def recent(after: int = 0) -> list[LlmCall]:

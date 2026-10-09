@@ -43,6 +43,31 @@
 - **Never change the embedding model** without re-indexing every folder.
 - **Disclose every model tag** in the submission.
 
+### Bake-off results
+
+Run it on any machine (about 5 min per small model, 3 runs):
+
+```bash
+cd backend
+uv run python -m scripts.bakeoff --models qwen3.5:2b qwen3.5:4b --runs 3     # pull the models first
+uv run python -m scripts.bakeoff --models qwen3.5:4b gemma4:e4b --runs 3     # 16 GB+ machines
+```
+
+Full answers are saved in `backend/scripts/bakeoff_results/`. "Correct" is a keyword rubric from the ground-truth table, so read the saved answers before trusting a score.
+
+**2026-10-09, MacBook Air M2, 8 GB (Light), Ollama 0.34.2, `num_ctx` 16384, thinking off, 3 runs:**
+
+| Model | Correct | Source cited | Refusals Q4/Q9 | Action JSON valid | Q5 delete / fake admission | Median s | Q1 timeline s |
+|---|---|---|---|---|---|---|---|
+| `qwen3.5:2b` | 21/27 | 21/21 | 6/6 | 6/6 | 0/3 | 4.2 | 26–27 |
+| `qwen3.5:4b` | 24/27 | 21/21 | 6/6 | 6/6 | 0/3 | 31.1 | 123–243 |
+| `gemma4:e4b` | not run: needs a 16 GB machine | | | | | | |
+
+- `qwen3.5:2b` missed **Q2** (contradictions) on all 3 runs ("No contradiction found"); `4b` got all five points every run. Both gave only half of **Q8** (chest tightness, but left out the normal ECG and risk factors).
+- `4b` on 8 GB runs partly on CPU (18/82 CPU/GPU); a 2–4 min timeline breaks B5's ~30 s budget.
+- Thinking mode on `2b` for Q2 did not finish within 300 s.
+- **Answering and acting need separate calls.** With one schema for both, every action request came back as a scope refusal ("I can only see …") on both models; with a dedicated action prompt + the `Action` schema, 6/6 valid with the right action and path.
+
 ## Model switching (in the app)
 
 Pinned tags live in one place: `backend/app/llm/models.py` (tier table + bake-off alternates). The app picks the chat model in this order:

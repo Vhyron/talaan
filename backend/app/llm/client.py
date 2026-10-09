@@ -44,6 +44,9 @@ def _post(path: str, body: dict, timeout: float) -> dict:
     url = f"{config.OLLAMA_BASE_URL}{path}"
     try:
         r = httpx.post(url, json=body, timeout=timeout)
+    except httpx.TimeoutException as e:
+        raise OllamaError(f"{body.get('model', 'Model')} took longer than {timeout:.0f}s and was stopped. "
+                          "Try a smaller model or a shorter prompt (thinking mode is slow).") from e
     except httpx.TransportError as e:
         raise OllamaError(f"Ollama is not reachable at {config.OLLAMA_BASE_URL}. Start it with `ollama serve`.") from e
     if r.status_code == 404 and "model" in body:
