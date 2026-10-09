@@ -70,7 +70,7 @@ export default function AuditPanel() {
         ) : !shown.length ? (
           <p className="text-sm text-muted">{blockedOnly ? 'Nothing has been blocked.' : 'No activity yet.'}</p>
         ) : (
-          <table className="w-full table-fixed border-separate border-spacing-0 overflow-hidden rounded-xl bg-white text-xs">
+          <table className="w-full min-w-[34rem] table-fixed border-separate border-spacing-0 overflow-hidden rounded-xl bg-white text-xs">
             <thead className="sticky top-0 bg-white text-left text-[11px] text-muted uppercase">
               <tr>
                 {[['When', 'w-28'], ['What', ''], ['Decision', 'w-28'], ['Details', 'w-36']].map(([h, w]) => (

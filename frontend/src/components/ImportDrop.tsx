@@ -25,12 +25,12 @@ export function ImportButton({ onFiles, busy }: { onFiles: (f: FileList) => void
   )
 }
 
-export function DropZone({ onFiles, children }: { onFiles: (f: FileList) => void; children: ReactNode }) {
+export function DropZone({ onFiles, children, className = '' }: { onFiles: (f: FileList) => void; children: ReactNode; className?: string }) {
   const [over, setOver] = useState(false)
   const has = (e: DragEvent) => e.dataTransfer.types.includes('Files')
   return (
     <div
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col"
+      className={`relative min-h-0 min-w-0 flex-1 flex-col ${className || 'flex'}`}
       onDragOver={(e) => { if (has(e)) { e.preventDefault(); setOver(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false) }}
       onDrop={(e) => { if (has(e)) { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files) } }}

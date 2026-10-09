@@ -112,7 +112,7 @@ def chat(
 def embed(texts: list[str]) -> EmbedResult:
     t0 = time.perf_counter()
     try:
-        d = _post("/api/embed", {"model": EMBED_MODEL, "input": texts, "options": {"num_ctx": EMBED_NUM_CTX}}, 120.0)
+        d = _post("/api/embed", {"model": EMBED_MODEL, "input": texts, "keep_alive": "30m", "options": {"num_ctx": EMBED_NUM_CTX}}, 120.0)
     except OllamaError as e:
         trace.record("embed", EMBED_MODEL, seconds=time.perf_counter() - t0, inputs=len(texts), error=str(e))
         raise

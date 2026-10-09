@@ -9,9 +9,9 @@ const POLL_MS = 2000
 
 export default function SettingsPage({ onModelChanged }: { onModelChanged: () => void }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-10 py-8">
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
       <div className="mx-auto max-w-4xl">
-        <h1 className="text-3xl font-extrabold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Settings</h1>
         <p className="mt-1 text-muted">Models run on this laptop through Ollama. Nothing is sent online.</p>
         <ModelSection onModelChanged={onModelChanged} />
         <ActivitySection />

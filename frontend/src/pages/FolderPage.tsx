@@ -6,7 +6,8 @@ import type { FileEntry, Folder } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
-import RightPanel, { type PanelTab } from '../components/RightPanel'
+import VoiceNote from '../components/VoiceNote'
+import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
 import { DropZone, ImportButton } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
 import ApprovalsPanel from '../panels/ApprovalsPanel'
@@ -24,7 +25,7 @@ export default function FolderPage({ folders, error }: { folders: Folder[]; erro
     return (
       <div className="flex min-h-0 flex-1">
         <Sidebar folders={folders} error={error} />
-        <p className="p-10 text-muted">{folders.length ? 'Folder not found.' : 'Loading…'}</p>
+        <p className="p-6 text-muted sm:p-10">{folders.length ? 'Folder not found.' : 'Loading…'}</p>
       </div>
     )
   }
@@ -39,6 +40,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const [tabs, setTabs] = useState<Tabs>({ paths: [], active: 0 })
   const [highlight, setHighlight] = useState<Highlight>(null)
   const [panel, setPanel] = useState<PanelTab>('ask')
+  // Phones show one view at a time: the document or the selected panel.
+  const [mobileView, setMobileView] = useState<'doc' | 'panel'>('doc')
   const [version, setVersion] = useState(0)
 
   const refreshFiles = useCallback(() => {
@@ -58,6 +61,7 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
       return i >= 0 ? { paths, active: i } : { paths: [...paths, path], active: paths.length }
     })
     setHighlight(start ? { start, end: end ?? start } : null)
+    setMobileView('doc')
   }, [])
 
   const select = (i: number) => {
@@ -87,6 +91,12 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
         highlight={highlight}
         panel={panel}
         onPanel={setPanel}
+        mobileView={mobileView}
+        onMobileView={(v) => {
+          if (v === 'doc') return setMobileView('doc')
+          setPanel(v)
+          setMobileView('panel')
+        }}
         onSelect={select}
         onClose={close}
       />
@@ -94,13 +104,15 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   )
 }
 
-function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelect, onClose }: {
+function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileView, onMobileView, onSelect, onClose }: {
   folders: Folder[]
   error: string | null
   tabs: Tabs
   highlight: Highlight
   panel: PanelTab
   onPanel: (t: PanelTab) => void
+  mobileView: 'doc' | 'panel'
+  onMobileView: (v: 'doc' | PanelTab) => void
   onSelect: (i: number) => void
   onClose: (i: number) => void
 }) {
@@ -109,6 +121,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
   const current = tabs.paths[tabs.active]
 
   return (
+    <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex min-h-0 flex-1">
       <Sidebar
         folders={folders}
@@ -127,20 +140,25 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
         }
       />
 
-      <DropZone onFiles={imp.importFiles}>
-        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-4 text-xs">
-          <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
-            <Lock size={11} /> Sealed: AI can only see this {noun(folder.mode).toLowerCase()}
+      <DropZone onFiles={imp.importFiles} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
+        <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-xs sm:px-4">
+          <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
+            <Lock size={11} className="shrink-0" />
+            <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
           </span>
-          <span className="text-muted">{files.length} files</span>
+          <span className="hidden shrink-0 text-muted sm:inline">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
+          <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
+          <span className="ml-auto sm:ml-0 lg:ml-auto">
+            <VoiceNote onProposed={() => onMobileView('approvals')} />
+          </span>
         </div>
         <FileTabs tabs={tabs.paths} active={tabs.active} onSelect={onSelect} onClose={onClose} />
         <div className="min-h-0 flex-1 overflow-y-auto">
           {current ? (
             <FileViewer key={current} path={current} highlight={highlight} />
           ) : (
-            <p className="p-10 text-muted">
-              {files.length ? 'Open a file from the left.' : 'This folder is empty. Drop files here or use Import files.'}
+            <p className="p-6 text-muted sm:p-10">
+              {files.length ? 'Open a file from the folder list.' : 'This folder is empty. Drop files here or use Import files.'}
             </p>
           )}
         </div>
@@ -150,14 +168,17 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
         tab={panel}
         onTab={onPanel}
         wide={panel === 'audit' || panel === 'approvals' || panel === 'timeline'}
+        mobileVisible={mobileView === 'panel'}
         panels={{
-          ask: <AskPanel onShowApprovals={() => onPanel('approvals')} />,
+          ask: <AskPanel onShowApprovals={() => onMobileView('approvals')} />,
           timeline: <TimelinePanel />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,
           audit: <AuditPanel />,
         }}
       />
+    </div>
+    <MobileTabs view={mobileView === 'doc' ? 'doc' : panel} onView={onMobileView} />
     </div>
   )
 }

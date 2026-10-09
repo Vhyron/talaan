@@ -47,8 +47,8 @@ export default function FileViewer({ path, highlight }: { path: string; highligh
   if (isPdf(path)) {
     return <iframe title={path} src={`/api/folders/${encodeURIComponent(folder.id)}/files/${encodeURIComponent(path)}`} className="h-full w-full" />
   }
-  if (error) return <p className="p-10 text-red-700">{error}</p>
-  if (text === null) return <p className="p-10 text-muted">Loading…</p>
+  if (error) return <p className="p-6 text-red-700 sm:p-10">{error}</p>
+  if (text === null) return <p className="p-6 text-muted sm:p-10">Loading…</p>
 
   // The first H1 becomes the page title; keep line numbers aligned with the file.
   const lines = text.split('\n')
@@ -59,9 +59,9 @@ export default function FileViewer({ path, highlight }: { path: string; highligh
   const date = path.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
 
   return (
-    <article ref={root} className="mx-auto max-w-3xl px-10 py-8">
-      <p className="text-sm text-muted">{folder.name} / {path}</p>
-      <h1 className={`mt-2 text-3xl font-extrabold tracking-tight ${highlight && h1 + 1 >= highlight.start && h1 + 1 <= highlight.end ? 'source-hit' : ''}`}>
+    <article ref={root} className="mx-auto max-w-3xl px-4 py-5 sm:px-10 sm:py-8">
+      <p className="text-sm break-words text-muted">{folder.name} / {path}</p>
+      <h1 className={`mt-2 text-2xl font-extrabold tracking-tight break-words sm:text-3xl ${highlight && h1 + 1 >= highlight.start && h1 + 1 <= highlight.end ? 'source-hit' : ''}`}>
         {title}
       </h1>
       <div className="mt-3 flex flex-wrap gap-2">

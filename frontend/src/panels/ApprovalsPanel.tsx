@@ -146,7 +146,7 @@ export default function ApprovalsPanel() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 border-t border-line bg-white p-3">
+          <div className="flex flex-wrap items-center gap-2 border-t border-line bg-white p-3">
             <button className="btn-primary text-sm" disabled={busy || !ids.length} onClick={() => decide(ids, true)}>
               Approve {ids.length}
             </button>

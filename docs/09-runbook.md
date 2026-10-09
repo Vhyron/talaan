@@ -35,6 +35,9 @@ cd frontend; npm ci; cd ..
 ollama pull qwen3-embedding:0.6b   # every tier, always
 ollama pull qwen3.5:2b             # Light   (8 GB RAM)
 ollama pull gemma4:e4b             # Standard (16 GB RAM / Apple 16 GB / 8-10 GB GPU)
+
+# Speech-to-text model for voice notes (faster-whisper "small", ~464 MB)
+cd backend; uv run python -m app.transcribe.whisper --download; cd ..
 ```
 
 Pull the embedding model plus the chat model for your tier; pulling more is fine (switch on the Settings page). Pinned tags live in `backend/app/llm/models.py` and are final after the B1 bake-off (05-models.md). Pull models before the venue; the Wi-Fi there may be slow.
@@ -81,10 +84,12 @@ All optional, set as environment variables before starting the backend (see `bac
 | Variable | Default | Use |
 |---|---|---|
 | `TALAAN_HOME` | `~/Talaan` | Where folders and `app.db` live |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. The client uses Ollama's native API (needed for per-request `num_ctx`), so LM Studio is not a drop-in swap |
-| `CHAT_MODEL` | unset (auto by hardware tier) | Optional dev override; must be a pinned tag in `backend/app/llm/models.py`. Normally switch on the Setup page / `PUT /system/model` ([05-models.md](05-models.md#model-switching-in-the-app)) |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama server. Use `127.0.0.1`, not `localhost`: on Windows `localhost` tries IPv6 first and adds ~2 s to every model call. The client uses Ollama's native API (needed for per-request `num_ctx`), so LM Studio is not a drop-in swap |
+| `CHAT_MODEL` | unset (auto by hardware tier) | Optional dev override; must be a pinned tag in `backend/app/llm/models.py`. Normally switch on the Settings page / `PUT /system/model` ([05-models.md](05-models.md#model-switching-in-the-app)). The embedding model is fixed (`qwen3-embedding:0.6b`), not configurable |
 | `NUM_CTX` | `16384` | Context window sent on every request |
 | `LLM_LOG_PROMPTS` | unset | `1` forces "Record prompt and response text" on in the LLM activity log (memory only, never written to disk). Same as the toggle on the Settings page |
+| `WHISPER_MODEL` | `small` | faster-whisper size: `base` (Light), `small` (Standard), `large-v3-turbo` (Pro). Download it with the command in section 2 |
+| `WHISPER_LANGUAGES` | `en,tl` | Languages a voice note may be in; Whisper picks the likeliest of these (English, Tagalog, Taglish). One code forces it, e.g. `en` |
 
 ### Running ticket branches side by side
 
@@ -128,20 +133,32 @@ uv run python -m scripts.bakeoff --models qwen3.5:4b gemma4:e4b --runs 3   # 16 
 uv run python -m scripts.bakeoff --actions-only --runs 3                    # action JSON only
 ```
 
-It prints a summary table and saves every answer to `backend/scripts/bakeoff_results/<date>.json`. Commit that file and add the row to the results table in [05-models.md](05-models.md#bake-off-results), noting the laptop (model, RAM, GPU). The acceptance questions Q1–Q9 in [demo-data/README.md](../demo-data/README.md) are the end-to-end check once the AI tickets (B4, B5) are merged; D4 automates them.
+It prints a summary table and saves every answer to `backend/scripts/bakeoff_results/<date>.json`. Commit that file and add the row to the results table in [05-models.md](05-models.md#bake-off-results), noting the laptop (model, RAM, GPU).
+
+### Acceptance test (D4)
+
+The nine ground-truth questions in [demo-data/README.md](../demo-data/README.md), plus the sealing and prompt-injection rules, against the running backend:
+
+```powershell
+cd backend
+uv run scripts/seed_demo.py --reset     # always start from the demo state
+uv run scripts/acceptance.py            # backend on http://127.0.0.1:8000
+uv run scripts/acceptance.py --only 4,5,9 --base http://127.0.0.1:8011
+```
+
+It prints PASS/FAIL per question with the reason and real seconds per answer, and exits non-zero on any failure. It is the sign-off for milestone M2: everything must pass before rehearsals. Until B4/B5 merge, only Q3, Q4 and Q9 pass (the routes still return sample answers). Timings may be quoted in the pitch, so only quote numbers from a real run on the demo laptop.
 
 ## 6. Reset before a demo or rehearsal
 
-Rehearsals approve drafts, change grants and fill the audit log. Reset to the pristine demo state:
+Rehearsals approve drafts, change grants and fill the audit log. One command gets back to the demo state (from `backend/`):
 
 ```powershell
-# Stop the backend first (Ctrl+C), then:
-Remove-Item -Recurse -Force "$HOME\Talaan"
-New-Item -ItemType Directory -Force "$HOME\Talaan\folders" | Out-Null
-Copy-Item -Recurse demo-data\hr\*, demo-data\clinic\* "$HOME\Talaan\folders\"
+uv run scripts/seed_demo.py --reset
 ```
 
-This deletes `app.db` too: grants go back to defaults, the audit log and pending proposals are cleared. Indexes are rebuilt on the next index call. D3 replaces this with a reset script.
+It restores the four demo folders from `demo-data/` (removing files added during rehearsal), resets their grants to the defaults, clears their proposals, audit log and chat history, rebuilds their indexes and warms the Ollama models so the first answer isn't slow. Other folders and their history are left alone. Add `--no-warm` to skip the model warm-up.
+
+For a completely clean `TALAAN_HOME` (e.g. a new laptop): `uv run scripts/seed_demo.py --fresh --yes`. It refuses to wipe a folder that contains anything other than `folders/` and `app.db`, in case `TALAAN_HOME` points somewhere wrong.
 
 **Never edit the files in `demo-data/`** to "fix" the demo. `2026-09-26_email_from-representative.md` contains a deliberate prompt injection; it is a test fixture.
 
@@ -151,11 +168,12 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 
 - [ ] `git pull` on the branch being demoed; `uv sync` and `npm ci` if dependencies changed
 - [ ] Models pulled and listed in `ollama list` (exact pinned tags)
+- [ ] `uv run scripts/seed_demo.py --reset` (section 6)
 - [ ] Settings page shows the expected tier and the chat model you will demo with ("In use"); no `CHAT_MODEL` env var left over
-- [ ] Demo data reset (section 6)
 - [ ] Backend and frontend running; `http://localhost:8000/health` shows the pinned model tags
 - [ ] Ask one question per folder so the models are loaded and warm (`ollama ps`)
 - [ ] **Turn Wi-Fi off**, refresh the app, run the full 5-minute script from [06-demo-and-pitch.md](06-demo-and-pitch.md)
+- [ ] `uv run scripts/acceptance.py` passes 9/9 with Wi-Fi off
 - [ ] Check Audit → Blocked only shows the injection attempt; then reset again
 - [ ] Backup demo video on the laptop and on a USB stick
 
@@ -176,4 +194,7 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 | Answers suddenly slow, `ollama ps` shows `CPU/GPU` split | Model larger than memory allows, or a second chat model still loaded | Switch on the Settings page (it unloads the old model); `ollama stop <tag>` |
 | Ask and Timeline always show Case 2026-014 answers | Expected until B4/B5 merge: those routes still return fixture data (`backend/app/fixtures.py`) | — |
 | `git push` → `403 Permission … denied to <work account>` | Git Credential Manager uses one saved GitHub login for every folder | In the partition's gitconfig (e.g. `~/.gitconfig-personal`) set `[credential "https://github.com"] username = <your account>`; optionally `gitHubAuthModes = device` and complete the code in a browser window signed in to that account |
+| Voice note fails with `open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 removed an argument faster-whisper 1.2 still passes | `uv sync` (the lockfile pins `av<19`); don't upgrade `av` past 18 |
+| Voice note comes out in the wrong language (e.g. Chinese) or as random words | Whisper guessed the language from a very short or quiet clip | Fixed: it now only chooses among `WHISPER_LANGUAGES`, refuses clips under 1.5 s and drops segments it rates as non-speech. Speak for a few seconds, close to the mic |
+| Voice note fails offline / tries to download | Whisper model not cached | Run the download command in section 2 while online |
 | `git add -A` stages thousands of files | Branch made from a commit without `.gitignore` | Unstage (`git reset`), branch from current `dev`, add paths explicitly |
