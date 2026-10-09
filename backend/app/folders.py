@@ -9,6 +9,7 @@ from fastapi import HTTPException, UploadFile
 
 from app import config
 from app.policy import PathOutsideFolder, rel, resolve_in_folder
+from app.policy.grants import init_grants
 from app.schemas import FileEntry, Folder, FolderCreate
 
 IMPORT_TYPES = {".md", ".txt", ".pdf"}
@@ -67,6 +68,7 @@ def create_folder(body: FolderCreate) -> Folder:
     (path / ".talaan").mkdir(parents=True)
     meta = {"name": body.name, "mode": body.mode, "created_at": datetime.now().isoformat()}
     (path / ".talaan" / META).write_text(json.dumps(meta), encoding="utf-8")
+    init_grants(folder_id)
     return _meta(path)
 
 
