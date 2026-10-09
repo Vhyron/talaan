@@ -1,16 +1,16 @@
-"""Talaan API. A1: every route exists and returns fixture data (see app/fixtures.py)."""
+"""Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
 import csv
 import io
 import json
-from datetime import datetime
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from app import fixtures as fx
+from app import folders
 from app.config import CHAT_MODEL, EMBED_MODEL
 from app.schemas import (
     AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Outcome,
@@ -30,10 +30,7 @@ _grants: dict[str, Grants] = {}
 
 
 def _folder(folder_id: str) -> Folder:
-    for f in fx.FOLDERS:
-        if f.id == folder_id:
-            return f
-    raise HTTPException(404, "Folder not found")
+    return folders.get_folder(folder_id)
 
 
 @app.get("/health")
@@ -46,35 +43,35 @@ def health() -> dict:
 
 @app.get("/folders")
 def list_folders() -> list[Folder]:
-    return fx.FOLDERS
+    return folders.list_folders()
 
 
 @app.post("/folders", status_code=201)
 def create_folder(body: FolderCreate) -> Folder:
-    return Folder(id=body.name.replace(" ", "-"), name=body.name, mode=body.mode, created_at=datetime.now())
+    return folders.create_folder(body)
 
 
 @app.get("/folders/{folder_id}")
 def get_folder(folder_id: str) -> Folder:
-    return _folder(folder_id)
+    return folders.get_folder(folder_id)
 
 
 @app.get("/folders/{folder_id}/files")
 def list_files(folder_id: str) -> list[FileEntry]:
-    _folder(folder_id)
-    return fx.FILES
+    return folders.list_files(folder_id)
 
 
-@app.get("/folders/{folder_id}/files/{path:path}", response_class=PlainTextResponse)
-def read_file(folder_id: str, path: str) -> str:
-    _folder(folder_id)
-    return fx.FILE_CONTENT
+@app.get("/folders/{folder_id}/files/{path:path}", response_model=None)
+def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
+    target = folders.file_path(folder_id, path)
+    if target.suffix.lower() == ".pdf":
+        return FileResponse(target, media_type="application/pdf")
+    return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"))
 
 
 @app.post("/folders/{folder_id}/import")
-def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
-    _folder(folder_id)
-    return [FileEntry(path=f.filename or "upload", size=0, mtime=datetime.now()) for f in files]
+async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
+    return await folders.import_files(folder_id, files)
 
 
 # --- Index, ask, timeline (B3–B5) ---------------------------------------------
@@ -83,7 +80,7 @@ def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
 @app.post("/folders/{folder_id}/index")
 def build_index(folder_id: str) -> dict:
     _folder(folder_id)
-    return {"chunks": 0, "files": len(fx.FILES)}
+    return {"chunks": 0, "files": len(folders.list_files(folder_id))}
 
 
 @app.post("/folders/{folder_id}/ask")
