@@ -3,6 +3,7 @@ import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, S
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import Mascot from '../components/Mascot'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { chatScope, useFolder } from '../lib/folderContext'
@@ -215,7 +216,10 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
 
       {view === 'history' ? (
         <ChatHistory
+          folderId={folder.id}
+          emptyText={`No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}
           activeId={sessionId}
+          activeCount={messages.filter((m) => m.role !== 'error').length}
           onOpen={resume}
           onDeleted={(sid) => {
             if (sid === sessionId) update(() => EMPTY)
@@ -231,6 +235,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           </div>
 
           <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-sm">
+            {empty && <Mascot pose="hug" className="mx-auto h-24 w-24" />}
             {empty && (
               <p className="text-muted">
                 Answers come only from {currentPath ? 'the open file' : dir ? `files in ${dir}` : 'files in this Space'}, with

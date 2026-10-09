@@ -140,11 +140,23 @@ def test_home_thread_is_saved_and_continued(model):
     assert thread["id"] == sid and [m["content"] for m in thread["messages"] if m["role"] == "user"] == ["first", "second"]
 
 
-def test_new_home_thread_replaces_the_old_one_but_audit_stays(model):
+def test_home_chats_are_kept_as_history(model):
     model.reply = {"answer": "Penicillin [S1].", "refused": False}
     old = ask("penicillin allergy")["session_id"]
     new = ask("badge entry")["session_id"]
-    assert new != old and c.get("/chat").json()["id"] == new
+    assert new != old and c.get("/chat").json()["id"] == new  # the newest opens on load
+    listed = c.get("/chats").json()
+    assert [s["id"] for s in listed] == [new, old] and listed[1]["title"] == "penicillin allergy"
+    assert c.get(f"/chats/{old}").json()["messages"][0]["content"] == "penicillin allergy"
+    assert [s["id"] for s in c.get("/chats", params={"q": "badge"}).json()] == [new]
+
+
+def test_home_chat_rename_and_delete_keep_the_audit(model):
+    model.reply = {"answer": "Penicillin [S1].", "refused": False}
+    sid = ask("penicillin allergy")["session_id"]
+    assert c.patch(f"/chats/{sid}", json={"title": "Allergies"}).json()["title"] == "Allergies"
+    assert c.delete(f"/chats/{sid}").status_code == 204
+    assert c.get("/chats").json() == [] and c.get(f"/chats/{sid}").status_code == 404
     assert any(e["reason"] == "Home chat (all folders): penicillin allergy" for e in c.get(f"/folders/{CHART}/audit").json())
 
 
@@ -156,3 +168,29 @@ def test_home_thread_is_not_a_folder_chat(model):
         assert c.get(f"/folders/{f}/chats/{sid}").status_code == 404
     assert c.get("/folders/*/chats").status_code == 404
     assert c.post("/ask", json={"question": "x", "session_id": "nope"}).status_code == 404
+
+
+def test_question_is_saved_before_the_answer(model, monkeypatch):
+    seen = {}
+
+    def slow_chat(messages, schema=None, **kw):
+        thread = c.get("/chat").json()  # what a reload would see while the model is answering
+        seen["roles"] = [m["role"] for m in thread["messages"]]
+        return ChatResult(content="", model="fake:1b", seconds=0, data={"answer": "x", "refused": False})
+
+    monkeypatch.setattr(client, "chat", slow_chat)
+    ask("still thinking?")
+    assert seen["roles"] == ["user"]
+    assert [m["role"] for m in c.get("/chat").json()["messages"]] == ["user", "assistant"]
+
+
+def test_failed_answer_takes_the_question_back(model, monkeypatch):
+    from app.llm.client import OllamaError
+
+    def broken(messages, **kw):
+        raise OllamaError("Ollama is not running")
+
+    monkeypatch.setattr(client, "chat", broken)
+    assert c.post("/ask", json={"question": "anyone?"}).status_code == 503
+    thread = c.get("/chat").json()
+    assert thread is None or all(m["content"] != "anyone?" for m in thread["messages"])

@@ -12,6 +12,7 @@ import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
 import { renamePath } from '../lib/renamed'
+import ConfirmDialog from './ConfirmDialog'
 
 // Whether a mouse/touch button is currently held anywhere on the page.
 let pointerIsDown = false
@@ -583,25 +584,19 @@ function MoveToTrash({ kind, folderId, path, name, active }: {
         <Trash2 size={13} />
       </button>
       {confirming && (
-        <div
-          className="basis-full px-2 pb-1.5"
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setConfirming(false) } }}
+        <ConfirmDialog
+          title={`Move ${kind === 'folder' ? 'folder' : kind} to Trash?`}
+          confirmLabel="Move to Trash"
+          busyLabel="Moving…"
+          busy={busy}
+          error={error}
+          onConfirm={trash}
+          onClose={() => setConfirming(false)}
         >
-          <div role="alertdialog" aria-label={`Move ${name} to Trash?`} className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-900">
-            <p>
-              Move <span className="font-semibold break-words">{name}</span> to Trash?
-              {kind === 'folder' ? ' The whole folder goes; its permissions, audit log and chats are kept.' : ''} You can restore it from Trash.
-            </p>
-            {error && <p role="alert" className="mt-1 text-red-700">{error}</p>}
-            <div className="mt-1.5 flex gap-1">
-              <button autoFocus onClick={trash} disabled={busy} className="rounded bg-red-700 px-2 py-1 font-semibold text-white disabled:opacity-50">
-                {busy ? 'Moving…' : 'Move to Trash'}
-              </button>
-              <button onClick={() => setConfirming(false)} className="rounded px-2 py-1 hover:bg-white">Cancel</button>
-            </div>
-          </div>
-        </div>
+          <p><span className="font-semibold break-words text-ink">{name}</span>{kind === 'folder' ? ' and everything in it' : ''} will move to the Trash, where the AI can't read it.</p>
+          {kind === 'folder' && <p>Its permissions, audit log and chats are kept.</p>}
+          <p>You can restore it from Trash.</p>
+        </ConfirmDialog>
       )}
     </>
   )

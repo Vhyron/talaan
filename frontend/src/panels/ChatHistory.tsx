@@ -3,16 +3,20 @@ import { Pencil, Search, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { ChatSessionSummary } from '../api/types'
 import { ago } from '../lib/format'
-import { useFolder } from '../lib/folderContext'
 
-/** Saved chats for the open folder only: search, continue, rename, delete. */
-export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: {
+/** Saved chats for one folder only, or for the home chat (`folderId` null): search,
+ * continue, rename, delete. */
+export default function ChatHistory({ folderId, emptyText, activeId, activeCount, onOpen, onDeleted, onRenamed }: {
+  folderId: string | null
+  emptyText: string
   activeId: string | null
+  /** Saved messages in the open chat right now: the list refetches when it changes, and the
+   * open chat's row shows it at once (counts and new chats stay current while you talk). */
+  activeCount: number
   onOpen: (sid: string) => void
   onDeleted: (sid: string) => void
   onRenamed: () => void
 }) {
-  const { folder } = useFolder()
   const [q, setQ] = useState('')
   const [list, setList] = useState<ChatSessionSummary[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -23,12 +27,12 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
   useEffect(() => {
     let live = true
     const t = setTimeout(() => {
-      api.chats(folder.id, q)
+      api.chats(folderId, q)
         .then((l) => { if (live) { setList(l); setError(null) } })
         .catch((e) => live && setError((e as Error).message))
     }, q ? 250 : 0)
     return () => { live = false; clearTimeout(t) }
-  }, [folder.id, q])
+  }, [folderId, q, activeId, activeCount])
 
   function startEdit(s: ChatSessionSummary) {
     cancelled.current = false
@@ -42,7 +46,7 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
     setEditing(null)
     if (!title) return
     try {
-      const s = await api.renameChat(folder.id, editing.id, title)
+      const s = await api.renameChat(folderId, editing.id, title)
       setList((l) => l?.map((x) => (x.id === s.id ? s : x)) ?? l)
       onRenamed()
     } catch (e) {
@@ -53,7 +57,7 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
   async function remove(sid: string) {
     setConfirming(null)
     try {
-      await api.deleteChat(folder.id, sid)
+      await api.deleteChat(folderId, sid)
       setList((l) => l?.filter((x) => x.id !== sid) ?? l)
       onDeleted(sid)
     } catch (e) {
@@ -81,7 +85,7 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
         {list === null ? (
           <p className="text-muted">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-muted">{q.trim() ? 'No saved chats match.' : 'No saved chats in this Space yet. Every question you ask is saved here.'}</p>
+          <p className="text-muted">{q.trim() ? 'No saved chats match.' : emptyText}</p>
         ) : (
           <ul className="space-y-2">
             {list.map((s) => (
@@ -116,7 +120,10 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
                     <button onClick={() => onOpen(s.id)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate font-medium">{s.title}</span>
                       <span className="block text-xs text-muted">
-                        {s.scope ? `${s.scope} · ` : ''}{ago(s.updated_at)} · {Math.ceil(s.message_count / 2)} {s.message_count === 2 ? 'question' : 'questions'}
+                        {(() => {
+                          const n = Math.ceil((s.id === activeId ? Math.max(activeCount, s.message_count) : s.message_count) / 2)
+                          return `${s.scope ? `${s.scope} · ` : ''}${ago(s.updated_at)} · ${n} ${n === 1 ? 'question' : 'questions'}`
+                        })()}
                         {s.id === activeId ? ' · open now' : ''}
                       </span>
                     </button>

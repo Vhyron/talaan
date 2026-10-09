@@ -4,6 +4,8 @@ import { FileText, Folder as FolderIcon, FolderOpen, RotateCcw, Trash2 } from 'l
 import { api } from '../api/client'
 import type { Folder, TrashItem } from '../api/types'
 import Sidebar from '../components/Sidebar'
+import ConfirmDialog from '../components/ConfirmDialog'
+import Mascot from '../components/Mascot'
 import { ago, fileLabel } from '../lib/format'
 import { useTree } from '../lib/tree'
 
@@ -17,6 +19,8 @@ export default function TrashPage({ folders, error }: { folders: Folder[]; error
   const [note, setNote] = useState<{ text: string; error?: boolean; folderId?: string } | null>(null)
   const [purging, setPurging] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+
+  const purgeItem = items?.find((i) => i.id === purging)
 
   const load = useCallback(() => {
     api.trash().then((t) => { setItems(t); setLoadError(null) }).catch((e) => setLoadError(e.message))
@@ -66,7 +70,12 @@ export default function TrashPage({ folders, error }: { folders: Folder[]; error
           </p>
         )}
         {loadError && <p className="mt-4 text-red-700">{loadError}</p>}
-        {items && !items.length && <p className="mt-6 text-muted">The Trash is empty.</p>}
+        {items && !items.length && (
+          <div className="mt-8 flex flex-col items-center text-center text-muted">
+            <Mascot pose="sealed" className="h-28 w-28" />
+            <p className="mt-3">The Trash is empty.</p>
+          </div>
+        )}
 
         <ul className="mt-6 space-y-2">
           {items?.map((item) => {
@@ -90,20 +99,24 @@ export default function TrashPage({ folders, error }: { folders: Folder[]; error
                     </button>
                   </div>
                 </div>
-                {purging === item.id && (
-                  <div role="alertdialog" aria-label="Delete forever?" className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                    <p>Delete <span className="font-semibold">{item.name}</span> permanently? This can't be undone. The audit log keeps the record that it existed.</p>
-                    <div className="mt-2 flex gap-2">
-                      <button autoFocus onClick={() => purge(item)} disabled={busy === item.id} className="rounded-full bg-red-700 px-3 py-1.5 font-semibold text-white disabled:opacity-50">Delete forever</button>
-                      <button onClick={() => setPurging(null)} className="rounded-full px-3 py-1.5 hover:bg-white">Cancel</button>
-                    </div>
-                  </div>
-                )}
               </li>
             )
           })}
         </ul>
       </main>
+      {purgeItem && (
+        <ConfirmDialog
+          title="Delete forever?"
+          confirmLabel="Delete forever"
+          busyLabel="Deleting…"
+          busy={busy === purgeItem.id}
+          onConfirm={() => purge(purgeItem)}
+          onClose={() => setPurging(null)}
+        >
+          <p><span className="font-semibold break-words text-ink">{purgeItem.kind === 'folder' ? purgeItem.name : purgeItem.path}</span> will be deleted permanently. This can't be undone.</p>
+          <p>The audit log keeps the record that it existed.</p>
+        </ConfirmDialog>
+      )}
     </div>
   )
 }

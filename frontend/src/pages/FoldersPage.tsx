@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import HomeChat from '../components/HomeChat'
+import Mascot from '../components/Mascot'
 import { DropZone } from '../components/ImportDrop'
 import { useImportDialog } from '../lib/importDialog'
 import { noun, SHOW_MODE } from '../lib/folderContext'
@@ -28,9 +29,12 @@ export default function FoldersPage({ folders, error, onCreated }: {
 
         <section id="folders" className="mt-8 scroll-mt-6 sm:scroll-mt-8" aria-label="Your folders">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="mr-auto w-full sm:w-auto">
+          <div className="mr-auto flex w-full items-center gap-3 sm:w-auto">
+            <Mascot pose="folder" className="hidden h-20 w-20 sm:block" />
+            <div>
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your Spaces</h1>
             <p className="mt-1 text-muted">Each Space is sealed: its chat only sees that Space.</p>
+            </div>
           </div>
           {SHOW_MODE ? (
             <>

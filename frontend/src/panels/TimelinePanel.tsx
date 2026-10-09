@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { AlertTriangle, GanttChart, Loader2, RefreshCw } from 'lucide-react'
-import { api } from '../api/client'
-import type { TimelineEvent, TimelineResponse } from '../api/types'
+import type { TimelineEvent } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import Mascot from '../components/Mascot'
 import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
+import { buildTimeline, useTimeline } from '../lib/timelineStore'
 
 function dayLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
@@ -27,23 +27,11 @@ function groupByDate(events: TimelineEvent[]): [string, TimelineEvent[]][] {
 
 export default function TimelinePanel() {
   const { folder, dir } = useFolder()
-  const [data, setData] = useState<TimelineResponse | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const elapsed = useElapsed(busy)
+  // Kept per Space and subfolder outside the panel: a build survives switching tools or folders.
+  const { data, busy, since, error } = useTimeline(folder.id, dir)
+  const elapsed = useElapsed(busy, since)
   const where = dir ? `${dir}` : 'this Space'
-
-  async function build() {
-    setBusy(true)
-    setError(null)
-    try {
-      setData(await api.timeline(folder.id, dir || undefined))
-    } catch (e) {
-      setError((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
+  const build = () => buildTimeline(folder.id, dir)
 
   const days = data ? groupByDate(data.events) : []
 
@@ -67,7 +55,8 @@ export default function TimelinePanel() {
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
         {busy && (
-          <div role="status" className="rounded-xl border border-line bg-white p-4">
+          <div role="status" className="relative rounded-xl border border-line bg-white p-4 pr-16">
+            <Mascot pose="search" className="absolute top-2 right-2 h-14 w-10" />
             <p className="flex items-center gap-2 text-sm font-semibold">
               <Loader2 size={15} className="animate-spin text-brand-text" /> Building the timeline… <span className="font-mono text-xs font-normal text-muted">{elapsed}s</span>
             </p>
@@ -91,9 +80,7 @@ export default function TimelinePanel() {
 
         {!data && !busy && !error && (
           <div className="flex flex-col items-center rounded-xl border border-dashed border-line bg-white/60 px-5 py-8 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-brand-soft text-brand-text">
-              <GanttChart size={22} />
-            </span>
+            <Mascot pose="search" className="h-24 w-16" />
             <p className="mt-3 font-semibold">No timeline yet</p>
             <p className="mt-1 max-w-xs text-sm text-muted">
               See what happened in order, with a source for every event, and anything that doesn’t line up.

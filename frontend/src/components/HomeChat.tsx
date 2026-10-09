@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowDown, Library, MessageSquare, Minimize2, RotateCcw, SendHorizontal, WifiOff } from 'lucide-react'
+import { ArrowDown, Clock, Library, MessageSquare, Minimize2, RotateCcw, SendHorizontal, WifiOff } from 'lucide-react'
 import type { Folder, Source } from '../api/types'
-import { askHome, HOME_CHAT_OPEN, newHomeChat, useHomeChat } from '../lib/chatSession'
+import { askHome, HOME_CHAT_OPEN, newHomeChat, openHomeChat, useHomeChat } from '../lib/chatSession'
+import ChatHistory from '../panels/ChatHistory'
 import { fileLabel } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
+import Mascot from './Mascot'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 
 /** A citation from the home chat: names its folder and opens the file there with the lines highlighted. */
@@ -78,16 +80,19 @@ const toolBtn = 'inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs text
  * after opening a source and coming back.
  */
 export default function HomeChat({ folders }: { folders: Folder[] }) {
-  const { messages, busy, since } = useHomeChat()
+  const { messages, busy, since, sessionId } = useHomeChat()
   const [open, setOpen] = usePersistentFlag(HOME_CHAT_OPEN, false)
+  // Saved chats (all folders) shown in place of the conversation.
+  const [history, setHistory] = useState(false)
   const elapsed = useElapsed(busy, since)
   const section = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const hasThread = messages.length > 0 || busy
-  const expanded = open && hasThread
+  const expanded = open && (hasThread || history)
 
   const bringIntoView = () => requestAnimationFrame(() => section.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
   const ask = (q: string) => {
+    setHistory(false)
     setOpen(true)
     askHome(q)
     bringIntoView()
@@ -95,6 +100,15 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
   const resume = () => {
     setOpen(true)
     bringIntoView()
+  }
+  const showHistory = () => {
+    setHistory(true)
+    setOpen(true)
+    bringIntoView()
+  }
+  const startNew = () => {
+    newHomeChat()
+    setHistory(false)
   }
 
   // Opening the conversation lands on the latest message; new messages then glide into view.
@@ -109,7 +123,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
   useEffect(() => {
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !document.querySelector('[aria-modal="true"]')) setOpen(false)
+      if (e.key === 'Escape' && !document.querySelector('[aria-modal="true"]')) { setOpen(false); setHistory(false) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -138,10 +152,18 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
       {expanded && (
         <>
           <div className="mt-2 flex shrink-0 flex-wrap items-center gap-1 border-b border-line pb-2">
-            <button onClick={newHomeChat} disabled={busy} className={toolBtn} title="Start a new chat (replaces this one; the audit log keeps its record)">
+            <button onClick={startNew} disabled={busy || (!messages.length && !history)} className={toolBtn} title="Start a new chat (this one stays in Saved chats)">
               <RotateCcw size={12} /> New chat
             </button>
-            <button onClick={() => setOpen(false)} className={toolBtn} title="Minimize (Esc)">
+            <button
+              onClick={() => (history && hasThread ? setHistory(false) : setHistory(true))}
+              aria-pressed={history}
+              className={`${toolBtn} ${history ? 'bg-white text-ink' : ''}`}
+              title="Saved chats across all Spaces"
+            >
+              <Clock size={12} /> Saved chats
+            </button>
+            <button onClick={() => { setOpen(false); setHistory(false) }} className={toolBtn} title="Minimize (Esc)">
               <Minimize2 size={12} /> Minimize
             </button>
             <button
@@ -151,6 +173,19 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
               Your Spaces <ArrowDown size={12} />
             </button>
           </div>
+          {history ? (
+            <div className="-mx-4 flex min-h-0 flex-1 flex-col">
+              <ChatHistory
+                folderId={null}
+                emptyText="No saved chats yet. Every question you ask across all Spaces is saved here."
+                activeId={sessionId}
+                activeCount={messages.filter((m) => m.role !== 'error').length}
+                onOpen={(sid) => { openHomeChat(sid).catch(() => {}); setHistory(false) }}
+                onDeleted={(sid) => { if (sid === sessionId) newHomeChat() }}
+                onRenamed={() => {}}
+              />
+            </div>
+          ) : (
           <div ref={list} className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-3 text-sm" aria-live="polite">
             {messages.map((m, i) =>
               m.role === 'user' ? (
@@ -163,8 +198,13 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
                 </div>
               ),
             )}
-            {busy && <div className="chat-in rounded-xl bg-white px-3 py-2 text-muted">Searching every Space on this laptop… {elapsed}s</div>}
+            {busy && (
+              <div className="chat-in flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-muted">
+                <Mascot pose="search" className="h-12 w-8" /> Searching every Space on this laptop… {elapsed}s
+              </div>
+            )}
           </div>
+          )}
         </>
       )}
 
@@ -177,11 +217,18 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
         onAsk={ask}
       />
 
-      {!expanded && hasThread && (
-        <button onClick={resume} className="mt-2 inline-flex items-center gap-1.5 self-start rounded-md px-1 text-xs font-semibold text-brand-text hover:underline">
-          <MessageSquare size={13} />
-          {busy ? `Answering… ${elapsed}s` : `Continue chat · ${messages.length} messages`}
-        </button>
+      {!expanded && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {hasThread && (
+            <button onClick={resume} className="inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-brand-text hover:underline">
+              <MessageSquare size={13} />
+              {busy ? `Answering… ${elapsed}s` : `Continue chat · ${messages.length} messages`}
+            </button>
+          )}
+          <button onClick={showHistory} className="inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-muted hover:text-ink hover:underline">
+            <Clock size={13} /> Saved chats
+          </button>
+        </div>
       )}
     </section>
   )

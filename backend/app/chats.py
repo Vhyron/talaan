@@ -73,6 +73,38 @@ def save_turn(folder_id: str, sid: str, question: str, resp: AskResponse, scope:
         )
 
 
+def save_question(folder_id: str, sid: str, question: str) -> int:
+    """Save a question before it is answered (the home chat answers slowly: a reload in between
+    must still show it). Returns the message id, so a failed answer can take it back."""
+    now = datetime.now().isoformat()
+    with connect() as db:
+        db.execute(
+            "INSERT INTO chat_sessions (id, folder_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+            " ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at",
+            (sid, folder_id, fallback_title(question), now, now),
+        )
+        cur = db.execute(
+            "INSERT INTO chat_messages (session_id, folder_id, role, content, response, created_at) VALUES (?, ?, 'user', ?, NULL, ?)",
+            (sid, folder_id, question, now),
+        )
+        return cur.lastrowid
+
+
+def save_answer(folder_id: str, sid: str, resp: AskResponse) -> None:
+    now = datetime.now().isoformat()
+    with connect() as db:
+        db.execute(
+            "INSERT INTO chat_messages (session_id, folder_id, role, content, response, created_at) VALUES (?, ?, 'assistant', ?, ?, ?)",
+            (sid, folder_id, resp.answer, resp.model_dump_json(), now),
+        )
+        db.execute("UPDATE chat_sessions SET updated_at = ? WHERE id = ?", (now, sid))
+
+
+def drop_message(message_id: int) -> None:
+    with connect() as db:
+        db.execute("DELETE FROM chat_messages WHERE id = ?", (message_id,))
+
+
 def _summary(row) -> ChatSessionSummary:
     return ChatSessionSummary(
         id=row["id"], title=row["title"], message_count=row["message_count"], scope=row["scope"],
@@ -150,10 +182,3 @@ def auto_title(folder_id: str, sid: str, question: str) -> None:
         db.execute("UPDATE chat_sessions SET title = ?, title_source = 'model'"
                    " WHERE id = ? AND folder_id = ? AND title_source = 'question'", (title, sid, folder_id))
 
-
-def clear_home() -> None:
-    """The home chat keeps one thread: starting a new one replaces it. The audit log of every
-    folder it read keeps the questions and answers."""
-    with connect() as db:
-        db.execute("DELETE FROM chat_messages WHERE folder_id = ?", (ALL,))
-        db.execute("DELETE FROM chat_sessions WHERE folder_id = ?", (ALL,))
