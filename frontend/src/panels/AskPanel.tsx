@@ -211,6 +211,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           folderId={folder.id}
           emptyText={`No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}
           activeId={sessionId}
+          activeCount={messages.filter((m) => m.role !== 'error').length}
           onOpen={resume}
           onDeleted={(sid) => {
             if (sid === sessionId) update(() => EMPTY)

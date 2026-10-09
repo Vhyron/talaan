@@ -179,6 +179,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
                 folderId={null}
                 emptyText="No saved chats yet. Every question you ask across all folders is saved here."
                 activeId={sessionId}
+                activeCount={messages.filter((m) => m.role !== 'error').length}
                 onOpen={(sid) => { openHomeChat(sid).catch(() => {}); setHistory(false) }}
                 onDeleted={(sid) => { if (sid === sessionId) newHomeChat() }}
                 onRenamed={() => {}}

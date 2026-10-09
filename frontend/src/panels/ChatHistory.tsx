@@ -6,10 +6,13 @@ import { ago } from '../lib/format'
 
 /** Saved chats for one folder only, or for the home chat (`folderId` null): search,
  * continue, rename, delete. */
-export default function ChatHistory({ folderId, emptyText, activeId, onOpen, onDeleted, onRenamed }: {
+export default function ChatHistory({ folderId, emptyText, activeId, activeCount, onOpen, onDeleted, onRenamed }: {
   folderId: string | null
   emptyText: string
   activeId: string | null
+  /** Saved messages in the open chat right now: the list refetches when it changes, and the
+   * open chat's row shows it at once (counts and new chats stay current while you talk). */
+  activeCount: number
   onOpen: (sid: string) => void
   onDeleted: (sid: string) => void
   onRenamed: () => void
@@ -29,7 +32,7 @@ export default function ChatHistory({ folderId, emptyText, activeId, onOpen, onD
         .catch((e) => live && setError((e as Error).message))
     }, q ? 250 : 0)
     return () => { live = false; clearTimeout(t) }
-  }, [folderId, q])
+  }, [folderId, q, activeId, activeCount])
 
   function startEdit(s: ChatSessionSummary) {
     cancelled.current = false
@@ -117,7 +120,10 @@ export default function ChatHistory({ folderId, emptyText, activeId, onOpen, onD
                     <button onClick={() => onOpen(s.id)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate font-medium">{s.title}</span>
                       <span className="block text-xs text-muted">
-                        {ago(s.updated_at)} · {Math.ceil(s.message_count / 2)} {s.message_count === 2 ? 'question' : 'questions'}
+                        {(() => {
+                          const n = Math.ceil((s.id === activeId ? Math.max(activeCount, s.message_count) : s.message_count) / 2)
+                          return `${ago(s.updated_at)} · ${n} ${n === 1 ? 'question' : 'questions'}`
+                        })()}
                         {s.id === activeId ? ' · open now' : ''}
                       </span>
                     </button>
