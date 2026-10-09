@@ -88,6 +88,7 @@ All optional, set as environment variables before starting the backend (see `bac
 | `EMBED_MODEL` | `qwen3-embedding:0.6b` | Embedding model. Changing it means re-indexing every folder |
 | `NUM_CTX` | `16384` | Context window sent on every request |
 | `WHISPER_MODEL` | `small` | faster-whisper size: `base` (Light), `small` (Standard), `large-v3-turbo` (Pro). Download it with the command in section 2 |
+| `WHISPER_LANGUAGES` | `en,tl` | Languages a voice note may be in; Whisper picks the likeliest of these (English, Tagalog, Taglish). One code forces it, e.g. `en` |
 
 ### Running ticket branches side by side
 
@@ -167,5 +168,6 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 | Ask and Timeline always show Case 2026-014 answers | Expected until B4/B5 merge: those routes still return fixture data (`backend/app/fixtures.py`) | — |
 | `git push` → `403 Permission … denied to <work account>` | Git Credential Manager uses one saved GitHub login for every folder | In the partition's gitconfig (e.g. `~/.gitconfig-personal`) set `[credential "https://github.com"] username = <your account>`; optionally `gitHubAuthModes = device` and complete the code in a browser window signed in to that account |
 | Voice note fails with `open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 removed an argument faster-whisper 1.2 still passes | `uv sync` (the lockfile pins `av<19`); don't upgrade `av` past 18 |
+| Voice note comes out in the wrong language (e.g. Chinese) or as random words | Whisper guessed the language from a very short or quiet clip | Fixed: it now only chooses among `WHISPER_LANGUAGES`, refuses clips under 1.5 s and drops segments it rates as non-speech. Speak for a few seconds, close to the mic |
 | Voice note fails offline / tries to download | Whisper model not cached | Run the download command in section 2 while online |
 | `git add -A` stages thousands of files | Branch made from a commit without `.gitignore` | Unstage (`git reset`), branch from current `dev`, add paths explicitly |

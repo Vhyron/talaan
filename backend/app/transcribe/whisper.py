@@ -40,6 +40,23 @@ class ModelNotDownloaded(RuntimeError):
     pass
 
 
+class TooShort(ValueError):
+    pass
+
+
+SAMPLE_RATE = 16_000
+MIN_SECONDS = 1.5  # shorter clips make Whisper invent text
+# Segment filters against made-up text on unclear audio (Whisper's own scores).
+MAX_NO_SPEECH_PROB = 0.6
+MIN_AVG_LOGPROB = -1.0
+
+
+def choose_language(probs: list[tuple[str, float]], allowed: list[str]) -> str:
+    """The likeliest language among `allowed`, from Whisper's full ranking."""
+    ranked = [(p, lang) for lang, p in probs if lang in allowed]
+    return max(ranked)[1] if ranked else allowed[0]
+
+
 def _load(local_only: bool = True):
     """Load from the local cache only. Without this, faster-whisper contacts
     Hugging Face on every load to check for updates, even when cached."""
@@ -58,19 +75,43 @@ def _load(local_only: bool = True):
 
 def transcribe_file(path: Path, hotwords: str | None = None) -> Transcript:
     """`hotwords`: names from the open folder, so they come out spelled as in the case."""
+    from faster_whisper.audio import decode_audio
+
+    audio = decode_audio(str(path), sampling_rate=SAMPLE_RATE)
+    duration = len(audio) / SAMPLE_RATE
+    if duration < MIN_SECONDS:
+        raise TooShort(f"The recording is too short ({duration:.1f}s). Speak for at least a few seconds.")
+
+    allowed = config.WHISPER_LANGUAGES
     with _lock:
         model = _load()
         try:
-            segments, info = model.transcribe(str(path), beam_size=5, vad_filter=True, hotwords=hotwords or None)
-            segs = [Segment(s.start, s.end, s.text.strip()) for s in segments if s.text.strip()]
+            if len(allowed) == 1:
+                language = allowed[0]
+            else:
+                _, _, probs = model.detect_language(audio=audio, vad_filter=True)
+                language = choose_language(probs, allowed)
+            segments, _ = model.transcribe(
+                audio,
+                language=language,
+                beam_size=5,
+                vad_filter=True,
+                hotwords=hotwords or None,
+                condition_on_previous_text=False,  # stops one bad guess repeating ("味道味道味道")
+            )
+            segs = [
+                Segment(s.start, s.end, s.text.strip())
+                for s in segments
+                if s.text.strip() and s.no_speech_prob < MAX_NO_SPEECH_PROB and s.avg_logprob > MIN_AVG_LOGPROB
+            ]
         finally:
             del model
             gc.collect()
     return Transcript(
         text=" ".join(s.text for s in segs),
         segments=segs,
-        duration=info.duration,
-        language=info.language,
+        duration=duration,
+        language=language,
         model=f"faster-whisper:{config.WHISPER_MODEL}",
     )
 
