@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, Trash2, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
@@ -285,7 +286,7 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         )
       })}
       {node.files.map((path) => (
-        <Row key={path} depth={depth} selected={path === currentPath}>
+        <Row key={path} depth={depth} selected={path === currentPath} actions={<FileActions folderId={folderId} path={path} />}>
           <button
             onClick={() => onOpenFile(path)}
             title={path}
@@ -297,6 +298,84 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         </Row>
       ))}
     </>
+  )
+}
+
+/** Delete for one file: a trash icon that fades in on hover and asks in a dialog first. */
+function FileActions({ folderId, path }: { folderId: string; path: string }) {
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <>
+      <button
+        onClick={() => setConfirming(true)}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-red-700 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+        aria-label={`Delete ${fileLabel(path)}`}
+        title="Delete file"
+      >
+        <Trash2 size={14} />
+      </button>
+      {confirming && <DeleteFileDialog folderId={folderId} path={path} onClose={() => setConfirming(false)} />}
+    </>
+  )
+}
+
+function DeleteFileDialog({ folderId, path, onClose }: { folderId: string; path: string; onClose: () => void }) {
+  const tree = useTree()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, onClose])
+
+  async function remove() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.deleteFile(folderId, path)
+      onClose()
+      tree.changed()
+    } catch (e) {
+      setError((e as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 sm:items-center" onClick={() => !busy && onClose()}>
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="delete-file-title"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-sm shadow-xl sm:max-w-md sm:rounded-2xl"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-red-50 text-red-700">
+            <Trash2 size={15} />
+          </span>
+          <h2 id="delete-file-title" className="text-base font-bold">Delete this file?</h2>
+        </div>
+        <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-line bg-panel/50 px-3 py-2.5">
+          <FileText size={16} className="mt-0.5 shrink-0 text-muted" />
+          <div className="min-w-0">
+            <p className="break-words font-medium">{fileLabel(path)}</p>
+            {path.includes('/') && <p className="break-words text-xs text-muted">{path}</p>}
+          </div>
+        </div>
+        <p className="mt-3 text-muted">This removes it from disk and can't be undone. The audit log keeps a record.</p>
+        {error && <p role="alert" className="mt-3 text-red-700">{error}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <button autoFocus onClick={onClose} disabled={busy} className="btn-ghost text-sm">Cancel</button>
+          <button onClick={remove} disabled={busy} className="rounded-full bg-red-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60">
+            {busy ? 'Deleting…' : 'Delete'}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 

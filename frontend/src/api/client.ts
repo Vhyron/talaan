@@ -48,6 +48,7 @@ export const api = {
     form.append('keep_paths', String(Boolean(opts.keepPaths)))
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
+  deleteFile: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`, { method: 'DELETE' }),
   dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 

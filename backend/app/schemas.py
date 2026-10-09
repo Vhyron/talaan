@@ -183,6 +183,7 @@ class Proposal(BaseModel):
 
 AuditEventType = Literal[
     "question", "answer", "proposed_action", "decision", "executed", "grant_change", "session_renamed", "session_deleted",
+    "file_deleted",
 ]
 
 
