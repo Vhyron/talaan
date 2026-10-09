@@ -8,6 +8,9 @@ import FolderPage from './pages/FolderPage'
 import SettingsPage from './pages/SettingsPage'
 import { NavContext } from './lib/nav'
 import { TreeContext, type TreeCtx } from './lib/tree'
+import { ImportDialogContext } from './lib/importDialog'
+import type { Upload } from './lib/upload'
+import ImportFolder from './components/ImportFolder'
 
 export default function App() {
   const [folders, setFolders] = useState<Folder[]>([])
@@ -51,9 +54,14 @@ export default function App() {
     changed,
   }), [expanded, expand, collapsedDirs, treeVersion, changed])
 
+  // App-wide "Import folder" dialog: null = closed, [] = open empty, else dropped files.
+  const [importing, setImporting] = useState<Upload[] | null>(null)
+  const importDialog = useMemo(() => ({ open: (dropped?: Upload[]) => setImporting(dropped ?? []) }), [])
+
   return (
     <NavContext.Provider value={nav}>
     <TreeContext.Provider value={tree}>
+    <ImportDialogContext.Provider value={importDialog}>
       <div className="flex h-dvh flex-col">
         <TopBar modelVersion={modelVersion} />
         <Routes>
@@ -62,6 +70,14 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage onModelChanged={() => setModelVersion((v) => v + 1)} />} />
         </Routes>
       </div>
+      {importing && (
+        <ImportFolder
+          initial={importing}
+          onDone={() => { setImporting(null); refresh(); changed() }}
+          onClose={() => setImporting(null)}
+        />
+      )}
+    </ImportDialogContext.Provider>
     </TreeContext.Provider>
     </NavContext.Provider>
   )

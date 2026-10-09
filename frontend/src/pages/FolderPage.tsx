@@ -8,7 +8,7 @@ import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
 import VoiceNote from '../components/VoiceNote'
 import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
-import { DropZone, ImportButton } from '../components/ImportDrop'
+import { DropZone } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
 import { useTree } from '../lib/tree'
 import ApprovalsPanel from '../panels/ApprovalsPanel'
@@ -155,14 +155,6 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         activeId={folder.id}
         currentPath={current}
         onOpenFile={(p) => openSource(p)}
-        footer={
-          <>
-            <ImportButton onFiles={(u) => imp.importUploads(u)} busy={imp.busy} />
-            {imp.message && (
-              <button className="mt-1 px-2 text-left text-xs text-muted" onClick={imp.clear}>{imp.message}</button>
-            )}
-          </>
-        }
       />
 
       <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
@@ -172,6 +164,11 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
             <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
           </span>
           <span className="hidden shrink-0 text-muted sm:inline">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
+          {(imp.busy || imp.message) && (
+            <button onClick={imp.clear} role="status" className={`min-w-0 truncate ${imp.isError ? 'text-red-700' : 'text-brand-text'}`} title="Dismiss">
+              {imp.busy ? 'Importing…' : imp.message}
+            </button>
+          )}
           <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
           <span className="ml-auto sm:ml-0 lg:ml-auto">
             <VoiceNote onProposed={() => onMobileView('approvals')} />
@@ -183,7 +180,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
             <FileViewer key={current} path={current} highlight={highlight} />
           ) : (
             <p className="p-6 text-muted sm:p-10">
-              {files.length ? 'Open a file from the folder list.' : 'This folder is empty. Drop files here or use Import files.'}
+              {files.length ? 'Open a file from the folder list.' : 'This folder is empty. Drop files here, or hover the folder in the list and use Import here.'}
             </p>
           )}
         </div>

@@ -5,8 +5,7 @@ import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import { DropZone } from '../components/ImportDrop'
-import ImportFolder from '../components/ImportFolder'
-import type { Upload } from '../lib/upload'
+import { useImportDialog } from '../lib/importDialog'
 
 export default function FoldersPage({ folders, error, onCreated }: {
   folders: Folder[]
@@ -14,38 +13,31 @@ export default function FoldersPage({ folders, error, onCreated }: {
   onCreated: () => void
 }) {
   const [creating, setCreating] = useState<Mode | null>(null)
-  // null = closed; [] = open, nothing chosen yet; otherwise a dropped folder's files.
-  const [importing, setImporting] = useState<Upload[] | null>(null)
+  const importDialog = useImportDialog()
 
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar folders={folders} error={error} />
-      <DropZone onFiles={(u) => { setCreating(null); setImporting(u) }}>
-      <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
+      <DropZone onFiles={(u) => { setCreating(null); importDialog.open(u) }}>
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
         <div className="flex flex-wrap items-end gap-3">
           <div className="mr-auto w-full sm:w-auto">
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your folders</h1>
             <p className="mt-1 text-muted">Each folder is sealed. The AI only sees the one you open.</p>
           </div>
-          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => { setImporting(null); setCreating('case') }}>
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
             <Plus size={16} /> New Case
           </button>
-          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => { setImporting(null); setCreating('chart') }}>
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('chart')}>
             <Plus size={16} /> New Chart
           </button>
-          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => { setCreating(null); setImporting([]) }}>
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => { setCreating(null); importDialog.open() }}>
             <FolderInput size={16} /> Import folder
           </button>
         </div>
 
         {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
-        {importing && (
-          <ImportFolder
-            initial={importing.length ? importing : null}
-            onDone={() => { setImporting(null); onCreated() }}
-            onCancel={() => setImporting(null)}
-          />
-        )}
+
 
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">
           {folders.map((f) => (
@@ -63,7 +55,7 @@ export default function FoldersPage({ folders, error, onCreated }: {
             </li>
           ))}
         </ul>
-      </div>
+      </main>
       </DropZone>
     </div>
   )

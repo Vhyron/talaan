@@ -1,11 +1,12 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderOpen, FolderPlus, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
 import { useNav } from '../lib/nav'
 import { useTree } from '../lib/tree'
+import { useImportDialog } from '../lib/importDialog'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
 
@@ -16,17 +17,17 @@ const GROUPS: { mode: Mode; label: string }[] = [
 
 /** Folder tree. Any number of folders can be expanded; the active one is highlighted.
  * Inline from `lg` up; below that it's a drawer opened from the top bar. */
-export default function Sidebar({ folders, error, activeId, currentPath, onOpenFile, footer }: {
+export default function Sidebar({ folders, error, activeId, currentPath, onOpenFile }: {
   folders: Folder[]
   error: string | null
   activeId?: string
   currentPath?: string
   /** Opens a file in the active folder (other folders navigate there first). */
   onOpenFile?: (path: string) => void
-  footer?: ReactNode
 }) {
   const nav = useNav()
   const tree = useTree()
+  const importDialog = useImportDialog()
   const navigate = useNavigate()
 
   function openFolder(f: Folder) {
@@ -69,7 +70,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
                 const active = f.id === activeId
                 return (
                   <div key={f.id}>
-                    <Row depth={0} actions={expanded ? <DirActions folderId={f.id} dir="" /> : null}>
+                    <Row depth={0} actions={<DirActions folderId={f.id} dir="" label={f.name} />}>
                       <button
                         onClick={() => tree.toggle(f.id)}
                         className="grid h-6 w-5 shrink-0 place-items-center rounded hover:bg-panel"
@@ -97,7 +98,16 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
           )
         })}
       </nav>
-      {footer && <div className="border-t border-line p-3">{footer}</div>}
+      <div className="shrink-0 border-t border-line p-3">
+        <button
+          onClick={() => { nav.setOpen(false); importDialog.open() }}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
+          title="Create a new Case or Chart from a folder on this computer"
+        >
+          <FolderInput size={15} /> Import folder
+          <span className="ml-auto text-[11px] font-normal text-muted">new Case/Chart</span>
+        </button>
+      </div>
     </aside>
     </>
   )
@@ -204,13 +214,13 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
 }
 
 /** "New subfolder" and "Import here" for a folder (dir "") or one of its subfolders. */
-function DirActions({ folderId, dir }: { folderId: string; dir: string }) {
+function DirActions({ folderId, dir, label }: { folderId: string; dir: string; label?: string }) {
   const tree = useTree()
   const [naming, setNaming] = useState(false)
   const [name, setName] = useState('')
   const [note, setNote] = useState<string | null>(null)
   const picker = useFilePicker(importHere)
-  const where = dir || 'this folder'
+  const where = dir || label || 'this folder'
   const [noteIsError, setNoteIsError] = useState(false)
 
   useEffect(() => {
@@ -227,6 +237,7 @@ function DirActions({ folderId, dir }: { folderId: string; dir: string }) {
     try {
       await api.importFiles(folderId, accepted, { dest: dir })
       await api.reindex(folderId).catch(() => undefined)
+      tree.expand(folderId)
       tree.changed()
       say(`Imported ${accepted.length} into ${where}${skipped.length ? `, skipped ${skipped.length}` : ''}`)
     } catch (e) {

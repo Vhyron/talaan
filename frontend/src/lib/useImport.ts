@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useFolder } from './folderContext'
 import { useTree } from './tree'
@@ -10,11 +10,21 @@ export function useImport() {
   const tree = useTree()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [isError, setIsError] = useState(false)
+
+  // Successes clear themselves; errors stay until dismissed or the next import.
+  useEffect(() => {
+    if (!message || isError) return
+    const t = setTimeout(() => setMessage(null), 5000)
+    return () => clearTimeout(t)
+  }, [message, isError])
+
+  const say = (text: string, error = false) => { setMessage(text); setIsError(error) }
 
   /** `keepPaths`: recreate dropped folders' subfolders (used for drag-and-drop). */
   async function importUploads(uploads: Upload[], opts: { dest?: string; keepPaths?: boolean } = {}) {
     const { accepted, skipped } = splitImportable(uploads)
-    if (!accepted.length) return setMessage('Only .md, .txt and .pdf files can be imported.')
+    if (!accepted.length) return say('Only .md, .txt and .pdf files can be imported.', true)
     setBusy(true)
     setMessage(null)
     try {
@@ -24,13 +34,13 @@ export function useImport() {
       tree.changed()
       bump()
       const where = opts.dest ? ` into ${opts.dest}` : ''
-      setMessage(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${where}${skipped.length ? `, skipped ${skipped.length}` : ''}.`)
+      say(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${where}${skipped.length ? `, skipped ${skipped.length}` : ''}.`)
     } catch (e) {
-      setMessage((e as Error).message)
+      say((e as Error).message, true)
     } finally {
       setBusy(false)
     }
   }
 
-  return { importUploads, busy, message, clear: () => setMessage(null) }
+  return { importUploads, busy, message, isError, clear: () => setMessage(null) }
 }
