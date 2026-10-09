@@ -14,7 +14,7 @@ How to install, run, test and reset Talaan on a team laptop. Commands are PowerS
 
 If `uv` isn't found after a pip install, use `python -m uv` in place of `uv` everywhere below, or add Python's user `Scripts` folder to PATH.
 
-Hardware: 16 GB RAM (Standard tier) runs the default models comfortably; see [05-models.md](05-models.md). Keep ~15 GB disk free for models and dependencies.
+Hardware: the app detects RAM/GPU and picks the chat model for your tier automatically (Light 8 GB, Standard 16 GB, Pro 32 GB; see [05-models.md](05-models.md)). Keep ~15 GB disk free for models and dependencies.
 
 ## 2. One-time setup
 
@@ -32,11 +32,12 @@ cd backend; uv sync; cd ..
 cd frontend; npm ci; cd ..
 
 # Models: one-time download, the only step that needs internet
-ollama pull gemma4:e4b
-ollama pull qwen3-embedding:0.6b
+ollama pull qwen3-embedding:0.6b   # every tier, always
+ollama pull qwen3.5:2b             # Light   (8 GB RAM)
+ollama pull gemma4:e4b             # Standard (16 GB RAM / Apple 16 GB / 8-10 GB GPU)
 ```
 
-The model tags are the defaults until the B1 bake-off pins the final ones (05-models.md). Pull models before the venue; the Wi-Fi there may be slow.
+Pull the embedding model plus the chat model for your tier; pulling more is fine (switch on the Settings page). Pinned tags live in `backend/app/llm/models.py` and are final after the B1 bake-off (05-models.md). Pull models before the venue; the Wi-Fi there may be slow.
 
 **`npm ci` vs `npm install`:** use `npm ci` to install. Use `npm install <pkg>` only when adding a dependency, then commit `package-lock.json` and add the library to the disclosure list (06-demo-and-pitch.md). The backend equivalent is `uv add <pkg>`, which updates `uv.lock`.
 
@@ -96,6 +97,16 @@ cd ..\talaan-backend\backend; uv sync; uv run uvicorn app.main:app --port 8000
 
 Remove it afterwards with `git worktree remove ..\talaan-backend`.
 
+### Models: Settings page and LLM log
+
+Open **http://localhost:5173/settings** (or click the model chip in the top bar):
+
+- **This device:** detected RAM, GPU, free disk and tier. Warns if Ollama isn't running or the embedding model is missing.
+- **Chat model:** "Automatic" picks your tier's model. "Use" switches to another installed pinned model (first load can take ~20 s). Models above your tier are allowed but marked as possibly slow. `ollama list` must show a model before it can be picked.
+- **LLM activity:** every model call (tokens in/out, tok/s, load and total time, errors). Click a row for details. "Record prompt and response text" is off by default; when on, text stays in memory only.
+
+The backend terminal prints the same calls as `[llm]` lines. API: `GET /system/tier`, `PUT /system/model`, `GET /system/llm-log`.
+
 ## 5. Test
 
 ```powershell
@@ -106,7 +117,18 @@ cd backend; uv run pytest
 cd frontend; npx tsc -b; npm run lint; npm run build
 ```
 
-All four must pass before opening a PR. The acceptance questions Q1–Q9 in [demo-data/README.md](../demo-data/README.md) are the end-to-end check once the AI tickets (B4, B5) are merged; D4 automates them.
+All four must pass before opening a PR.
+
+**Model bake-off (B1).** Runs Q1–Q9 plus action-JSON probes against real models (Ollama running, models pulled). About 5 min per small model with 3 runs; a 4B model on 8 GB takes ~20 min:
+
+```powershell
+cd backend
+uv run python -m scripts.bakeoff --models qwen3.5:2b qwen3.5:4b --runs 3
+uv run python -m scripts.bakeoff --models qwen3.5:4b gemma4:e4b --runs 3   # 16 GB+ laptops
+uv run python -m scripts.bakeoff --actions-only --runs 3                    # action JSON only
+```
+
+It prints a summary table and saves every answer to `backend/scripts/bakeoff_results/<date>.json`. Commit that file and add the row to the results table in [05-models.md](05-models.md#bake-off-results), noting the laptop (model, RAM, GPU). The acceptance questions Q1–Q9 in [demo-data/README.md](../demo-data/README.md) are the end-to-end check once the AI tickets (B4, B5) are merged; D4 automates them.
 
 ## 6. Reset before a demo or rehearsal
 
@@ -129,6 +151,7 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 
 - [ ] `git pull` on the branch being demoed; `uv sync` and `npm ci` if dependencies changed
 - [ ] Models pulled and listed in `ollama list` (exact pinned tags)
+- [ ] Settings page shows the expected tier and the chat model you will demo with ("In use"); no `CHAT_MODEL` env var left over
 - [ ] Demo data reset (section 6)
 - [ ] Backend and frontend running; `http://localhost:8000/health` shows the pinned model tags
 - [ ] Ask one question per folder so the models are loaded and warm (`ollama ps`)
@@ -147,6 +170,10 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 | Folder list is empty but the backend is up | No folders in `TALAAN_HOME\folders` | Load the demo data (section 3); check `TALAAN_HOME` |
 | `Port 5173 is already in use` / `[Errno 10048]` on 8000 | Another dev server still running | Close it, or run on another port (`npx vite --port 5174`, `uvicorn … --port 8001` with `API_TARGET`) |
 | Model tag in the top bar says `model offline` | Backend can't be reached from the frontend | As above |
+| Settings shows "Ollama is not running" / API returns 503 | Ollama app closed | Open the Ollama app or run `ollama serve` |
+| `Model X is not installed. Run ollama pull X` | Picked or auto-selected a model that isn't pulled | Run the `ollama pull` shown, or pick an installed model on the Settings page |
+| `X took longer than 300s and was stopped` | Model too big for this laptop, or thinking mode on | Use your tier's model (Settings → Automatic); keep thinking off |
+| Answers suddenly slow, `ollama ps` shows `CPU/GPU` split | Model larger than memory allows, or a second chat model still loaded | Switch on the Settings page (it unloads the old model); `ollama stop <tag>` |
 | Ask and Timeline always show Case 2026-014 answers | Expected until B4/B5 merge: those routes still return fixture data (`backend/app/fixtures.py`) | — |
 | `git push` → `403 Permission … denied to <work account>` | Git Credential Manager uses one saved GitHub login for every folder | In the partition's gitconfig (e.g. `~/.gitconfig-personal`) set `[credential "https://github.com"] username = <your account>`; optionally `gitHubAuthModes = device` and complete the code in a browser window signed in to that account |
 | `git add -A` stages thousands of files | Branch made from a commit without `.gitignore` | Unstage (`git reset`), branch from current `dev`, add paths explicitly |
