@@ -4,7 +4,7 @@ import { useFolder } from './folderContext'
 import { useTree } from './tree'
 import { splitImportable, type Upload } from './upload'
 
-/** Import into the open folder (optionally a subfolder), then re-index it. */
+/** Import into the open folder (optionally a subfolder). The backend re-indexes on import. */
 export function useImport() {
   const { folder, refreshFiles, bump } = useFolder()
   const tree = useTree()
@@ -29,7 +29,6 @@ export function useImport() {
     setMessage(null)
     try {
       const saved = await api.importFiles(folder.id, accepted, opts)
-      await api.reindex(folder.id).catch(() => undefined) // index may not exist yet (B3)
       refreshFiles()
       tree.changed()
       bump()

@@ -61,7 +61,6 @@ export default function ImportFolder({ initial, onDone, onClose }: {
     try {
       const folder = await api.createFolder({ name: name.trim(), mode })
       await api.importFiles(folder.id, split.accepted, { keepPaths: true })
-      await api.reindex(folder.id).catch(() => undefined)
       onDone()
       navigate(`/folders/${encodeURIComponent(folder.id)}`)
     } catch (err) {

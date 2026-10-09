@@ -244,7 +244,6 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
     if (!accepted.length) return say('Only .md, .txt and .pdf can be imported.', true)
     try {
       await api.importFiles(folderId, accepted, { dest: dir })
-      await api.reindex(folderId).catch(() => undefined)
       tree.expand(folderId)
       tree.changed()
       say(`Imported ${accepted.length} into ${where}${skipped.length ? `, skipped ${skipped.length}` : ''}`)
