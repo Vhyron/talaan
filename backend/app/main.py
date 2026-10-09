@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse, Response
 
 from app import fixtures as fx
+from app.config import CHAT_MODEL, EMBED_MODEL
 from app.schemas import (
     AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Outcome,
     Proposal, SystemTier, TimelineResponse,
@@ -37,7 +38,7 @@ def _folder(folder_id: str) -> Folder:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok"}
+    return {"status": "ok", "chat_model": CHAT_MODEL, "embed_model": EMBED_MODEL}
 
 
 # --- Folders and files (A2) --------------------------------------------------
