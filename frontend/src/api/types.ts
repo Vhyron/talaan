@@ -73,7 +73,7 @@ export type Proposal = {
 
 export type AuditEventType =
   | 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change'
-  | 'session_renamed' | 'session_deleted' | 'rename' | 'deleted' | 'restored' | 'purged'
+  | 'session_renamed' | 'session_deleted' | 'file_deleted' | 'rename' | 'deleted' | 'restored' | 'purged'
 export type AuditEvent = {
   id: number
   timestamp: string

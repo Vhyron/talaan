@@ -106,6 +106,14 @@ def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
     return PlainTextResponse(target.read_text(encoding="utf-8", errors="replace"))
 
 
+@app.delete("/folders/{folder_id}/files/{path:path}", status_code=204)
+def delete_file(folder_id: str, path: str) -> None:
+    """User-only, from the file tree. The model's `delete` action still goes through the policy engine."""
+    rel_path = folders.delete_file(folder_id, path)
+    audit_log.log_event(folder_id, "user", "file_deleted", action="delete", path=rel_path)
+    index.refresh(folder_id)  # drop its chunks so answers can't cite it
+
+
 @app.get("/folders/{folder_id}/dirs")
 def list_dirs(folder_id: str) -> list[str]:
     """Subfolders, folder-relative (`.talaan/` hidden). Empty ones included."""

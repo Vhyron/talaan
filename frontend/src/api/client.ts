@@ -48,6 +48,7 @@ export const api = {
     form.append('keep_paths', String(Boolean(opts.keepPaths)))
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
+  deleteFile: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`, { method: 'DELETE' }),
   dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
   /** Change a folder's display name; its id (and grants, audit, chat) stays. */
   renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),

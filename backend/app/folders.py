@@ -157,6 +157,14 @@ def file_path(folder_id: str, path: str) -> Path:
     return target
 
 
+def delete_file(folder_id: str, path: str) -> str:
+    """User-only delete from the file tree. Files only; sealed like every other access."""
+    target = file_path(folder_id, path)
+    rel_path = rel(folder_root(folder_id), target)
+    target.unlink()
+    return rel_path
+
+
 def _free_name(directory: Path, base: str) -> Path:
     stem, suffix = Path(base).stem, Path(base).suffix
     candidate, n = directory / base, 1
