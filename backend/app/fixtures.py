@@ -6,7 +6,7 @@ Each route swaps to a real implementation in its own ticket (A2–A5, B3–B5, D
 from datetime import datetime
 
 from app.schemas import (
-    Outcome, Proposal, ProposeEditAction,
+    Outcome,
     Source, SystemTier, Tier, TimelineEvent, TimelineFlag, TimelineResponse,
 )
 
@@ -39,23 +39,6 @@ TIMELINE = TimelineResponse(
         )
     ],
 )
-
-PROPOSALS = [
-    Proposal(
-        id="p-demo-1",
-        folder_id="Case-2026-014_Dela-Cruz",
-        action=ProposeEditAction(
-            action="propose_edit", path="2026-10-02_open-items.md", content="...", reason="Add agency name from the Oct 3 call"
-        ),
-        status="pending",
-        reason="Add agency name from the Oct 3 call",
-        old_content="- [ ] Agency helper roster for Sep 11 night shift\n",
-        new_content="- [ ] Agency helper roster for Sep 11 night shift\n  - Agency: Tulong Manpower Services\n",
-        diff="--- a/2026-10-02_open-items.md\n+++ b/2026-10-02_open-items.md\n@@ -1 +1,2 @@\n"
-        " - [ ] Agency helper roster for Sep 11 night shift\n+  - Agency: Tulong Manpower Services\n",
-        created_at=T("2026-10-03T10:15:00"),
-    )
-]
 
 _R = "2026-09-13_interview_R-Santos.md"
 BLOCKED_DELETE = Outcome(status="blocked", action="delete", path=_R, reason="Delete is set to Never")
