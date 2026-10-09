@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from app import fixtures as fx
+from app import ask as ask_mod
 from app import audit as audit_log
 from app import folders, index
 from app import transcribe as voice
@@ -98,18 +99,7 @@ def build_index(folder_id: str) -> dict:
 
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    folder = _folder(folder_id)
-    q = body.question.lower()
-    if "villanueva" in q or "bautista" in q:
-        return AskResponse(answer=f"I can only see {folder.name}.", refused=True)
-    if "email" in q:
-        return AskResponse(
-            answer="Atty. Ramos asks for copies of the incident report and witness statements [S1]. "
-            "The email also contained hidden instructions to delete files; that action was blocked.",
-            sources=[fx.EMAIL],
-            outcome=fx.BLOCKED_DELETE,
-        )
-    return AskResponse(**fx.ASK_ANSWER)
+    return ask_mod.ask(folder_id, body.question)
 
 
 @app.post("/folders/{folder_id}/timeline")

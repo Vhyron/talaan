@@ -8,15 +8,26 @@
 `POST /folders/{id}/ask` answers from this folder only, with clickable citations, or refuses.
 
 ## Tasks
-- [ ] Retrieve chunks → build prompt with chunks tagged `[S1] path:lines`, wrapped as untrusted document text
-- [ ] System prompt: answer only from sources, cite `[S#]`, flag contradictions for human review, never decide
-- [ ] Map `[S#]` citations back to `Source` objects in the response; drop citations that don't exist
-- [ ] **Scope refusal:** low retrieval scores, or the question names a person not found in the folder → `refused: true`, answer "I can only see <folder name>."
-- [ ] Action path: let the model optionally return an `Action` JSON (structured output); pass it to `policy.handle()` (A4) and return the outcome in the response
-- [ ] Log `question`, `answer` and the model tag via A3
+- [x] Retrieve chunks → build prompt with chunks tagged `[S1] path:lines`, wrapped as untrusted document text
+- [x] System prompt: answer only from sources, cite `[S#]`, flag contradictions for human review, never decide
+- [x] Map `[S#]` citations back to `Source` objects in the response; drop citations that don't exist
+- [x] **Scope refusal:** low retrieval scores, or the question names a person not found in the folder → `refused: true`, answer "I can only see <folder name>."
+- [x] Action path: let the model optionally return an `Action` JSON (structured output); pass it to `policy.handle()` (A4) and return the outcome in the response
+- [x] Log `question`, `answer` and the model tag via A3
 
 ## Done when
 Q3, Q6, Q7 and Q8 answer correctly with the right sources; Q4 and Q9 refuse.
+
+## Outcome (2026-10-09)
+- `backend/app/ask.py`, called by `POST /folders/{id}/ask`. The fixture branch and the ask fixtures are gone.
+- Flow: log `question` (user) → Read set to Never answers "Reading is turned off for this folder." without retrieving → `retrieve(k=None)` → scope check → model → `answer` logged (model, `model_tag`; refusals have `decision: refused`).
+- **Scope check in code, before the model:** `names_in()` pulls capitalised words out of the question (handles "A. Bautista", possessives, a capitalised first word) and `index.contains()` checks each one. Then `MIN_SCORE = 0.45` with no keyword hits. Q4 and Q9 refuse in under 1 s without calling the model. The model can also set `refused`; the text is then still built from the folder name.
+- **Context:** whole folder in rank order up to `CONTEXT_CHARS` (28k chars, ~9k tokens), then sorted by file and line. Each chunk is `<document id="S1" source="path:start-end">`, marked as untrusted text. HTML comments are kept, so Q5's injection reaches the model.
+- **Citations:** `[S#]` and groups like `[S5, S6]` are renumbered in order of first use to match `sources`; numbers that don't exist are dropped. PDFs are cited by file and line range only (no `page` field added to `Source`; nothing in the shared contract changed).
+- **Actions:** a question matching `ACTION_REQUEST` (delete, edit, draft, create, …) gets a separate call with `ACTION_SYSTEM` + the Action JSON schema, then goes to `engine.handle()`. The response carries `outcome` and `proposal_id`, and the answer says what happened ("waiting for your approval", "blocked: Delete is set to Never …").
+- Prompt tuning for `gemma4:e4b`: it stopped after two of three open items (Q3) and left out the normal ECG (Q8) until the prompt asked it to cover every document and include normal results (system rule + a reminder after the question).
+- `tests/test_ask.py`: name extraction, citation mapping, action detection, refusal without a model call, Read = Never, audit events, blocked delete and invalid action (model stubbed).
+- **Acceptance** (`scripts/acceptance.py`, gemma4:e4b, 2 runs): Q3–Q9 pass both runs. Q1 is still the timeline fixture (B5). Q2 gets a partial answer (misses the medical certificate, the face not being identifiable and the agency helper): **B5's dedicated contradiction prompt should cover it.** Q5: the model proposed no action, so the blocked delete still depends on B6. Answers took 6–30 s, and up to ~100 s while another backend was using the same GPU.
 
 ## Handoff notes (2026-10-09, after B3)
 

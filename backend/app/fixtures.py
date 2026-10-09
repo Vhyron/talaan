@@ -6,23 +6,15 @@ Each route swaps to a real implementation in its own ticket (A2–A5, B3–B5, D
 from datetime import datetime
 
 from app.schemas import (
-    Outcome,
     Source, SystemTier, Tier, TimelineEvent, TimelineFlag, TimelineResponse,
 )
 
 T = datetime.fromisoformat
 
 OPEN_ITEMS = Source(path="2026-10-02_open-items.md", start=3, end=5, snippet="Agency helper roster … Notice of Decision target date: Oct 16, 2026")
-EMAIL = Source(path="2026-09-26_email_from-representative.md", start=3, end=8, snippet="Requesting copies of the incident report and witness statements")
 MED_CERT = Source(path="2026-09-11_medical-certificate.md", start=3, end=6, snippet="Seen 8:30 AM, Sep 11. Advised rest Sep 11–12")
 HEARING = Source(path="2026-09-24_hearing-minutes.md", start=10, end=14, snippet="No badge entry for J. Dela Cruz on Sep 11")
 SANTOS = Source(path="2026-09-13_interview_R-Santos.md", start=5, end=9, snippet="I think it was Jose, from the way he walked")
-
-ASK_ANSWER = {
-    "answer": "Three items are still open: the agency helper roster for the Sep 11 night shift [S1], "
-    "a reply to Atty. Ramos's request for copies [S2], and the Notice of Decision due Oct 16 [S1].",
-    "sources": [OPEN_ITEMS, EMAIL],
-}
 
 TIMELINE = TimelineResponse(
     events=[
@@ -39,9 +31,6 @@ TIMELINE = TimelineResponse(
         )
     ],
 )
-
-_R = "2026-09-13_interview_R-Santos.md"
-BLOCKED_DELETE = Outcome(status="blocked", action="delete", path=_R, reason="Delete is set to Never")
 
 _EMBED = "qwen3-embedding:0.6b"
 TIER = SystemTier(

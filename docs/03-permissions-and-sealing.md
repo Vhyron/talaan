@@ -73,8 +73,8 @@ Refuse with **"I can only see {folder name}."**, e.g. "I can only see Case 2026-
 
 Refuse when **either** check fires. Both run in code before the model writes an answer:
 
-1. **Nothing relevant retrieved.** The best chunk's similarity is below a threshold (`MIN_SCORE`, set during the B1 bake-off so Q1–Q3 and Q5–Q8 pass and Q4/Q9 refuse) and keyword search has no hits.
-2. **A name that isn't in this folder.** Capitalised names in the question (e.g. "Ana Villanueva", "A. Bautista") are checked against this folder's text with keyword search. If a name appears nowhere in the folder, refuse, even if other words in the question match.
+1. **Nothing relevant retrieved.** The best chunk's similarity is below a threshold (`MIN_SCORE = 0.45` in `backend/app/ask.py`, measured in B3 with `qwen3-embedding:0.6b`: answerable questions scored 0.46–0.67, Q4 scored 0.44) and keyword search has no hits. The gap is thin, so the name check below does most of the work.
+2. **A name that isn't in this folder.** Capitalised names in the question (e.g. "Ana Villanueva", "A. Bautista") are checked against this folder's text with keyword search. If a name appears nowhere in the folder, refuse, even if other words in the question match. Each capitalised word is checked on its own ("A. Bautista" checks "Bautista"); the question's first word, months, weekdays and common question words are skipped.
 
 Retrieval always returns its closest chunks, so the threshold is what stops a question about Villanueva being answered from loosely related Dela Cruz text. The model is also told to refuse if the sources don't answer the question, but that is a second line of defense, not the main check.
 
