@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 
 from app import fixtures as fx
 from app import audit as audit_log
-from app import folders
+from app import folders, index
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
 from app.llm import selection, trace
@@ -80,7 +80,9 @@ def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
 
 @app.post("/folders/{folder_id}/import")
 async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
-    return await folders.import_files(folder_id, files)
+    saved = await folders.import_files(folder_id, files)
+    await run_in_threadpool(index.refresh, folder_id)  # so the next question can cite the new files
+    return saved
 
 
 # --- Index, ask, timeline (B3–B5) ---------------------------------------------
@@ -88,8 +90,10 @@ async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntr
 
 @app.post("/folders/{folder_id}/index")
 def build_index(folder_id: str) -> dict:
+    """Build or refresh the folder's index (incremental). If Ollama is down, keyword search is
+    still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
-    return {"chunks": 0, "files": len(folders.list_files(folder_id))}
+    return index.build_index(folder_id)
 
 
 @app.post("/folders/{folder_id}/ask")

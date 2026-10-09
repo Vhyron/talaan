@@ -22,7 +22,7 @@ from typing import Any
 from fastapi import HTTPException
 from pydantic import ValidationError
 
-from app import folders
+from app import folders, index
 from app.audit import log_event
 from app.policy import proposals
 from app.policy.grants import get_grants
@@ -54,25 +54,9 @@ class ActionRefused(Exception):
     """An executor's precondition failed (e.g. a draft would overwrite a file)."""
 
 
-# Retrieval hook. B3 replaces this with the per-folder index; until then a plain
-# line search over the folder keeps `search` working end to end.
+# Retrieval hook: `search` queries this folder's index only (B3).
 SearchFn = Callable[[str, str], str]
-
-
-def _line_search(folder_id: str, query: str) -> str:
-    words = [w.lower() for w in query.split() if len(w) > 2]
-    hits = []
-    for entry in folders.list_files(folder_id):
-        if not entry.path.endswith((".md", ".txt")):
-            continue
-        text = folders.file_path(folder_id, entry.path).read_text(encoding="utf-8", errors="replace")
-        for n, line in enumerate(text.splitlines(), 1):
-            if any(w in line.lower() for w in words):
-                hits.append(f"{entry.path}:{n}: {line.strip()}")
-    return "\n".join(hits[:20])
-
-
-search_fn: SearchFn = _line_search
+search_fn: SearchFn = index.search_text
 
 
 def handle(
@@ -211,6 +195,7 @@ def execute(folder_id: str, action: Action, target: Path | None) -> str | None:
                 f.write(action.content)
         case DeleteAction():
             target.unlink()  # type: ignore[union-attr]
+    index.refresh(folder_id)  # after any write, so the next question can cite it (docs/03 rule 6)
     return None
 
 

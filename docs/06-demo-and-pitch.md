@@ -54,7 +54,7 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 - Embeddings: `qwen3-embedding:0.6b` on every tier
 - Speech-to-text: faster-whisper `small` (Light/Standard), `large-v3-turbo` (Pro); D1 confirms
 
-**Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2)
+**Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2), `numpy` (embedding similarity, B3)
 
 **AI development tools:** Claude Code (Anthropic) used by track B for coding and docs. Not part of the product: the app makes no cloud AI calls.
 

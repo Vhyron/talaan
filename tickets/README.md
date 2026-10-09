@@ -35,8 +35,8 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [A4](A4-policy-engine.md) | Policy engine and action execution | A | P0 | 2h | A2, A3 | review |
 | [A5](A5-proposals-approval-flow.md) | Proposals and approval flow | A | P0 | 1.5h | A4 | review |
 | [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | done |
-| [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | review |
-| [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | todo |
+| [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | done |
+| [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | review |
 | [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | todo |
 | [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | todo |
 | [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | todo |
