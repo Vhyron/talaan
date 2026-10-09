@@ -25,7 +25,7 @@ class TierSpec:
 # Ordered smallest to largest; the order matters for fallback.
 TIERS: list[TierSpec] = [
     TierSpec("light", "Light", 8, "qwen3.5:2b", "small"),  # digest 0689d44085e0, bake-off tested on 8 GB M2
-    TierSpec("standard", "Standard", 16, "gemma4:e4b", "small"),  # digest dc35e8d9c606, not yet bake-off tested
+    TierSpec("standard", "Standard", 16, "gemma4:e4b", "small"),  # digest dc35e8d9c606, bake-off tested on 32 GB + 4 GB GPU
     TierSpec("pro", "Pro", 32, "gemma4:26b", "large-v3-turbo"),  # not yet bake-off tested
 ]
 
