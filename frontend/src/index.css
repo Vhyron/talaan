@@ -38,3 +38,9 @@ body { @apply bg-white text-ink font-sans antialiased; }
 
 /* Lines cited by a source chip */
 .source-hit { @apply -mx-2 rounded bg-warn-soft px-2 outline-2 outline-amber-300; }
+
+/* Indeterminate progress bar (timeline build) */
+@keyframes timeline-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
