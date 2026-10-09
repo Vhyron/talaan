@@ -36,10 +36,24 @@ class Transcript:
     model: str
 
 
-def _load(local_only: bool = False):
+class ModelNotDownloaded(RuntimeError):
+    pass
+
+
+def _load(local_only: bool = True):
+    """Load from the local cache only. Without this, faster-whisper contacts
+    Hugging Face on every load to check for updates, even when cached."""
     from faster_whisper import WhisperModel  # heavy import, only when needed
 
-    return WhisperModel(config.WHISPER_MODEL, device="cpu", compute_type="int8", local_files_only=local_only)
+    try:
+        return WhisperModel(config.WHISPER_MODEL, device="cpu", compute_type="int8", local_files_only=local_only)
+    except Exception as e:
+        if local_only:
+            raise ModelNotDownloaded(
+                f"Speech model '{config.WHISPER_MODEL}' isn't downloaded. "
+                "Run: uv run python -m app.transcribe.whisper --download"
+            ) from e
+        raise
 
 
 def transcribe_file(path: Path, hotwords: str | None = None) -> Transcript:
@@ -65,7 +79,7 @@ def download() -> None:
     """Fetch the model into the local Hugging Face cache so later runs work offline."""
     from huggingface_hub import scan_cache_dir
 
-    _load()
+    _load(local_only=False)
     size = sum(r.size_on_disk for r in scan_cache_dir().repos if config.WHISPER_MODEL in r.repo_id)
     print(f"faster-whisper '{config.WHISPER_MODEL}' cached ({size / 2**20:.0f} MB). Transcription now works offline.")
 

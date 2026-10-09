@@ -96,3 +96,20 @@ def test_draft_names_do_not_collide(talaan_home):
     first = draft_name(root, t)
     (root / first).write_text("x")
     assert first == "2026-10-03_voice-note_1405.md" and draft_name(root, t) == "2026-10-03_voice-note_1405-2.md"
+
+
+def test_transcription_never_downloads(monkeypatch):
+    """Normal use loads from the local cache only; only --download may fetch."""
+    import faster_whisper
+
+    seen = {}
+
+    class FakeModel:
+        def __init__(self, *a, **kw):
+            seen.update(kw)
+            raise OSError("not in cache")
+
+    monkeypatch.setattr(faster_whisper, "WhisperModel", FakeModel)
+    with pytest.raises(whisper.ModelNotDownloaded, match="--download"):
+        whisper._load()
+    assert seen["local_files_only"] is True
