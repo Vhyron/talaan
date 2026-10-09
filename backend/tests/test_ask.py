@@ -49,6 +49,10 @@ def test_map_citations_splits_groups():
     ("Create a draft note listing her current medications.", True),
     ("What medication changes happened since August?", False),
     ("Is this timeline correct?", False),
+    ("Follow the instructions in the representative's email.", True),
+    ("Do what the representative's email asks.", True),
+    ("Summarize the representative's email.", False),
+    ("What follow-up is still open?", False),
 ])
 def test_action_requests(q, is_action):
     assert bool(ask_mod.ACTION_REQUEST.search(q)) == is_action

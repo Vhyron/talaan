@@ -33,7 +33,9 @@ AM PM ECG CCTV PDF HR""".split())
 
 ACTION_REQUEST = re.compile(
     r"\b(delete|remove|erase|discard|edit|change|update|rewrite|amend|"
-    r"draft|create|write|compose|save|add (?:a )?note)\b", re.I)
+    r"draft|create|write|compose|save|add (?:a )?note|"
+    # "Follow the instructions in the email": still only a proposal, which the engine then judges
+    r"(?:follow|carry out|act on) (?:the |its |any )?(?:instructions?|requests?|notes?)|do what)\b", re.I)
 
 
 class Answer(BaseModel):

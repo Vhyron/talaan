@@ -39,7 +39,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | todo |
 | [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | review |
 | [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | review |
-| [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | todo |
+| [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | review |
 | [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | review |
 | [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | review |
 | [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | review |
