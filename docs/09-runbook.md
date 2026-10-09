@@ -34,6 +34,9 @@ cd frontend; npm ci; cd ..
 # Models: one-time download, the only step that needs internet
 ollama pull gemma4:e4b
 ollama pull qwen3-embedding:0.6b
+
+# Speech-to-text model for voice notes (faster-whisper "small", ~464 MB)
+cd backend; uv run python -m app.transcribe.whisper --download; cd ..
 ```
 
 The model tags are the defaults until the B1 bake-off pins the final ones (05-models.md). Pull models before the venue; the Wi-Fi there may be slow.
@@ -84,6 +87,7 @@ All optional, set as environment variables before starting the backend (see `bac
 | `CHAT_MODEL` | `gemma4:e4b` | Chat model tag |
 | `EMBED_MODEL` | `qwen3-embedding:0.6b` | Embedding model. Changing it means re-indexing every folder |
 | `NUM_CTX` | `16384` | Context window sent on every request |
+| `WHISPER_MODEL` | `small` | faster-whisper size: `base` (Light), `small` (Standard), `large-v3-turbo` (Pro). Download it with the command in section 2 |
 
 ### Running ticket branches side by side
 
@@ -162,4 +166,6 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 | Model tag in the top bar says `model offline` | Backend can't be reached from the frontend | As above |
 | Ask and Timeline always show Case 2026-014 answers | Expected until B4/B5 merge: those routes still return fixture data (`backend/app/fixtures.py`) | — |
 | `git push` → `403 Permission … denied to <work account>` | Git Credential Manager uses one saved GitHub login for every folder | In the partition's gitconfig (e.g. `~/.gitconfig-personal`) set `[credential "https://github.com"] username = <your account>`; optionally `gitHubAuthModes = device` and complete the code in a browser window signed in to that account |
+| Voice note fails with `open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 removed an argument faster-whisper 1.2 still passes | `uv sync` (the lockfile pins `av<19`); don't upgrade `av` past 18 |
+| Voice note fails offline / tries to download | Whisper model not cached | Run the download command in section 2 while online |
 | `git add -A` stages thousands of files | Branch made from a commit without `.gitignore` | Unstage (`git reset`), branch from current `dev`, add paths explicitly |
