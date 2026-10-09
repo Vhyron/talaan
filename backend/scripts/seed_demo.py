@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # make `app` importable
 
-from app import config  # noqa: E402
+from app import chats, config  # noqa: E402
 from app.db import connect  # noqa: E402
 from app.folders import META, _meta  # noqa: E402
 from app.policy.grants import init_grants  # noqa: E402
@@ -27,7 +27,7 @@ DEMO_DATA = Path(__file__).resolve().parents[2] / "demo-data"
 GROUPS = ("hr", "clinic")
 # Only these may exist in TALAAN_HOME before a full wipe. Anything else means the
 # path is probably wrong (e.g. TALAAN_HOME pointed at a real directory).
-WIPEABLE = {"folders", "app.db", "app.db-journal", "app.db-wal", "app.db-shm"}
+WIPEABLE = {"folders", "trash", "app.db", "app.db-journal", "app.db-wal", "app.db-shm"}
 
 
 def demo_folders() -> list[Path]:
@@ -61,6 +61,13 @@ def clear_state(folder_ids: list[str]) -> None:
     with connect() as db:
         for table in ("grants", "audit", "proposals", "chat_messages", "chat_sessions"):
             db.execute(f"DELETE FROM {table} WHERE folder_id IN ({marks})", folder_ids)
+        # The home chat thread quotes demo folders: clear it too.
+        db.execute("DELETE FROM chat_messages WHERE folder_id = ?", (chats.ALL,))
+        db.execute("DELETE FROM chat_sessions WHERE folder_id = ?", (chats.ALL,))
+        trashed = [r["id"] for r in db.execute(f"SELECT id FROM trash WHERE folder_id IN ({marks})", folder_ids)]
+        db.execute(f"DELETE FROM trash WHERE folder_id IN ({marks})", folder_ids)
+    for tid in trashed:  # the demo folders' Trash, so a reset demo has nothing to restore over
+        shutil.rmtree(config.TALAAN_HOME / "trash" / tid, ignore_errors=True)
     for fid in folder_ids:
         init_grants(fid)
 

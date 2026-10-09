@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { Lock } from 'lucide-react'
 import { api } from '../api/client'
@@ -13,6 +13,7 @@ import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { DropZone } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
 import { useTree } from '../lib/tree'
+import { movedPath, onRenamed } from '../lib/renamed'
 import ApprovalsPanel from '../panels/ApprovalsPanel'
 import AskPanel from '../panels/AskPanel'
 import AuditPanel from '../panels/AuditPanel'
@@ -42,6 +43,14 @@ type Tabs = { paths: string[]; active: number }
 // Open tabs per folder for this session, so switching between folders keeps them.
 const tabsByFolder = new Map<string, Tabs>()
 
+const renameTabs = (t: Tabs, from: string, to: string): Tabs => ({ ...t, paths: t.paths.map((p) => movedPath(p, from, to)) })
+
+// Remembered tabs of folders not on screen follow renames too.
+onRenamed(({ folderId, from, to }) => {
+  const t = tabsByFolder.get(folderId)
+  if (t) tabsByFolder.set(folderId, renameTabs(t, from, to))
+})
+
 function FolderView({ folder, folders, error }: { folder: Folder; folders: Folder[]; error: string | null }) {
   const tree = useTree()
   const location = useLocation()
@@ -51,6 +60,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   // Which folder tool is open in the floating card (or pinned column), if any.
   const [tool, setTool] = useState<PanelTab | null>(null)
   const [version, setVersion] = useState(0)
+  // "That file was renamed or removed": a source or tab pointing at a file that's gone.
+  const [notice, setNotice] = useState<string | null>(null)
 
   // Any change to files or subfolders (import, approval, new subfolder) bumps
   // tree.version; this view and every open sidebar tree refetch from that.
@@ -58,6 +69,11 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     api.files(folder.id).then(setFiles).catch(() => setFiles([]))
   }, [folder.id, tree.version])
   const refreshFiles = tree.changed
+
+  // Open tabs follow a rename instead of closing.
+  useEffect(() => onRenamed(({ folderId, from, to }) => {
+    if (folderId === folder.id) setTabs((t) => renameTabs(t, from, to))
+  }), [folder.id])
 
   const { expand } = tree
   useEffect(() => expand(folder.id), [expand, folder.id])
@@ -70,13 +86,24 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   useEffect(() => {
     if (!files.length) return
     const exists = new Set(files.map((f) => f.path))
+    const gone = tabs.paths.filter((p) => !exists.has(p))
+    if (gone.length) setNotice(`${gone[0]} was renamed or removed. Ask again to get current sources.`)
     setTabs((t) => {
       const paths = t.paths.filter((p) => exists.has(p))
       return paths.length === t.paths.length ? t : { paths, active: Math.min(t.active, paths.length - 1) }
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the file list changes
   }, [files])
 
+  const filesRef = useRef(files)
+  filesRef.current = files
   const openSource = useCallback((path: string, start?: number, end?: number) => {
+    const known = filesRef.current
+    if (known.length && !known.some((f) => f.path === path)) {
+      setNotice(`${path} was renamed or removed. Ask again to get current sources.`)
+      return
+    }
+    setNotice(null)
     setTabs(({ paths }) => {
       const i = paths.indexOf(path)
       return i >= 0 ? { paths, active: i } : { paths: [...paths, path], active: paths.length }
@@ -87,10 +114,13 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }, [])
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
-  const navState = location.state as { open?: string; overview?: boolean } | null
+  // A file to open can arrive with the navigation: from another folder's sidebar tree, or a
+  // source in the home-page chat (which also passes the cited lines to highlight).
+  const navState = location.state as { open?: string; start?: number; end?: number; overview?: boolean } | null
   const requested = navState?.open
   useEffect(() => {
-    if (requested) openSource(requested)
+    if (requested) openSource(requested, navState?.start, navState?.end)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per navigation
   }, [requested, location.key, openSource])
   // A click on the folder's name in the sidebar asks for its overview.
   const wantsOverview = navState?.overview
@@ -129,6 +159,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
         folders={folders}
         error={error}
         tabs={tabs}
+        notice={notice}
+        onDismissNotice={() => setNotice(null)}
         highlight={highlight}
         tool={tool}
         onTool={setTool}
@@ -139,10 +171,12 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   )
 }
 
-function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect, onClose }: {
+function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight, tool, onTool, onSelect, onClose }: {
   folders: Folder[]
   error: string | null
   tabs: Tabs
+  notice: string | null
+  onDismissNotice: () => void
   highlight: Highlight
   tool: PanelTab | null
   onTool: (t: PanelTab | null) => void
@@ -171,6 +205,11 @@ function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect,
             <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
           </span>
           <span className="hidden shrink-0 text-muted sm:inline">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
+          {notice && (
+            <button onClick={onDismissNotice} role="status" className="min-w-0 truncate text-warn-text" title={`${notice} (click to dismiss)`}>
+              {notice}
+            </button>
+          )}
           {(imp.busy || imp.message) && (
             <button onClick={imp.clear} role="status" className={`min-w-0 truncate ${imp.isError ? 'text-red-700' : 'text-brand-text'}`} title="Dismiss">
               {imp.busy ? 'Importing…' : imp.message}
