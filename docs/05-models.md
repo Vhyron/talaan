@@ -2,6 +2,23 @@
 
 **Rule:** the same embedding model on every tier, so an index built on one machine works on any other and switching tiers never means re-indexing.
 
+## Pinned tags
+
+**Pinned 2026-10-09 by the B1 bake-off. No model changes after midnight.** The single source in code is `backend/app/llm/models.py`; `GET /health` and the top bar show the tag in use, and every answer logs it.
+
+| Role | Tag | Ollama digest | Size | Tested |
+|---|---|---|---|---|
+| Embeddings (every tier) | `qwen3-embedding:0.6b` | `ac6da0dfba84` | 0.64 GB (Q8_0) | Yes, 8 GB M2 |
+| Chat, Light | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
+| Chat, Standard | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | **No**: needs a 16 GB machine. Kept from the original plan |
+| Chat, Pro | `gemma4:26b` | — | — | **No** |
+| Alternate (Standard) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
+| Alternate (Pro) | `qwen3.5:9b` | — | — | **No** |
+
+Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking off.
+
+**If a 16 GB+ bake-off arrives before midnight**, the Standard row may switch to `qwen3.5:4b` (one line in `models.py` + this table). Untested tags stay selectable but must be labelled untested in the submission.
+
 ## Tiers
 
 | Tier | Typical device | Chat model | Embeddings | Speech-to-text |
