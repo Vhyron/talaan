@@ -109,6 +109,7 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
               tierLabel={TIER_NAME[m.tier]}
               warn={m.installed && !m.fits}
               active={tier.active_source !== 'auto' && m.active}
+              autoPicked={tier.active_source === 'auto' && m.active}
               busy={switching === m.tag}
               disabled={!m.installed || switching !== null || tier.active_source === 'env'}
               onUse={() => choose(m.tag)}
@@ -133,22 +134,25 @@ function modelDetail(m: ModelOption, needGb?: number): string {
   return `Installed${need}`
 }
 
-function ModelRow({ title, detail, tierLabel, warn, active, busy, disabled, onUse }: {
+function ModelRow({ title, detail, tierLabel, warn, active, autoPicked, busy, disabled, onUse }: {
   title: string
   detail: string
   tierLabel?: string
   warn?: boolean
   active: boolean
+  /** Automatic mode is on and picked this model: highlighted, with no "Use" button. */
+  autoPicked?: boolean
   busy: boolean
   disabled: boolean
   onUse: () => void
 }) {
   return (
-    <li className={`flex items-center gap-3 px-4 py-3 ${active ? 'bg-brand-soft/60' : ''}`}>
+    <li className={`flex items-center gap-3 px-4 py-3 ${active ? 'bg-brand-soft/60' : autoPicked ? 'border-l-4 border-l-brand bg-brand-soft/30' : ''}`}>
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 font-mono text-sm font-semibold">
           {title}
           {tierLabel && <span className="rounded bg-panel px-1.5 py-0.5 font-sans text-[11px] font-semibold uppercase text-muted">{tierLabel}</span>}
+          {autoPicked && <span className="inline-flex items-center gap-1 font-sans text-xs font-semibold text-brand-text"><Check size={13} /> In use via Automatic</span>}
         </p>
         <p className={`mt-0.5 inline-flex items-center gap-1 text-xs ${warn ? 'text-warn-text' : 'text-muted'}`}>
           {warn && <AlertTriangle size={12} />} {detail}
@@ -156,7 +160,7 @@ function ModelRow({ title, detail, tierLabel, warn, active, busy, disabled, onUs
       </div>
       {active ? (
         <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand-text"><Check size={15} /> In use</span>
-      ) : (
+      ) : autoPicked ? null : (
         <button className="btn-ghost px-4 py-1.5 text-sm" disabled={disabled} onClick={onUse}>
           {busy ? <Loader2 size={15} className="animate-spin" /> : 'Use'}
         </button>
