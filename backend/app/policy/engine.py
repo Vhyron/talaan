@@ -19,6 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from fastapi import HTTPException
 from pydantic import ValidationError
 
 from app import folders
@@ -133,6 +134,57 @@ def handle(
     result = execute(folder_id, action, target)
     log("executed", action=name, path=path)
     return Outcome(status="executed", action=name, path=path, result=result)
+
+
+def approve(pid: str) -> Outcome:
+    """User approved a proposal in the UI. Re-checks everything before executing."""
+    proposal, old_mtime = _pending(pid)
+    folder_id, action = proposal.folder_id, proposal.action
+    name, path = action.action, getattr(action, "path", None)
+
+    def done(status: str, decision: str, reason: str | None = None, result: str | None = None) -> Outcome:
+        proposals.set_status(pid, status)
+        log_event(folder_id, "user", "decision", action=name, path=path, decision=decision, reason=reason or f"proposal {pid}")
+        if status == "approved":
+            log_event(folder_id, "user", "executed", action=name, path=path, reason=f"proposal {pid}")
+            return Outcome(status="executed", action=name, path=path, proposal_id=pid, result=result)
+        return Outcome(status="blocked", action=name, path=path, proposal_id=pid, reason=reason)
+
+    root = folders.folder_root(folder_id)
+    try:
+        target = resolve_in_folder(root, path) if path is not None else None
+    except PathOutsideFolder:
+        return done("rejected", "never", "That path is outside this folder")
+
+    grant_name = ACTION_GRANT[name]
+    if getattr(get_grants(folder_id), grant_name) == Grant.NEVER:
+        return done("rejected", "never", f"{GRANT_LABEL[grant_name]} is set to Never for this folder")
+
+    current_mtime = target.stat().st_mtime if target is not None and target.exists() else None
+    if current_mtime != old_mtime:
+        return done("stale", "never", "The file changed after this was proposed. Ask again.")
+
+    try:
+        result = execute(folder_id, action, target)
+    except (ActionRefused, FileExistsError) as e:
+        return done("stale", "never", str(e) or "A file with that name already exists")
+    return done("approved", "approved", result=result)
+
+
+def reject(pid: str) -> Outcome:
+    proposal, _ = _pending(pid)
+    action = proposal.action
+    path = getattr(action, "path", None)
+    proposals.set_status(pid, "rejected")
+    log_event(proposal.folder_id, "user", "decision", action=action.action, path=path, decision="rejected", reason=f"proposal {pid}")
+    return Outcome(status="blocked", action=action.action, path=path, proposal_id=pid, reason="Rejected by you")
+
+
+def _pending(pid: str):
+    proposal, old_mtime = proposals.get(pid)
+    if proposal.status != "pending":
+        raise HTTPException(409, f"This proposal was already {proposal.status}")
+    return proposal, old_mtime
 
 
 def _check(action: Action, target: Path | None) -> None:

@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from app import fixtures as fx
 from app import audit as audit_log
 from app import folders
-from app.policy import grants
+from app.policy import engine, grants, proposals
 from app.config import CHAT_MODEL, EMBED_MODEL
 from app.schemas import (
     AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Outcome,
@@ -119,17 +119,18 @@ def put_grants(folder_id: str, body: Grants) -> Grants:
 @app.get("/folders/{folder_id}/proposals")
 def list_proposals(folder_id: str) -> list[Proposal]:
     _folder(folder_id)
-    return [p for p in fx.PROPOSALS if p.folder_id == folder_id]
+    return proposals.list_pending(folder_id)
 
 
+# User-only: these are called from the approval UI, never from model code.
 @app.post("/proposals/{pid}/approve")
 def approve(pid: str) -> Outcome:
-    return Outcome(status="executed", action="propose_edit", path="2026-10-02_open-items.md")
+    return engine.approve(pid)
 
 
 @app.post("/proposals/{pid}/reject")
-def reject(pid: str) -> dict:
-    return {"id": pid, "status": "rejected"}
+def reject(pid: str) -> Outcome:
+    return engine.reject(pid)
 
 
 @app.get("/folders/{folder_id}/audit")
