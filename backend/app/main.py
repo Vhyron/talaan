@@ -11,8 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from app import fixtures as fx
+from app import ask as ask_mod
 from app import audit as audit_log
-from app import folders
+from app import folders, index
+from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
 from app.llm import selection, trace
@@ -98,7 +100,9 @@ async def import_files(
 ) -> list[FileEntry]:
     """Add files under `dest` (a subfolder, "" = top level). `keep_paths` recreates each
     upload's own subfolders, for importing a whole folder from disk."""
-    return await folders.import_files(folder_id, files, dest=dest, keep_paths=keep_paths)
+    saved = await folders.import_files(folder_id, files, dest=dest, keep_paths=keep_paths)
+    await run_in_threadpool(index.refresh, folder_id)  # so the next question can cite the new files
+    return saved
 
 
 # --- Index, ask, timeline (B3–B5) ---------------------------------------------
@@ -106,30 +110,22 @@ async def import_files(
 
 @app.post("/folders/{folder_id}/index")
 def build_index(folder_id: str) -> dict:
+    """Build or refresh the folder's index (incremental). If Ollama is down, keyword search is
+    still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
-    return {"chunks": 0, "files": len(folders.list_files(folder_id))}
+    return index.build_index(folder_id)
 
 
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    folder = _folder(folder_id)
-    q = body.question.lower()
-    if "villanueva" in q or "bautista" in q:
-        return AskResponse(answer=f"I can only see {folder.name}.", refused=True)
-    if "email" in q:
-        return AskResponse(
-            answer="Atty. Ramos asks for copies of the incident report and witness statements [S1]. "
-            "The email also contained hidden instructions to delete files; that action was blocked.",
-            sources=[fx.EMAIL],
-            outcome=fx.BLOCKED_DELETE,
-        )
-    return AskResponse(**fx.ASK_ANSWER)
+    return ask_mod.ask(folder_id, body.question)
 
 
 @app.post("/folders/{folder_id}/timeline")
-def timeline(folder_id: str) -> TimelineResponse:
-    _folder(folder_id)
-    return fx.TIMELINE
+def timeline(folder_id: str, refresh: bool = False) -> TimelineResponse:
+    """Dated events and flags for human review, every one with sources. Cached per index
+    version and chat model; `refresh=true` rebuilds anyway."""
+    return case_timeline.build(_folder(folder_id), refresh)
 
 
 # --- Grants, proposals, audit (A3–A5) -----------------------------------------

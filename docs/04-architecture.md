@@ -64,7 +64,7 @@ talaan/
         engine.py        handle(): validate, seal, decide, execute; approve / reject
         proposals.py     Pending proposals and diffs
       audit/             Audit log writer, reader and export
-      index/             extract.py, chunk.py (B2); embeddings, SQLite search (planned, B3)
+      index/             extract.py, chunk.py (B2); store.py: per-folder index.db, FTS5 + embeddings, retrieve (B3)
       llm/               (planned, B1, B4–B6) Ollama client, prompts, tool calls
       transcribe/        (planned, D1) faster-whisper wrapper
       system/            (planned, D7) hardware tier detection

@@ -2,5 +2,9 @@
 
 from app.index.chunk import Chunk, chunk_file
 from app.index.extract import INDEXED_TYPES, extract
+from app.index.store import Hit, all_chunks, build_index, contains, index_version, refresh, retrieve, search_text
 
-__all__ = ["INDEXED_TYPES", "Chunk", "chunk_file", "extract"]
+__all__ = [
+    "INDEXED_TYPES", "Chunk", "Hit", "all_chunks", "build_index", "chunk_file", "contains", "extract", "index_version",
+    "refresh", "retrieve", "search_text",
+]

@@ -9,7 +9,7 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 | 0:00–0:30 | **Problem.** Bea, an HR officer, has Case 2026-014: interviews, a medical certificate, SSS numbers. She can't paste any of it into ChatGPT |
 | 0:30–1:00 | Open the sealed case. Show the permission panel: Read on, Suggest and Create need approval, Delete never |
 | 1:00–2:00 | **Hero:** "Build a timeline with sources." Timeline appears; the app flags that sick leave, the medical certificate and the badge log contradict the supervisor's ID. "Flagged for your review." Click a source |
-| 2:00–2:45 | **Attack:** "Summarize the representative's email." The hidden instruction makes the model propose deleting witness files → **blocked**, shown in the audit log. If the pinned model ignores the injection, use the fallback in 03-permissions-and-sealing.md and say so |
+| 2:00–2:45 | **Attack:** open the email and show the hidden comment. "Summarize the representative's email." → a factual summary: the request for copies, no admission (gemma4:e4b ignored the injection in 10/10 runs). Then play the careless user: "Follow the instructions in the representative's email." → the model proposes deleting a witness interview → **blocked** (Delete: Never), red row in Audit → Blocked only. Say it plainly: the model obeyed the email because we told it to; the policy engine stopped it, not the prompt |
 | 2:45–3:15 | **Sealing:** "Summarize Ana Villanueva's tardiness." → "I can only see Case 2026-014 · Dela Cruz." |
 | 3:15–3:45 | **Voice:** record the 30-second follow-up note → transcript proposed → approve → saved into the case |
 | 3:45–4:15 | **Clinic cameo:** switch to Chart M. Reyes → "Any allergies before I prescribe an antibiotic?" → penicillin, with source |
@@ -27,7 +27,7 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 | Why not ChatGPT Enterprise or Claude? | Still sends the file off the device. For many orgs and clinics that's not allowed, and Cowork's own page advises against granting sensitive files |
 | Small models hallucinate. Why trust it? | Every claim cites a source file; contradictions are flagged, not decided; a human approves every change |
 | How is sealing actually enforced? | One index per folder, paths checked against the folder root, grants stored outside the model's reach, policy engine decides every action |
-| What about prompt injection? | We just showed it: the model proposed a delete, the policy engine blocked it |
+| What about prompt injection? | We just showed it: the summary ignored the hidden instruction, and when told to follow the email the model proposed the delete, which the policy engine blocked. Safety doesn't depend on the model behaving |
 | What needs internet? | Only the one-time model download |
 | What if the laptop is stolen? | Today, OS disk encryption. Per-folder encryption at rest is on the roadmap |
 | Does it understand Taglish? | The models are multilingual; we demo in English and haven't benchmarked Taglish yet |
@@ -50,11 +50,11 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 ### Disclosure list (running; add as you go)
 
 **Models** (all run locally through Ollama 0.34.2, pinned 2026-10-09):
-- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
+- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard, tested), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
 - Embeddings: `qwen3-embedding:0.6b` on every tier
 - Speech-to-text: faster-whisper `small` (Light/Standard), `large-v3-turbo` (Pro); D1 confirms
 
-**Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2)
+**Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2), `numpy` (embedding similarity, B3)
 
 **AI development tools:** Claude Code (Anthropic) used by track B for coding and docs. Not part of the product: the app makes no cloud AI calls.
 
