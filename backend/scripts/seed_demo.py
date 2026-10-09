@@ -59,7 +59,7 @@ def clear_state(folder_ids: list[str]) -> None:
     """Default grants, no proposals, no audit, no chat history for these folders."""
     marks = ",".join("?" * len(folder_ids))
     with connect() as db:
-        for table in ("grants", "audit", "proposals", "conversations"):
+        for table in ("grants", "audit", "proposals", "chat_messages", "chat_sessions"):
             db.execute(f"DELETE FROM {table} WHERE folder_id IN ({marks})", folder_ids)
     for fid in folder_ids:
         init_grants(fid)

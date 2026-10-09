@@ -19,18 +19,19 @@ def log_event(
     decision: str | None = None,
     reason: str | None = None,
     model_tag: str | None = None,
+    session_id: str | None = None,
 ) -> AuditEvent:
     ts = datetime.now()
     with connect() as db:
         cur = db.execute(
-            "INSERT INTO audit (timestamp, folder_id, actor, event, action, path, decision, reason, model_tag)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (ts.isoformat(), folder_id, actor, event, action, path, decision, reason, model_tag),
+            "INSERT INTO audit (timestamp, folder_id, actor, event, action, path, decision, reason, model_tag, session_id)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (ts.isoformat(), folder_id, actor, event, action, path, decision, reason, model_tag, session_id),
         )
         event_id = cur.lastrowid
     return AuditEvent(
         id=event_id, timestamp=ts, folder_id=folder_id, actor=actor, event=event,
-        action=action, path=path, decision=decision, reason=reason, model_tag=model_tag,
+        action=action, path=path, decision=decision, reason=reason, model_tag=model_tag, session_id=session_id,
     )
 
 

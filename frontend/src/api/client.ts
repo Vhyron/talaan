@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  AppSettings, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -54,6 +54,11 @@ export const api = {
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
+  chats: (id: string, q = '') => json<ChatSessionSummary[]>(`${f(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+  chat: (id: string, sid: string) => json<ChatSession>(`${f(id)}/chats/${encodeURIComponent(sid)}`),
+  renameChat: (id: string, sid: string, title: string) =>
+    send<ChatSessionSummary>('PATCH', `${f(id)}/chats/${encodeURIComponent(sid)}`, { title }),
+  deleteChat: (id: string, sid: string) => req(`${f(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),
