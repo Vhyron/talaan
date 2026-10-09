@@ -4,6 +4,8 @@ import type { FileEntry, Folder } from '../api/types'
 export type FolderCtx = {
   folder: Folder
   files: FileEntry[]
+  /** The file in the active viewer tab, if any: the chat focuses on it. */
+  currentPath: string | undefined
   /** Open a file in a tab and highlight lines start..end (1-based). */
   openSource: (path: string, start?: number, end?: number) => void
   /** Re-fetch the file list (after imports or approvals). */

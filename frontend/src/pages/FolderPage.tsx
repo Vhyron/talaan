@@ -77,9 +77,10 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     setHighlight(null)
   }
 
+  const currentPath = tabs.paths[tabs.active]
   const ctx: FolderCtx = useMemo(
-    () => ({ folder, files, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
-    [folder, files, openSource, refreshFiles, version],
+    () => ({ folder, files, currentPath, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
+    [folder, files, currentPath, openSource, refreshFiles, version],
   )
 
   return (

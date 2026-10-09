@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, LlmCall, Outcome,
+  AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
   Proposal, SystemTier, TimelineResponse,
 } from './types'
 
@@ -46,8 +46,9 @@ export const api = {
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
 
-  reindex: (id: string) => send<{ chunks: number; files: number }>('POST', `${f(id)}/index`),
-  ask: (id: string, question: string) => send<AskResponse>('POST', `${f(id)}/ask`, { question }),
+  reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
+  ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
+    send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),

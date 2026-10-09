@@ -65,7 +65,9 @@ export default function RightPanel({ tab, onTab, panels, wide, mobileVisible }: 
           </button>
         ))}
       </nav>
-      <div className="min-h-0 flex-1">{panels[tab]}</div>
+      {/* Ask stays mounted so the conversation survives switching tabs; the others load when shown. */}
+      <div className={`min-h-0 flex-1 ${tab === 'ask' ? '' : 'hidden'}`}>{panels.ask}</div>
+      {tab !== 'ask' && <div className="min-h-0 flex-1">{panels[tab]}</div>}
     </aside>
   )
 }

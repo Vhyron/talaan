@@ -121,8 +121,17 @@ class Source(BaseModel):
     snippet: str
 
 
+class Turn(BaseModel):
+    """An earlier chat turn, sent back by the UI so follow-ups make sense. Context only, never a source."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=4000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
+    path: str | None = None  # the file open in the viewer (folder-relative); re-checked against the folder
+    history: list[Turn] = Field(default=[], max_length=8)
 
 
 class AskResponse(BaseModel):
@@ -133,6 +142,18 @@ class AskResponse(BaseModel):
     refused: bool = False
     outcome: Outcome | None = None
     proposal_id: str | None = None
+
+
+class IndexStatus(BaseModel):
+    """Result of building or refreshing a folder's index."""
+
+    files: int
+    chunks: int
+    changed: int
+    removed: int
+    pending_embeddings: int  # > 0: Ollama was unreachable, search is keyword-only until the next build
+    version: int
+    errors: list[str] = []
 
 
 # --- Proposals -------------------------------------------------------------
