@@ -72,7 +72,7 @@ export type Proposal = {
   created_at: string
 }
 
-export type AuditEventType = 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change'
+export type AuditEventType = 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change' | 'rename'
 export type AuditEvent = {
   id: number
   timestamp: string

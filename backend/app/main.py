@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
-from app import chats, folders, global_ask, index
+from app import chats, folders, global_ask, index, rename
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
@@ -21,7 +21,7 @@ from app.llm import selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    ChatMessage, GlobalAskRequest,
+    ChatMessage, FolderRename, GlobalAskRequest, PathRename,
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
@@ -86,6 +86,19 @@ def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
 def list_dirs(folder_id: str) -> list[str]:
     """Subfolders, folder-relative (`.talaan/` hidden). Empty ones included."""
     return folders.list_dirs(folder_id)
+
+
+@app.patch("/folders/{folder_id}")
+def rename_folder(folder_id: str, body: FolderRename) -> Folder:
+    """Change the folder's display name. Its id (and so its grants, audit and chat) stays."""
+    return rename.rename_folder(folder_id, body.name)
+
+
+@app.post("/folders/{folder_id}/rename")
+async def rename_path(folder_id: str, body: PathRename) -> dict[str, str]:
+    """Rename a file or subfolder (user only; the model has no rename action). Re-indexes."""
+    new = await run_in_threadpool(rename.rename_path, folder_id, body.path, body.name)
+    return {"path": new}
 
 
 @app.post("/folders/{folder_id}/dirs", status_code=201)

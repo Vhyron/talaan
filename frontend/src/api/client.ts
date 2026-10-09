@@ -50,6 +50,10 @@ export const api = {
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
   dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
+  /** Change a folder's display name; its id (and grants, audit, chat) stays. */
+  renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
+  /** Rename a file or subfolder in place; `name` is the new last segment. */
+  renamePath: (id: string, path: string, name: string) => send<{ path: string }>('POST', `${f(id)}/rename`, { path, name }),
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),

@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { api } from '../api/client'
 import type { AskResponse, ChatMessage, Turn } from '../api/types'
+import { movedPath, onRenamed } from './renamed'
 import { usePersistentFlag } from './usePersistentFlag'
 
 /**
@@ -34,6 +35,19 @@ function subscribe(l: () => void) {
   listeners.add(l)
   return () => listeners.delete(l)
 }
+
+// Cached sources follow a rename (the server already updated the saved sessions).
+onRenamed(({ folderId, from, to }) => {
+  for (const scope of [folderId, null]) {
+    set(scope, (s) => ({
+      messages: s.messages.map((m) => m.role !== 'assistant' ? m : {
+        ...m,
+        res: { ...m.res, sources: m.res.sources.map((src) =>
+          scope === null && src.folder_id !== folderId ? src : { ...src, path: movedPath(src.path, from, to) }) },
+      }),
+    }))
+  }
+})
 
 const fromSaved = (saved: ChatMessage[]): Msg[] =>
   saved.map((m) => (m.role === 'assistant' && m.response ? { role: 'assistant', res: m.response } : { role: 'user', text: m.content }))

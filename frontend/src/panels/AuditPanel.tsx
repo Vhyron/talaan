@@ -22,6 +22,7 @@ const ACTION_NOUN: Record<string, string> = { propose_edit: 'edit', create_draft
 /** One-line summary: what happened, in plain words. */
 function title(e: AuditEvent): string {
   if (e.event === 'grant_change') return `Permission changed: ${GRANT_LABEL[e.action ?? ''] ?? words(e.action ?? '')}`
+  if (e.event === 'rename') return e.action === 'rename_folder' ? 'Folder renamed' : e.action === 'rename_dir' ? 'Subfolder renamed' : 'File renamed'
   if (e.event === 'question') return 'Question asked'
   if (e.event === 'answer') return 'Answer given'
   const action = ACTION_NOUN[e.action ?? ''] ?? (e.action ? words(e.action) : 'action')

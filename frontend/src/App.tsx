@@ -44,6 +44,8 @@ export default function App() {
   }
   const expand = useCallback((id: string) => setExpanded((s) => (s.has(id) ? s : new Set(s).add(id))), [])
   const changed = useCallback(() => setTreeVersion((v) => v + 1), [])
+  // Any change to folders or files (rename, import, new subfolder) also refreshes the folder list.
+  useEffect(() => { if (treeVersion) refresh() }, [treeVersion, refresh])
   const tree: TreeCtx = useMemo(() => ({
     expanded,
     toggle: (id) => setExpanded((s) => flip(s, id)),

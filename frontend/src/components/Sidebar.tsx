@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
@@ -10,6 +10,7 @@ import { useImportDialog } from '../lib/importDialog'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
+import { renamePath } from '../lib/renamed'
 
 // Whether a mouse/touch button is currently held anywhere on the page.
 let pointerIsDown = false
@@ -157,7 +158,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
                 const active = f.id === activeId
                 return (
                   <div key={f.id}>
-                    <Row depth={0} actions={<DirActions folderId={f.id} dir="" label={f.name} />}>
+                    <Row depth={0} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
                       <button
                         onClick={() => tree.toggle(f.id)}
                         className="grid h-6 w-5 shrink-0 place-items-center rounded hover:bg-panel"
@@ -264,7 +265,7 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         const open = !tree.collapsedDirs.has(key)
         return (
           <div key={d.path}>
-            <Row depth={depth} actions={<DirActions folderId={folderId} dir={d.path} />}>
+            <Row depth={depth} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
               <button
                 onClick={() => tree.toggleDir(key)}
                 className="flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug"
@@ -285,7 +286,7 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
         )
       })}
       {node.files.map((path) => (
-        <Row key={path} depth={depth} selected={path === currentPath}>
+        <Row key={path} depth={depth} selected={path === currentPath} actions={<Rename kind="file" folderId={folderId} path={path} current={path.split('/').pop() ?? path} />}>
           <button
             onClick={() => onOpenFile(path)}
             title={path}
@@ -399,4 +400,95 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
       )}
     </>
   )
+}
+
+/**
+ * Rename a folder (its display name only: grants, audit and chat stay with it), a
+ * subfolder or a file (in place; open tabs, saved chat sources and pending approvals
+ * follow, and the folder is re-indexed). Only the user can rename; the AI can't.
+ */
+function Rename({ kind, folderId, path, current }: { kind: 'folder' | 'subfolder' | 'file'; folderId: string; path: string; current: string }) {
+  const tree = useTree()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(current)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const isFolder = kind === 'folder'
+  const isFile = kind === 'file'
+
+  function start() {
+    setName(current)
+    setError(null)
+    setEditing(true)
+  }
+
+  function cancel() {
+    setEditing(false)
+    setError(null)
+  }
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    const clean = name.trim()
+    if (!clean || clean === current) return cancel()
+    setSaving(true)
+    try {
+      if (isFolder) await api.renameFolder(folderId, clean)
+      else await renamePath(folderId, path, clean)
+      tree.changed()
+      setEditing(false)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={start}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink lg:hidden lg:group-hover:grid lg:group-focus-within:grid"
+        aria-label={`Rename ${current}`}
+        title={`Rename ${kind}`}
+      >
+        <Pencil size={13} />
+      </button>
+      {editing && (
+        <div className="basis-full px-2 pb-1.5" onClick={(e) => e.stopPropagation()}>
+          <form
+            onSubmit={save}
+            onBlur={(e) => { if (!saving && !error && !e.currentTarget.contains(e.relatedTarget as Element | null)) cancelLater() }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel() } }}
+            className="flex gap-1"
+          >
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(null) }}
+              // Select the name without its extension, so typing keeps the file type.
+              onFocus={(e) => {
+                const dot = isFile ? current.lastIndexOf('.') : -1
+                e.currentTarget.setSelectionRange(0, dot > 0 ? dot : current.length)
+              }}
+              aria-label={`New name for ${current}`}
+              className="min-w-0 flex-1 rounded border border-line bg-white px-2 py-1 text-xs outline-none focus:border-brand"
+            />
+            <button disabled={saving} className="rounded bg-brand px-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? '…' : 'Save'}</button>
+            <button type="button" onClick={cancel} className="grid w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink" aria-label="Cancel rename">
+              <X size={13} />
+            </button>
+          </form>
+          {error && <p role="alert" className="mt-1 text-xs text-red-700">{error}</p>}
+          {isFolder && !error && <p className="mt-1 text-[11px] text-muted">Changes the name shown in Talaan. Permissions, audit log and chat stay with this folder.</p>}
+        </div>
+      )}
+    </>
+  )
+
+  // Like the new-subfolder box: wait for a click to finish so the row under it doesn't jump away.
+  function cancelLater() {
+    if (!pointerIsDown) return cancel()
+    document.addEventListener('pointerup', () => setTimeout(cancel, 0), { once: true })
+  }
 }

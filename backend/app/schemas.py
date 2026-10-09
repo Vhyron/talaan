@@ -156,6 +156,17 @@ class AskResponse(BaseModel):
     proposal_id: str | None = None
 
 
+class FolderRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class PathRename(BaseModel):
+    """Rename a file or subfolder in place: `name` is the new last segment only."""
+
+    path: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
+
+
 class ChatMessage(BaseModel):
     """A saved chat message. Assistant messages carry the full response (sources, outcome)."""
 
@@ -195,7 +206,7 @@ class Proposal(BaseModel):
 
 # --- Audit -----------------------------------------------------------------
 
-AuditEventType = Literal["question", "answer", "proposed_action", "decision", "executed", "grant_change"]
+AuditEventType = Literal["question", "answer", "proposed_action", "decision", "executed", "grant_change", "rename"]
 
 
 class AuditEvent(BaseModel):
