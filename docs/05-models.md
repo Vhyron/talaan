@@ -58,6 +58,10 @@ Pinned tags live in one place: `backend/app/llm/models.py` (tier table + bake-of
 - Every answer logs the exact `model_tag`, so the audit log shows which model produced it.
 - Measured on an 8 GB M2: embeddings at `num_ctx` 8192 evicted the chat model; at 2048 both stay loaded on the GPU.
 
+## LLM activity log
+
+Every model call (chat, embed, load, unload) prints one line to the backend terminal and shows on the **Settings** page (`/settings`, or click the model chip in the top bar): model, `num_ctx`, prompt → output tokens, tokens/s, load time, total time, JSON validity, errors. Warns when a prompt fills ≥90% of `num_ctx`. Prompt/response text is off by default (it contains client files); when turned on it is kept in memory only. API: `GET /system/llm-log?after=<id>`, `DELETE /system/llm-log`, `GET/PUT /system/settings`.
+
 ## Tier detection (P2)
 
 On first run: read total RAM and GPU presence → map to Light / Standard / Pro → `ollama pull` that tier's models → show which features are available.

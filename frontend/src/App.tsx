@@ -5,10 +5,12 @@ import type { Folder } from './api/types'
 import TopBar from './components/TopBar'
 import FoldersPage from './pages/FoldersPage'
 import FolderPage from './pages/FolderPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [modelVersion, setModelVersion] = useState(0)
 
   const refresh = useCallback(() => {
     api.folders()
@@ -20,10 +22,11 @@ export default function App() {
 
   return (
     <div className="flex h-screen flex-col">
-      <TopBar />
+      <TopBar modelVersion={modelVersion} />
       <Routes>
         <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={refresh} />} />
         <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
+        <Route path="/settings" element={<SettingsPage onModelChanged={() => setModelVersion((v) => v + 1)} />} />
       </Routes>
     </div>
   )

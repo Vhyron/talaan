@@ -10,11 +10,11 @@ from app import fixtures as fx
 from app import audit as audit_log
 from app import folders
 from app.policy import engine, grants, proposals
-from app.llm import selection
+from app.llm import selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, ModelChoice, Outcome,
+    AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
     Proposal, SystemTier, TimelineResponse,
 )
 
@@ -176,3 +176,25 @@ def choose_model(body: ModelChoice) -> SystemTier:
         return selection.choose(body.chat_model)
     except selection.ModelChoiceError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/system/llm-log")
+def llm_log(after: int = 0) -> list[LlmCall]:
+    """Model calls since `after` (an LlmCall id), oldest first. In memory only; cleared on restart."""
+    return trace.recent(after)
+
+
+@app.delete("/system/llm-log", status_code=204)
+def clear_llm_log() -> None:
+    trace.clear()
+
+
+@app.get("/system/settings")
+def get_settings() -> AppSettings:
+    return AppSettings(log_prompts=trace.log_prompts())
+
+
+@app.put("/system/settings")
+def put_settings(body: AppSettings) -> AppSettings:
+    trace.set_log_prompts(body.log_prompts)
+    return get_settings()

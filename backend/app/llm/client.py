@@ -13,6 +13,7 @@ import httpx
 from pydantic import BaseModel
 
 from app import config
+from app.llm import trace
 from app.llm.models import EMBED_MODEL
 
 CHAT_TIMEOUT = 300.0  # first call includes loading the model from disk
@@ -83,8 +84,15 @@ def chat(
     if schema is not None:
         body["format"] = schema.model_json_schema() if isinstance(schema, type) else schema
 
+    prompt = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
     t0 = time.perf_counter()
-    d = _post("/api/chat", body, CHAT_TIMEOUT)
+    try:
+        d = _post("/api/chat", body, CHAT_TIMEOUT)
+    except OllamaError as e:
+        trace.record("chat", tag, seconds=time.perf_counter() - t0, num_ctx=config.NUM_CTX, think=think,
+                     prompt=prompt, error=str(e))
+        raise
+    seconds = time.perf_counter() - t0
     content = d["message"]["content"]
     data = None
     if schema is not None:
@@ -92,22 +100,40 @@ def chat(
             data = json.loads(content)
         except json.JSONDecodeError:
             data = None  # caller decides; policy.handle() rejects and logs invalid actions
-    return ChatResult(content=content, model=d.get("model", tag), seconds=time.perf_counter() - t0, data=data)
+    answered_by = d.get("model", tag)
+    trace.record("chat", answered_by, ollama=d, seconds=seconds, num_ctx=config.NUM_CTX, think=think,
+                 json_valid=None if schema is None else data is not None, prompt=prompt, response=content)
+    return ChatResult(content=content, model=answered_by, seconds=seconds, data=data)
 
 
 def embed(texts: list[str]) -> EmbedResult:
-    d = _post("/api/embed", {"model": EMBED_MODEL, "input": texts, "options": {"num_ctx": EMBED_NUM_CTX}}, 120.0)
+    t0 = time.perf_counter()
+    try:
+        d = _post("/api/embed", {"model": EMBED_MODEL, "input": texts, "options": {"num_ctx": EMBED_NUM_CTX}}, 120.0)
+    except OllamaError as e:
+        trace.record("embed", EMBED_MODEL, seconds=time.perf_counter() - t0, inputs=len(texts), error=str(e))
+        raise
+    trace.record("embed", d.get("model", EMBED_MODEL), ollama=d, seconds=time.perf_counter() - t0,
+                 num_ctx=EMBED_NUM_CTX, inputs=len(texts))
     return EmbedResult(vectors=d["embeddings"], model=d.get("model", EMBED_MODEL))
 
 
 def load(tag: str) -> None:
     """Load a chat model into memory now, with the same num_ctx chat() uses (so no reload later)."""
-    _post("/api/generate", {"model": tag, "keep_alive": "30m", "options": {"num_ctx": config.NUM_CTX}}, CHAT_TIMEOUT)
+    t0 = time.perf_counter()
+    try:
+        d = _post("/api/generate", {"model": tag, "keep_alive": "30m", "options": {"num_ctx": config.NUM_CTX}}, CHAT_TIMEOUT)
+    except OllamaError as e:
+        trace.record("load", tag, seconds=time.perf_counter() - t0, num_ctx=config.NUM_CTX, error=str(e))
+        raise
+    trace.record("load", tag, ollama=d, seconds=time.perf_counter() - t0, num_ctx=config.NUM_CTX)
 
 
 def unload(tag: str) -> None:
     """Free a model's memory. Matters on 8 GB machines where two chat models don't fit."""
+    t0 = time.perf_counter()
     try:
         _post("/api/generate", {"model": tag, "keep_alive": 0}, 30.0)
     except OllamaError:
-        pass  # not loaded or not installed: nothing to free
+        return  # not loaded or not installed: nothing to free
+    trace.record("unload", tag, seconds=time.perf_counter() - t0)
