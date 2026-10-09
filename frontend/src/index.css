@@ -35,3 +35,6 @@ body { @apply bg-white text-ink font-sans antialiased; }
 .prose-talaan table { @apply my-4 w-full text-sm; }
 .prose-talaan th, .prose-talaan td { @apply border border-line px-2 py-1 text-left; }
 .prose-talaan code { @apply rounded bg-panel px-1 font-mono text-[13px]; }
+
+/* Lines cited by a source chip */
+.source-hit { @apply -mx-2 rounded bg-warn-soft px-2 outline-2 outline-amber-300; }

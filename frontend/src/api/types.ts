@@ -20,7 +20,8 @@ export type Grants = { read: Grant; suggest_edits: Grant; create_drafts: Grant; 
 
 export type Outcome = {
   status: 'executed' | 'pending' | 'blocked'
-  action: ActionName
+  /** null when the model's output didn't parse */
+  action: ActionName | null
   path: string | null
   reason: string | null
   proposal_id: string | null
