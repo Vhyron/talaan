@@ -47,9 +47,10 @@ def to_markdown(t: Transcript, recorded: datetime) -> str:
     return "\n".join(lines) + "\n"
 
 
-def draft_name(root: Path, recorded: datetime) -> str:
-    """`2026-10-03_voice-note_1405.md`, with -2, -3… if that name is taken."""
-    base = f"{recorded:%Y-%m-%d}_voice-note_{recorded:%H%M}"
+def draft_name(root: Path, recorded: datetime, subdir: str = "") -> str:
+    """`2026-10-03_voice-note_1405.md` (inside `subdir` if given), with -2, -3… if that name is taken."""
+    prefix = f"{subdir.strip('/')}/" if subdir.strip("/") else ""
+    base = f"{prefix}{recorded:%Y-%m-%d}_voice-note_{recorded:%H%M}"
     name, n = f"{base}.md", 1
     while (root / name).exists():
         n += 1
