@@ -14,3 +14,15 @@ export const isPdf = (path: string) => /\.pdf$/i.test(path)
 export function timeOf(iso: string): string {
   return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago", then a date. */
+export function ago(iso: string, now = Date.now()): string {
+  const min = Math.round((now - new Date(iso).getTime()) / 60_000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min} min ago`
+  const h = Math.round(min / 60)
+  if (h < 24) return `${h} h ago`
+  const d = Math.round(h / 24)
+  if (d < 7) return d === 1 ? 'yesterday' : `${d} days ago`
+  return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' })
+}

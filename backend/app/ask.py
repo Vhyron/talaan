@@ -15,7 +15,7 @@ from collections.abc import Sequence
 from fastapi import HTTPException
 from pydantic import BaseModel
 
-from app import audit, folders, index
+from app import audit, chats, folders, index
 from app.index import INDEXED_TYPES, Hit
 from app.llm import client
 from app.policy import engine
@@ -216,13 +216,20 @@ def outcome_text(o: Outcome) -> str:
     return f"That was blocked: {o.reason or what}. Nothing was changed."
 
 
-def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = ()) -> AskResponse:
+def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = (),
+        session_id: str | None = None) -> AskResponse:
     folder = folders.get_folder(folder_id)
-    audit.log_event(folder_id, "user", "question", reason=question)
+    if session_id:
+        chats.check(folder_id, session_id)  # 404 for an unknown chat or another folder's
+    sid = session_id or chats.new_id()
+    audit.log_event(folder_id, "user", "question", reason=question, session_id=sid)
 
     def reply(resp: AskResponse, tag: str | None = None) -> AskResponse:
+        """Every answer, refusal and policy outcome is audited and saved to the chat."""
+        resp.session_id = sid
         audit.log_event(folder_id, "model", "answer", reason=resp.answer, model_tag=tag,
-                        decision="refused" if resp.refused else None)
+                        decision="refused" if resp.refused else None, session_id=sid)
+        chats.save_turn(folder_id, sid, question, resp)
         return resp
 
     if get_grants(folder_id).read == Grant.NEVER:

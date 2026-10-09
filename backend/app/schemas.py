@@ -136,6 +136,7 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1)
     path: str | None = None  # the file open in the viewer (folder-relative); re-checked against the folder
     history: list[Turn] = Field(default=[], max_length=8)
+    session_id: str | None = None  # continue this saved chat; None starts a new one
 
 
 class AskResponse(BaseModel):
@@ -146,6 +147,7 @@ class AskResponse(BaseModel):
     refused: bool = False
     outcome: Outcome | None = None
     proposal_id: str | None = None
+    session_id: str | None = None  # the saved chat this turn belongs to
 
 
 class IndexStatus(BaseModel):
@@ -179,7 +181,9 @@ class Proposal(BaseModel):
 
 # --- Audit -----------------------------------------------------------------
 
-AuditEventType = Literal["question", "answer", "proposed_action", "decision", "executed", "grant_change"]
+AuditEventType = Literal[
+    "question", "answer", "proposed_action", "decision", "executed", "grant_change", "session_renamed", "session_deleted",
+]
 
 
 class AuditEvent(BaseModel):
@@ -193,6 +197,37 @@ class AuditEvent(BaseModel):
     decision: str | None = None
     reason: str | None = None
     model_tag: str | None = None
+    session_id: str | None = None
+
+
+# --- Chat sessions ---------------------------------------------------------
+
+
+class ChatSessionSummary(BaseModel):
+    id: str
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+
+
+class ChatMessage(BaseModel):
+    """A saved turn. Assistant turns keep the full response (sources, outcome); `proposal_status`
+    is the proposal's status now, not when it was proposed."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    response: AskResponse | None = None
+    proposal_status: ProposalStatus | None = None
+    created_at: datetime
+
+
+class ChatSession(ChatSessionSummary):
+    messages: list[ChatMessage]
+
+
+class ChatRename(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
 
 
 # --- Timeline --------------------------------------------------------------

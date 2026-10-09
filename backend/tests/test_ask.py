@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import ask as ask_mod
+from app import chats
 from app.index import Hit
 from app.llm import client
 from app.llm.client import ChatResult
@@ -64,6 +65,8 @@ def model(monkeypatch):
     state = type("M", (), {"reply": None, "calls": []})()
 
     def fake_chat(messages, schema=None, **kw):
+        if schema is chats.Title:  # the background chat title (C8), not part of answering
+            return ChatResult(content="", model="fake:1b", seconds=0, data={"title": "Test title"})
         state.calls.append(messages)
         return ChatResult(content="", model="fake:1b", seconds=0, data=state.reply)
 

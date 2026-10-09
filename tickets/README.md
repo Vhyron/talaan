@@ -47,6 +47,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | review |
 | [C6](C6-audit-log-view.md) | Audit log view and export | C | P0 | 1h | C2 | review |
 | [C7](C7-timeline-view.md) | Timeline view | C | P0 | 1.5h | C2 | review |
+| [C8](C8-chat-sessions.md) | Saved chat sessions per folder | C | P2 | 3h | C3, B4 | review |
 | [D1](D1-transcription-backend.md) | Transcription backend | D | P1 | 2h | A1, A4 | todo |
 | [D2](D2-recorder-ui.md) | Recorder UI | D | P1 | 1.5h | C1, D1 | todo |
 | [D3](D3-demo-seed-reset.md) | Demo seed and reset script | D | P0 | 1h | A2, A3, B3 | todo |
