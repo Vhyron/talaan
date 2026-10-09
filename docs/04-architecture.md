@@ -8,7 +8,7 @@ Chosen for speed of building and ease of debugging over a 20-hour hackathon, not
 |---|---|---|
 | Backend | **Python + FastAPI** | All AI pieces are mature Python libraries: Ollama client, faster-whisper, PyMuPDF, numpy. FastAPI's auto-generated `/docs` page lets you call every endpoint by hand, so the AI and policy engine can be debugged without a UI and frontend/backend can be built in parallel. Pydantic defines the action schema once: sent to the model and used to validate its output |
 | Frontend | **React + Vite + Tailwind** | Instant hot reload. The browser network tab shows every request and response, so bugs are easy to place on one side or the other |
-| Model runtime | **Ollama** | Headless, one command per model, verbose logs with `OLLAMA_DEBUG=1`, `ollama ps` shows loaded models, JSON-schema-constrained output, embeddings endpoint. Code against its OpenAI-compatible API with a configurable base URL so LM Studio is a config swap |
+| Model runtime | **Ollama** | Headless, one command per model, verbose logs with `OLLAMA_DEBUG=1`, `ollama ps` shows loaded models, JSON-schema-constrained output, embeddings endpoint. Code against its native API (`/api/chat`, `/api/embed`) with a configurable base URL: only the native API takes `num_ctx` and `think` per request, so long prompts are never silently truncated |
 | Storage | **Plain Markdown files + one SQLite file per folder** | SQLite full-text search for keywords, embeddings stored as blobs, similarity computed with numpy. No vector DB service to crash; any `.db` opens in a SQLite viewer; deleting a client = deleting one folder |
 | PDF text | PyMuPDF | Fast, reliable text extraction |
 | Transcription | faster-whisper | Runs on CPU, int8, timestamps |
@@ -64,7 +64,7 @@ talaan/
         engine.py        handle(): validate, seal, decide, execute; approve / reject
         proposals.py     Pending proposals and diffs
       audit/             Audit log writer, reader and export
-      index/             (planned, B2–B3) chunking, embeddings, SQLite search
+      index/             extract.py, chunk.py (B2); store.py: per-folder index.db, FTS5 + embeddings, retrieve (B3)
       llm/               (planned, B1, B4–B6) Ollama client, prompts, tool calls
       transcribe/        (planned, D1) faster-whisper wrapper
       system/            (planned, D7) hardware tier detection

@@ -207,9 +207,60 @@ class Tier(BaseModel):
     fits: bool
 
 
+class ModelOption(BaseModel):
+    """A pinned chat model the user can switch to."""
+
+    tag: str
+    tier: TierId
+    installed: bool
+    fits: bool  # this machine has the memory the tier calls for
+    active: bool
+
+
 class SystemTier(BaseModel):
     ram_gb: int
     gpu: str | None
     free_disk_gb: int
     recommended: TierId
     tiers: list[Tier]
+    ollama_running: bool = False
+    active_chat_model: str | None = None
+    active_source: Literal["env", "user", "auto"] = "auto"  # env var, Setup page choice, or tier detection
+    embed_installed: bool = False
+    models: list[ModelOption] = []
+
+
+LlmCallKind = Literal["chat", "embed", "load", "unload"]
+
+
+class LlmCall(BaseModel):
+    """One model call, for the LLM activity log. prompt/response only when "Record prompts" is on."""
+
+    id: int
+    timestamp: datetime
+    kind: LlmCallKind
+    model: str
+    ok: bool
+    error: str | None = None
+    warning: str | None = None
+    num_ctx: int | None = None
+    think: bool | None = None
+    inputs: int | None = None  # texts in an embed call
+    prompt_tokens: int | None = None
+    output_tokens: int | None = None
+    tokens_per_s: float | None = None
+    load_s: float | None = None
+    total_s: float
+    json_valid: bool | None = None  # set when a JSON schema was requested
+    prompt: str | None = None
+    response: str | None = None
+
+
+class AppSettings(BaseModel):
+    log_prompts: bool = False  # keep prompt/response text in the in-memory LLM log
+
+
+class ModelChoice(BaseModel):
+    """`chat_model: null` returns to automatic selection by hardware tier."""
+
+    chat_model: str | None

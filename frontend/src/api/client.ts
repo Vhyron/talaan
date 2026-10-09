@@ -1,6 +1,6 @@
 import type {
-  AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, Outcome, Proposal,
-  SystemTier, TimelineResponse,
+  AppSettings, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, LlmCall, Outcome,
+  Proposal, SystemTier, TimelineResponse,
 } from './types'
 
 export class ApiError extends Error {
@@ -67,4 +67,9 @@ export const api = {
   },
 
   systemTier: () => json<SystemTier>('/system/tier'),
+  chooseModel: (chat_model: string | null) => send<SystemTier>('PUT', '/system/model', { chat_model }),
+  llmLog: (after = 0) => json<LlmCall[]>(`/system/llm-log?after=${after}`),
+  clearLlmLog: () => req('/system/llm-log', { method: 'DELETE' }),
+  settings: () => json<AppSettings>('/system/settings'),
+  setSettings: (body: AppSettings) => send<AppSettings>('PUT', '/system/settings', body),
 }

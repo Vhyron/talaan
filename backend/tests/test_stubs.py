@@ -24,7 +24,6 @@ def test_every_route_responds():
     assert c.get(f"/folders/{F}/proposals").status_code == 200
     assert c.get(f"/folders/{F}/audit").status_code == 200
     assert c.get(f"/folders/{F}/audit/export?format=csv").text.startswith("id,")
-    assert c.post(f"/folders/{F}/transcribe", files={"audio": ("a.wav", b"x")}).json()["status"] == "pending"
     assert c.get("/system/tier").status_code == 200
 
 

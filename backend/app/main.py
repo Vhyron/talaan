@@ -1,18 +1,26 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
+import tempfile
+from datetime import datetime
+from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
 from app import fixtures as fx
 from app import audit as audit_log
-from app import folders
+from app import folders, index
+from app import transcribe as voice
 from app.policy import engine, grants, proposals
-from app.config import CHAT_MODEL, EMBED_MODEL
+from app.llm import selection, trace
+from app.llm.client import OllamaError
+from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Outcome,
+    CreateDraftAction,
+    AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
     Proposal, SystemTier, TimelineResponse,
 )
 
@@ -25,13 +33,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(OllamaError)
+def ollama_error(_: Request, e: OllamaError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": str(e)})
+
+
 def _folder(folder_id: str) -> Folder:
     return folders.get_folder(folder_id)
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "chat_model": CHAT_MODEL, "embed_model": EMBED_MODEL}
+    return {"status": "ok", "chat_model": selection.active_chat_model().tag, "embed_model": EMBED_MODEL}
 
 
 # --- Folders and files (A2) --------------------------------------------------
@@ -67,7 +80,9 @@ def read_file(folder_id: str, path: str) -> PlainTextResponse | FileResponse:
 
 @app.post("/folders/{folder_id}/import")
 async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntry]:
-    return await folders.import_files(folder_id, files)
+    saved = await folders.import_files(folder_id, files)
+    await run_in_threadpool(index.refresh, folder_id)  # so the next question can cite the new files
+    return saved
 
 
 # --- Index, ask, timeline (B3–B5) ---------------------------------------------
@@ -75,8 +90,10 @@ async def import_files(folder_id: str, files: list[UploadFile]) -> list[FileEntr
 
 @app.post("/folders/{folder_id}/index")
 def build_index(folder_id: str) -> dict:
+    """Build or refresh the folder's index (incremental). If Ollama is down, keyword search is
+    still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
-    return {"chunks": 0, "files": len(folders.list_files(folder_id))}
+    return index.build_index(folder_id)
 
 
 @app.post("/folders/{folder_id}/ask")
@@ -152,11 +169,77 @@ def audit_export(folder_id: str, format: Literal["json", "csv"] = "json") -> Res
 
 
 @app.post("/folders/{folder_id}/transcribe")
-def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
-    _folder(folder_id)
-    return Outcome(status="pending", action="create_draft", path="2026-10-03_voice-note.md", proposal_id="p-demo-2")
+async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
+    """Audio -> local transcript -> create_draft through the policy engine.
+
+    The transcript is never written directly: with the default grants it becomes a
+    proposal the user approves, and with Create drafts set to Never it is blocked.
+    """
+    root = folders.folder_root(folder_id)
+    suffix = Path(audio.filename or "").suffix.lower()
+    if suffix not in voice.AUDIO_TYPES:
+        raise HTTPException(415, f"Audio must be one of: {', '.join(sorted(voice.AUDIO_TYPES))}")
+
+    recorded = datetime.now()
+    # The upload is staged outside every client folder and deleted right after.
+    with tempfile.TemporaryDirectory(prefix="talaan-audio-") as tmp:
+        staged = Path(tmp) / f"audio{suffix}"
+        staged.write_bytes(await audio.read())
+        texts = [
+            folders.file_path(folder_id, f.path).read_text(encoding="utf-8", errors="replace")
+            for f in folders.list_files(folder_id)
+            if f.path.endswith((".md", ".txt"))
+        ]
+        try:
+            transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, voice.folder_vocabulary(texts))
+        except voice.whisper.TooShort as e:
+            raise HTTPException(422, str(e))
+        except Exception as e:  # undecodable audio, missing model, ...
+            raise HTTPException(422, f"Could not transcribe this audio: {e}")
+
+    if not transcript.text:
+        raise HTTPException(422, "No speech detected in the recording")
+
+    action = CreateDraftAction(
+        action="create_draft",
+        path=voice.draft_name(root, recorded),
+        content=voice.to_markdown(transcript, recorded),
+        reason=f"Voice note ({transcript.duration:.0f}s) transcribed on this laptop",
+    )
+    return engine.handle(folder_id, action, model_tag=transcript.model)
 
 
 @app.get("/system/tier")
 def system_tier() -> SystemTier:
-    return fx.TIER
+    return selection.system_tier()
+
+
+@app.put("/system/model")
+def choose_model(body: ModelChoice) -> SystemTier:
+    """Switch the chat model to another pinned tag, or back to automatic (null)."""
+    try:
+        return selection.choose(body.chat_model)
+    except selection.ModelChoiceError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@app.get("/system/llm-log")
+def llm_log(after: int = 0) -> list[LlmCall]:
+    """Model calls since `after` (an LlmCall id), oldest first. In memory only; cleared on restart."""
+    return trace.recent(after)
+
+
+@app.delete("/system/llm-log", status_code=204)
+def clear_llm_log() -> None:
+    trace.clear()
+
+
+@app.get("/system/settings")
+def get_settings() -> AppSettings:
+    return AppSettings(log_prompts=trace.log_prompts())
+
+
+@app.put("/system/settings")
+def put_settings(body: AppSettings) -> AppSettings:
+    trace.set_log_prompts(body.log_prompts)
+    return get_settings()
