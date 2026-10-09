@@ -52,6 +52,9 @@ export const api = {
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
+  /** Home-page chat across every folder the AI may read (read-only). */
+  askAll: (question: string, history: { role: 'user' | 'assistant'; content: string }[] = []) =>
+    send<AskResponse>('POST', '/ask', { question, history }),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),

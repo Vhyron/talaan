@@ -123,6 +123,7 @@ class Source(BaseModel):
     start: int
     end: int
     snippet: str
+    folder_id: str | None = None  # set by the home-page chat (all folders); None inside a folder
 
 
 class Turn(BaseModel):
@@ -130,6 +131,13 @@ class Turn(BaseModel):
 
     role: Literal["user", "assistant"]
     content: str = Field(max_length=4000)
+
+
+class GlobalAskRequest(BaseModel):
+    """Home-page chat across every folder."""
+
+    question: str = Field(min_length=1)
+    history: list[Turn] = Field(default=[], max_length=8)
 
 
 class AskRequest(BaseModel):

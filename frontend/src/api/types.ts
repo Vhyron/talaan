@@ -29,7 +29,7 @@ export type Outcome = {
 }
 
 /** start/end are 1-based line numbers in the file. */
-export type Source = { path: string; start: number; end: number; snippet: string }
+export type Source = { path: string; start: number; end: number; snippet: string; folder_id?: string | null }
 
 /** An earlier chat turn, sent so follow-ups make sense. Context only, never a source. */
 export type Turn = { role: 'user' | 'assistant'; content: string }

@@ -4,6 +4,7 @@ import { FolderInput, Lock, Plus } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
+import HomeChat from '../components/HomeChat'
 import { DropZone } from '../components/ImportDrop'
 import { useImportDialog } from '../lib/importDialog'
 
@@ -37,6 +38,8 @@ export default function FoldersPage({ folders, error, onCreated }: {
         </div>
 
         {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
+
+        <HomeChat folders={folders} />
 
 
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">

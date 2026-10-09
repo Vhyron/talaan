@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
-from app import folders, index
+from app import folders, global_ask, index
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
@@ -21,6 +21,7 @@ from app.llm import selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
+    GlobalAskRequest,
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
@@ -115,6 +116,12 @@ def build_index(folder_id: str) -> IndexStatus:
     still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
     return IndexStatus(**index.build_index(folder_id))
+
+
+@app.post("/ask")
+def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
+    """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder."""
+    return global_ask.ask_all(body.question, body.history)
 
 
 @app.post("/folders/{folder_id}/ask")

@@ -6,7 +6,7 @@ Built for the AppBuildersPH Hackathon 2026 (Local AI theme).
 
 - **Who it's for:** HR investigators and clinicians who aren't allowed to paste client files into cloud AI.
 - **What it does:** answers questions with clickable sources, builds case timelines that flag contradictions, transcribes voice notes, and proposes edits and drafts that you approve.
-- **What makes it safe:** a deterministic policy engine, outside the model, decides every AI action against per-folder permissions (Read · Suggest edits · Create drafts · Delete), and every question and action is written to a per-folder audit log.
+- **What makes it safe:** a deterministic policy engine, outside the model, decides every AI action against per-folder permissions (Read · Suggest edits · Create drafts · Delete), and every question and action is written to a per-folder audit log. Folder chats only see their own folder; the home-page chat can read across folders you allow (Read grant), is read-only, and logs to each folder it used.
 
 ## Requirements
 

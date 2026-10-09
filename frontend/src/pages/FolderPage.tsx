@@ -87,10 +87,13 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }, [])
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
-  const navState = location.state as { open?: string; overview?: boolean } | null
+  // A file to open can arrive with the navigation: from another folder's sidebar tree, or a
+  // source in the home-page chat (which also passes the cited lines to highlight).
+  const navState = location.state as { open?: string; start?: number; end?: number; overview?: boolean } | null
   const requested = navState?.open
   useEffect(() => {
-    if (requested) openSource(requested)
+    if (requested) openSource(requested, navState?.start, navState?.end)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per navigation
   }, [requested, location.key, openSource])
   // A click on the folder's name in the sidebar asks for its overview.
   const wantsOverview = navState?.overview

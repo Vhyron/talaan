@@ -40,10 +40,11 @@ Allowed `action` values: `search`, `read`, `propose_edit`, `create_draft`, `dele
 
 1. **Grants and audit log live outside the folders**, in the app's own database. The model has no tool that can read or change them.
 2. **Every path is resolved and checked against the folder root** before use. `../` tricks and symlinks that leave the folder are rejected.
-3. **Retrieval only queries the open folder's index.** Text from other folders can't reach the prompt.
+3. **Retrieval only queries the open folder's index.** Text from other folders can't reach the prompt. (Exception: the read-only home-page chat, rule 7.)
 4. **The model receives only retrieved chunks from the open folder**, tagged with file name and position for citations.
 5. **Approvals are made by the user in the UI**, never by the model. Approving re-checks the grant and the path, and refuses if the file changed since the proposal was made.
 6. **After any write, the folder is re-indexed.** An executed edit, draft, transcript or import triggers a refresh of that folder's index, so the next question can cite the new content.
+7. **The home-page chat is the one cross-folder reader, and it is read-only.** It searches every folder whose Read grant is not Never, tags each passage with its folder, makes no action call (nothing can be edited, drafted or deleted from it), and writes the question and answer to the audit log of every folder whose passages were shown to the model. Folder chats stay sealed to their own folder.
 
 ## Flow
 
