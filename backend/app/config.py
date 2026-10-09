@@ -10,3 +10,6 @@ OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4:e4b")  # pin after the B1 bake-off
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:0.6b")
 NUM_CTX = int(os.environ.get("NUM_CTX", "16384"))
+
+# faster-whisper size: base / small / large-v3-turbo per tier (docs/05-models.md)
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
