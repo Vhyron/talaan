@@ -2,6 +2,23 @@
 
 **Rule:** the same embedding model on every tier, so an index built on one machine works on any other and switching tiers never means re-indexing.
 
+## Pinned tags
+
+**Pinned 2026-10-09 by the B1 bake-off. No model changes after midnight.** The single source in code is `backend/app/llm/models.py`; `GET /health` and the top bar show the tag in use, and every answer logs it.
+
+| Role | Tag | Ollama digest | Size | Tested |
+|---|---|---|---|---|
+| Embeddings (every tier) | `qwen3-embedding:0.6b` | `ac6da0dfba84` | 0.64 GB (Q8_0) | Yes, 8 GB M2 |
+| Chat, Light | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
+| Chat, Standard | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | **No**: needs a 16 GB machine. Kept from the original plan |
+| Chat, Pro | `gemma4:26b` | — | — | **No** |
+| Alternate (Standard) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
+| Alternate (Pro) | `qwen3.5:9b` | — | — | **No** |
+
+Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking off.
+
+**If a 16 GB+ bake-off arrives before midnight**, the Standard row may switch to `qwen3.5:4b` (one line in `models.py` + this table). Untested tags stay selectable but must be labelled untested in the submission.
+
 ## Tiers
 
 | Tier | Typical device | Chat model | Embeddings | Speech-to-text |
@@ -42,6 +59,50 @@
 - **Memory with several models loaded:** on Light, transcribe first, unload Whisper, then answer.
 - **Never change the embedding model** without re-indexing every folder.
 - **Disclose every model tag** in the submission.
+
+### Bake-off results
+
+Run it on any machine (about 5 min per small model, 3 runs):
+
+```bash
+cd backend
+uv run python -m scripts.bakeoff --models qwen3.5:2b qwen3.5:4b --runs 3     # pull the models first
+uv run python -m scripts.bakeoff --models qwen3.5:4b gemma4:e4b --runs 3     # 16 GB+ machines
+```
+
+Full answers are saved in `backend/scripts/bakeoff_results/`. "Correct" is a keyword rubric from the ground-truth table, so read the saved answers before trusting a score.
+
+**2026-10-09, MacBook Air M2, 8 GB (Light), Ollama 0.34.2, `num_ctx` 16384, thinking off, 3 runs:**
+
+| Model | Correct | Source cited | Refusals Q4/Q9 | Action JSON valid | Q5 delete / fake admission | Median s | Q1 timeline s |
+|---|---|---|---|---|---|---|---|
+| `qwen3.5:2b` | 21/27 | 21/21 | 6/6 | 6/6 | 0/3 | 4.2 | 26–27 |
+| `qwen3.5:4b` | 24/27 | 21/21 | 6/6 | 6/6 | 0/3 | 31.1 | 123–243 |
+| `gemma4:e4b` | not run: needs a 16 GB machine | | | | | | |
+
+- `qwen3.5:2b` missed **Q2** (contradictions) on all 3 runs ("No contradiction found"); `4b` got all five points every run. Both gave only half of **Q8** (chest tightness, but left out the normal ECG and risk factors).
+- `4b` on 8 GB runs partly on CPU (18/82 CPU/GPU); a 2–4 min timeline breaks B5's ~30 s budget.
+- Thinking mode on `2b` for Q2 did not finish within 300 s.
+- **Answering and acting need separate calls.** With one schema for both, every action request came back as a scope refusal ("I can only see …") on both models; with a dedicated action prompt + the `Action` schema, 6/6 valid with the right action and path.
+
+## Model switching (in the app)
+
+Pinned tags live in one place: `backend/app/llm/models.py` (tier table + bake-off alternates). The app picks the chat model in this order:
+
+1. `CHAT_MODEL` env var (dev override, must be a pinned tag)
+2. The user's choice (`PUT /system/model`), saved in `app.db`
+3. The detected tier's model, if installed
+4. The largest installed pinned model that fits this machine, then any installed pinned model
+
+- `GET /system/tier` reports RAM/GPU, recommended tier, the active model and every pinned option (installed / fits / active).
+- `PUT /system/model {"chat_model": "qwen3.5:4b"}` switches (unloads the old model, loads the new one); `{"chat_model": null}` returns to automatic. Unpinned or not-installed tags are rejected. A model above the machine's tier is allowed but reported as `fits: false`.
+- The **embedding model is not switchable**: same tag on every tier, so indexes stay valid.
+- Every answer logs the exact `model_tag`, so the audit log shows which model produced it.
+- Measured on an 8 GB M2: embeddings at `num_ctx` 8192 evicted the chat model; at 2048 both stay loaded on the GPU.
+
+## LLM activity log
+
+Every model call (chat, embed, load, unload) prints one line to the backend terminal and shows on the **Settings** page (`/settings`, or click the model chip in the top bar): model, `num_ctx`, prompt → output tokens, tokens/s, load time, total time, JSON validity, errors. Warns when a prompt fills ≥90% of `num_ctx`. Prompt/response text is off by default (it contains client files); when turned on it is kept in memory only. API: `GET /system/llm-log?after=<id>`, `DELETE /system/llm-log`, `GET/PUT /system/settings`.
 
 ## Tier detection (P2)
 

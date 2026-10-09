@@ -40,12 +40,23 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 - [ ] X or LinkedIn video post tagging Devin / Cognition with #AppBuildersPH
 - [ ] What runs locally: all AI (chat, embeddings, transcription)
 - [ ] What requires internet: one-time model download only
-- [ ] Models: exact tags (chat, embedding, Whisper size)
+- [ ] Models: exact tags (chat, embedding, Whisper size). Pinned by B1, see the list below and [05-models.md](05-models.md#pinned-tags)
 - [ ] Technologies and frameworks: FastAPI, React, Vite, Tailwind, Ollama, faster-whisper, PyMuPDF, SQLite, numpy, uv
 - [ ] APIs and cloud services: none
 - [ ] Existing code and assets: open-source libraries; design mockups and synthetic demo data made on Oct 9
 - [ ] AI development tools used (e.g. Claude, Devin if used)
 - [ ] **Answer: why does this product benefit from running AI locally?** (draft below)
+
+### Disclosure list (running; add as you go)
+
+**Models** (all run locally through Ollama 0.34.2, pinned 2026-10-09):
+- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
+- Embeddings: `qwen3-embedding:0.6b` on every tier
+- Speech-to-text: faster-whisper `small` (Light/Standard), `large-v3-turbo` (Pro); D1 confirms
+
+**Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection)
+
+**AI development tools:** Claude Code (Anthropic) used by track B for coding and docs. Not part of the product: the app makes no cloud AI calls.
 
 ### Draft answer: why local?
 

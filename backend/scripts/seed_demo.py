@@ -14,8 +14,6 @@ import json
 import shutil
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # make `app` importable
@@ -76,30 +74,23 @@ def build_indexes(folder_ids: list[str]) -> None:
         print(f"  indexed {fid}: {result}")
 
 
-def _post(path: str, body: dict, timeout: float) -> None:
-    req = urllib.request.Request(
-        f"{config.OLLAMA_BASE_URL}{path}",
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        r.read()
-
-
 def warm_models() -> None:
-    """One tiny chat and one embed call, kept loaded for 30 minutes."""
-    calls = [
-        ("chat", "/api/chat", {"model": config.CHAT_MODEL, "messages": [{"role": "user", "content": "hi"}],
-                               "stream": False, "keep_alive": "30m", "options": {"num_ctx": config.NUM_CTX, "num_predict": 1}}),
-        ("embed", "/api/embed", {"model": config.EMBED_MODEL, "input": "warm up", "keep_alive": "30m"}),
-    ]
-    for label, path, body in calls:
+    """Load the active chat model (picked by hardware tier, see app/llm/selection.py) and the
+    embedding model, kept loaded for 30 minutes. Goes through app/llm/client.py so both load with
+    the num_ctx real calls use; a different num_ctx would make Ollama reload them on the first question."""
+    from app.llm import client
+    from app.llm.models import EMBED_MODEL
+    from app.llm.selection import active_chat_model
+
+    chat_tag = active_chat_model().tag
+    for label, tag, warm in [("chat", chat_tag, lambda: client.load(chat_tag)),
+                             ("embed", EMBED_MODEL, lambda: client.embed(["warm up"]))]:
         t = time.perf_counter()
         try:
-            _post(path, body, timeout=180)
-            print(f"  warmed {label} model {body['model']} in {time.perf_counter() - t:.1f}s")
-        except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
-            print(f"  skipped {label} warm-up ({body['model']}): {getattr(e, 'reason', e)}. Is Ollama running?")
+            warm()
+            print(f"  warmed {label} model {tag} in {time.perf_counter() - t:.1f}s")
+        except client.OllamaError as e:
+            print(f"  skipped {label} warm-up ({tag}): {e}")
 
 
 def main(argv: list[str] | None = None) -> None:

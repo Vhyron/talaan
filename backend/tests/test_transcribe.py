@@ -3,6 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.policy.grants import set_grants
 from app.schemas import Grant, Grants
@@ -20,7 +21,9 @@ def fake_whisper(monkeypatch):
 
     def fake(path, hotwords=None):
         calls.append((path, hotwords))
-        assert path.exists() and "folders" not in path.parts  # staged outside client folders
+        # Staged outside client folders. Compare against FOLDERS_DIR, not the word "folders":
+        # macOS temp dirs live under /var/folders/.
+        assert path.exists() and config.FOLDERS_DIR.resolve() not in path.resolve().parents
         return Transcript(text=SPEECH, segments=[Segment(0.0, 4.2, SPEECH)], duration=31.4, language="en", model="faster-whisper:small")
 
     monkeypatch.setattr(whisper, "transcribe_file", fake)
@@ -113,3 +116,29 @@ def test_transcription_never_downloads(monkeypatch):
     with pytest.raises(whisper.ModelNotDownloaded, match="--download"):
         whisper._load()
     assert seen["local_files_only"] is True
+
+
+def test_language_is_chosen_only_from_allowed():
+    # Whisper's guess on a short clip: Chinese first. We must pick English or Tagalog.
+    probs = [("zh", 0.41), ("en", 0.22), ("tl", 0.30), ("ja", 0.07)]
+    assert whisper.choose_language(probs, ["en", "tl"]) == "tl"
+    assert whisper.choose_language(probs, ["en"]) == "en"
+    assert whisper.choose_language([("zh", 1.0)], ["en", "tl"]) == "en"  # none ranked: first allowed
+
+
+def test_too_short_recording_is_refused(monkeypatch, tmp_path):
+    import numpy as np
+    import faster_whisper.audio
+
+    monkeypatch.setattr(faster_whisper.audio, "decode_audio", lambda *a, **k: np.zeros(int(0.8 * 16_000), dtype=np.float32))
+    monkeypatch.setattr(whisper, "_load", lambda *a, **k: pytest.fail("model must not load for a too-short clip"))
+    with pytest.raises(whisper.TooShort, match="too short"):
+        whisper.transcribe_file(tmp_path / "x.webm")
+
+
+def test_too_short_maps_to_friendly_422(monkeypatch):
+    def short(p, hotwords=None):
+        raise whisper.TooShort("The recording is too short (0.8s). Speak for at least a few seconds.")
+    monkeypatch.setattr(whisper, "transcribe_file", short)
+    r = post()
+    assert r.status_code == 422 and r.json()["detail"].startswith("The recording is too short")

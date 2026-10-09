@@ -146,7 +146,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
             <Lock size={11} className="shrink-0" />
             <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
           </span>
-          <span className="hidden shrink-0 text-muted sm:inline">{files.length} files</span>
+          <span className="hidden shrink-0 text-muted sm:inline">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
           <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
           <span className="ml-auto sm:ml-0 lg:ml-auto">
             <VoiceNote onProposed={() => onMobileView('approvals')} />
