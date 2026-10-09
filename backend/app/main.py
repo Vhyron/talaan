@@ -22,7 +22,7 @@ from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
+    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
     Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
 
