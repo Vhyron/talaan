@@ -50,7 +50,7 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 ### Disclosure list (running; add as you go)
 
 **Models** (all run locally through Ollama 0.34.2, pinned 2026-10-09):
-- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
+- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard, tested), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
 - Embeddings: `qwen3-embedding:0.6b` on every tier
 - Speech-to-text: faster-whisper `small` (Light/Standard), `large-v3-turbo` (Pro); D1 confirms
 
