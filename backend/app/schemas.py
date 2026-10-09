@@ -156,6 +156,14 @@ class AskResponse(BaseModel):
     proposal_id: str | None = None
 
 
+class ChatMessage(BaseModel):
+    """A saved chat message. Assistant messages carry the full response (sources, outcome)."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    response: AskResponse | None = None
+
+
 class IndexStatus(BaseModel):
     """Result of building or refreshing a folder's index."""
 

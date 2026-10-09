@@ -1,25 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ban, ClipboardCheck, Eye, Lock, SendHorizontal } from 'lucide-react'
+import { Ban, ClipboardCheck, Eye, Lock, RotateCcw, SendHorizontal } from 'lucide-react'
 import { api } from '../api/client'
-import type { AskResponse, Source, Turn } from '../api/types'
+import type { AskResponse, Source } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import { askIn, clearSession, useChatSession } from '../lib/chatSession'
 import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
 import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
-
-type Msg = { role: 'user'; text: string } | { role: 'assistant'; res: AskResponse } | { role: 'error'; text: string }
-
-/** Turns sent back with the next question, so follow-ups ("what about her meds?") make sense. */
-const HISTORY_TURNS = 4
-
-function historyOf(messages: Msg[]): Turn[] {
-  const turns: Turn[] = []
-  for (const m of messages) {
-    if (m.role === 'user') turns.push({ role: 'user', content: m.text })
-    else if (m.role === 'assistant' && !m.res.refused && !m.res.outcome) turns.push({ role: 'assistant', content: m.res.answer })
-  }
-  return turns.slice(-HISTORY_TURNS)
-}
 
 const basename = (path: string) => path.split('/').pop() ?? path
 
@@ -35,10 +22,10 @@ function withChips(answer: string, sources: Source[]): ReactNode[] {
 export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
   const { folder, currentPath, bump } = useFolder()
   const index = useIndexStatus()
-  const [messages, setMessages] = useState<Msg[]>([])
+  // Saved per folder: survives navigating away, reloads and restarts.
+  const { messages, busy, since } = useChatSession(folder.id)
   const [question, setQuestion] = useState('')
-  const [busy, setBusy] = useState(false)
-  const elapsed = useElapsed(busy)
+  const elapsed = useElapsed(busy, since)
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -48,25 +35,20 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
   async function send() {
     const q = question.trim()
     if (!q || busy || index.state === 'indexing') return
-    const history = historyOf(messages)
     setQuestion('')
-    setMessages((m) => [...m, { role: 'user', text: q }])
-    setBusy(true)
-    try {
-      const res = await api.ask(folder.id, q, { path: currentPath, history })
-      setMessages((m) => [...m, { role: 'assistant', res }])
-      if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
-    } catch (e) {
-      setMessages((m) => [...m, { role: 'error', text: (e as Error).message }])
-    } finally {
-      setBusy(false)
-    }
+    const res = await askIn(folder.id, q, (history) => api.ask(folder.id, q, { path: currentPath, history }))
+    if (res?.outcome) bump() // a proposal or blocked action changes Approvals/Audit
   }
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-1 px-4 pt-4">
-        <h2 className="font-bold">Ask this {folder.mode}</h2>
+        <h2 className="mr-auto font-bold">Ask this {folder.mode}</h2>
+        {messages.length > 0 && (
+          <button onClick={() => clearSession(folder.id)} disabled={busy} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs text-muted hover:bg-white hover:text-ink disabled:opacity-40" title="Start a new chat (the audit log keeps its record)">
+            <RotateCcw size={11} /> New chat
+          </button>
+        )}
         <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs">
           <Lock size={11} className="shrink-0" /> <span className="truncate">Only sees {folder.name}</span>
         </span>

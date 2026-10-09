@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
-from app import folders, global_ask, index
+from app import chats, folders, global_ask, index
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
@@ -21,7 +21,7 @@ from app.llm import selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
-    GlobalAskRequest,
+    ChatMessage, GlobalAskRequest,
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
@@ -121,12 +121,40 @@ def build_index(folder_id: str) -> IndexStatus:
 @app.post("/ask")
 def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
     """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder."""
-    return global_ask.ask_all(body.question, body.history)
+    res = global_ask.ask_all(body.question, body.history)
+    chats.append(chats.ALL, body.question, res)
+    return res
+
+
+@app.get("/chat")
+def home_chat() -> list[ChatMessage]:
+    """The home-page chat session, saved so it survives navigation and restarts."""
+    return chats.load(chats.ALL)
+
+
+@app.delete("/chat", status_code=204)
+def clear_home_chat() -> None:
+    chats.clear(chats.ALL)
 
 
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    return ask_mod.ask(folder_id, body.question, body.path, body.history)
+    res = ask_mod.ask(folder_id, body.question, body.path, body.history)
+    chats.append(folder_id, body.question, res)
+    return res
+
+
+@app.get("/folders/{folder_id}/chat")
+def folder_chat(folder_id: str) -> list[ChatMessage]:
+    """This folder's chat session. Only this folder's chat ever loads it."""
+    _folder(folder_id)
+    return chats.load(folder_id)
+
+
+@app.delete("/folders/{folder_id}/chat", status_code=204)
+def clear_folder_chat(folder_id: str) -> None:
+    _folder(folder_id)
+    chats.clear(folder_id)
 
 
 @app.post("/folders/{folder_id}/timeline")

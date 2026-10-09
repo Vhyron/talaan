@@ -48,6 +48,9 @@ export type IndexStatus = {
   errors: string[]
 }
 /** `answer` references sources as [S1], [S2]… in `sources` order. */
+/** A saved chat message; assistant messages carry the full response. */
+export type ChatMessage = { role: 'user' | 'assistant'; content: string; response: AskResponse | null }
+
 export type AskResponse = {
   answer: string
   sources: Source[]

@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # make `app` importable
 
-from app import config  # noqa: E402
+from app import chats, config  # noqa: E402
 from app.db import connect  # noqa: E402
 from app.folders import META, _meta  # noqa: E402
 from app.policy.grants import init_grants  # noqa: E402
@@ -59,8 +59,10 @@ def clear_state(folder_ids: list[str]) -> None:
     """Default grants, no proposals, no audit, no chat history for these folders."""
     marks = ",".join("?" * len(folder_ids))
     with connect() as db:
-        for table in ("grants", "audit", "proposals", "conversations"):
+        for table in ("grants", "audit", "proposals"):
             db.execute(f"DELETE FROM {table} WHERE folder_id IN ({marks})", folder_ids)
+        # Chat sessions: these folders' own, and the home chat's (it quotes demo folders).
+        db.execute(f"DELETE FROM chat_messages WHERE scope IN ({marks}, ?)", [*folder_ids, chats.ALL])
     for fid in folder_ids:
         init_grants(fid)
 

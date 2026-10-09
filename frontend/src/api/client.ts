@@ -1,4 +1,5 @@
 import type {
+  ChatMessage, Turn,
   AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
@@ -53,8 +54,11 @@ export const api = {
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
   /** Home-page chat across every folder the AI may read (read-only). */
-  askAll: (question: string, history: { role: 'user' | 'assistant'; content: string }[] = []) =>
+  askAll: (question: string, history: Turn[] = []) =>
     send<AskResponse>('POST', '/ask', { question, history }),
+  /** Saved chat session: a folder's, or the home chat's when `id` is null. */
+  chat: (id: string | null) => json<ChatMessage[]>(id ? `${f(id)}/chat` : '/chat'),
+  clearChat: (id: string | null) => req(id ? `${f(id)}/chat` : '/chat', { method: 'DELETE' }).then(() => undefined),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
