@@ -257,7 +257,7 @@ function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight
         pinned={pinned}
         onPin={setPinned}
         panels={{
-          ask: <AskPanel onShowApprovals={() => onTool('approvals')} />,
+          ask: <AskPanel onShowApprovals={() => onTool('approvals')} onShow={() => onTool('ask')} />,
           timeline: <TimelinePanel key={dir} />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,

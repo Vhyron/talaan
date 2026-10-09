@@ -402,7 +402,7 @@ def audit_export(folder_id: str, format: Literal["json", "csv"] = "json") -> Res
 # --- Voice (D1) and system (D7) ------------------------------------------------
 
 
-async def _transcribe_upload(folder_id: str | None, audio: UploadFile) -> "voice.Transcript":
+async def _transcribe_upload(folder_id: str | None, audio: UploadFile, extra_hotwords: str = "") -> "voice.Transcript":
     """Transcribe an upload on this laptop. Names from `folder_id`'s own files (if given) help spelling."""
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in voice.AUDIO_TYPES:
@@ -418,7 +418,8 @@ async def _transcribe_upload(folder_id: str | None, audio: UploadFile) -> "voice
             if f.path.endswith((".md", ".txt"))
         ] if folder_id else []
         try:
-            transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, voice.folder_vocabulary(texts))
+            hotwords = ", ".join(h for h in (extra_hotwords, voice.folder_vocabulary(texts)) if h)
+            transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, hotwords)
         except voice.whisper.TooShort as e:
             raise HTTPException(422, str(e))
         except Exception as e:  # undecodable audio, missing model, ...
@@ -453,16 +454,17 @@ async def transcribe(folder_id: str, audio: UploadFile, dir: str = Form("")) -> 
 
 
 @app.post("/voice/dictate")
-async def dictate(audio: UploadFile, folder_id: str | None = Form(None)) -> dict[str, str]:
-    """Hold-to-talk for the chat box: audio -> text, on this laptop.
+async def dictate(audio: UploadFile, folder_id: str | None = Form(None), wake: bool = Form(False)) -> dict[str, str]:
+    """Hold-to-talk and the "Hey Tala" wake phrase: audio -> text, on this laptop.
 
-    Nothing is saved or proposed; the text only goes anywhere if the user sends it as a
+    Nothing is saved, proposed or logged here; the text only goes anywhere if it becomes a
     question, which is audited then. With `folder_id`, names from that Space's own files
-    help spelling (never another Space's).
+    help spelling (never another Space's). `wake` also biases Whisper toward "Tala".
     """
     if folder_id:
         folders.folder_root(folder_id)  # 404 for an unknown Space
-    return {"text": (await _transcribe_upload(folder_id, audio)).text}
+    extra = "Hey Tala, Tala Tala" if wake else ""
+    return {"text": (await _transcribe_upload(folder_id, audio, extra)).text}
 
 
 @app.get("/system/voice")

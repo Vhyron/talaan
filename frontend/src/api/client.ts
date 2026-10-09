@@ -125,10 +125,11 @@ export const api = {
     return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
   },
   /** Hold-to-talk: speech -> text for the chat box. Nothing is saved. */
-  dictate: (audio: Blob, filename: string, folderId?: string) => {
+  dictate: (audio: Blob, filename: string, folderId?: string, wake = false) => {
     const form = new FormData()
     form.append('audio', audio, filename)
     if (folderId) form.append('folder_id', folderId)
+    if (wake) form.append('wake', 'true') // spell "Tala" right
     return json<{ text: string }>('/voice/dictate', { method: 'POST', body: form })
   },
 

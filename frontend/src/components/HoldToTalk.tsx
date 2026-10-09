@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Loader2, Mic } from 'lucide-react'
+import { Ear, EarOff, Loader2, Mic } from 'lucide-react'
 import { api } from '../api/client'
 import { extFor } from '../lib/audio'
 import { useElapsed } from '../lib/useElapsed'
+import { usePersistentFlag } from '../lib/usePersistentFlag'
+import { useWakeListener } from '../lib/useWakeListener'
 
 type Step = 'idle' | 'opening' | 'recording' | 'sending'
 
@@ -10,16 +12,20 @@ type Step = 'idle' | 'opening' | 'recording' | 'sending'
 const MIN_MS = 1500
 
 /**
- * Hold to talk: press and hold (mouse, touch, or Space/Enter on the focused button), speak,
- * release. The speech is transcribed on this laptop and handed to `onText`, which puts it in
- * the chat box to edit and send. Nothing is saved or asked until the user sends it.
+ * Voice input for a chat box, all transcribed on this laptop:
+ * - Hold to talk: press and hold (mouse, touch, Space/Enter on the focused button, or Alt+M
+ *   anywhere), speak, release. The question is sent when you let go.
+ * - Wake phrases (opt-in, the ear button): say "Hey Tala!" or "Tala, Tala" (either one), then your question.
+ * Either way `onSend` gets the text; it is asked like a typed question (and audited then).
  */
-export default function HoldToTalk({ folderId, disabled, onText }: {
+export default function HoldToTalk({ folderId, disabled, onSend }: {
   /** Names from this Space's own files help spelling. Home chat passes none. */
   folderId?: string
   disabled?: boolean
-  onText: (text: string) => void
+  onSend: (text: string) => void
 }) {
+  const send = useRef(onSend)
+  send.current = onSend
   const [step, setStep] = useState<Step>('idle')
   const [note, setNote] = useState<string | null>(null)
   const recorder = useRef<MediaRecorder | null>(null)
@@ -63,7 +69,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
       // Released while the browser was asking for the mic (first use): don't record.
       mic.getTracks().forEach((t) => t.stop())
       setStep('idle')
-      return setNote('Microphone ready. Hold the button while you speak.')
+      return setNote('Microphone ready. Hold the button (or Alt+M) while you speak.')
     }
     stream.current = mic
     const rec = new MediaRecorder(mic)
@@ -73,7 +79,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
       stopTracks()
       if (Date.now() - startedAt.current < MIN_MS) {
         setStep('idle')
-        return setNote('Hold the button while you speak, then let go.')
+        return setNote('Hold the button (or Alt+M) while you speak, then let go.')
       }
       const type = rec.mimeType || 'audio/webm'
       void transcribe(new Blob(chunks, { type }), `dictation.${extFor(type)}`)
@@ -89,11 +95,39 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
     if (recorder.current?.state === 'recording') recorder.current.stop()
   }
 
+  // Hotkey: hold Alt+M (Option+M on a Mac) anywhere on the page, release either key to stop.
+  // Chosen to avoid browser and OS shortcuts: Ctrl+Space switches input language on macOS and
+  // toggles the IME on Windows; Alt+Space opens the Windows window menu; Ctrl/Cmd+letters are
+  // browser commands. e.code, not e.key: Option+M types "µ" on a Mac.
+  const keys = useRef({ press, release })
+  keys.current = { press, release }
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyM' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      e.preventDefault() // no "µ" typed into the box
+      if (!e.repeat) void keys.current.press()
+    }
+    const up = (e: KeyboardEvent) => {
+      if (!held.current || (e.code !== 'KeyM' && e.key !== 'Alt')) return
+      e.preventDefault() // releasing Alt mustn't focus Firefox's menu bar on Windows
+      keys.current.release()
+    }
+    const lost = () => { if (held.current) keys.current.release() } // switched window mid-hold
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', lost)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', lost)
+    }
+  }, [])
+
   async function transcribe(audio: Blob, name: string) {
     setStep('sending')
     try {
       const { text } = await api.dictate(audio, name, folderId)
-      if (text.trim()) onText(text.trim())
+      if (text.trim()) send.current(text.trim())
     } catch (e) {
       setNote((e as Error).message)
     } finally {
@@ -101,17 +135,44 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
     }
   }
 
+  // Off by default: it keeps the microphone open while on.
+  const [wakeOn, setWakeOn] = usePersistentFlag('talaan.wake', false)
+  const wake = useWakeListener(wakeOn, { folderId, paused: step !== 'idle', onCommand: (t) => send.current(t) })
+  const wakeNote = wake.step === 'armed' ? 'Tala is listening. Ask your question…'
+    : wake.step === 'error' ? wake.message
+      : wake.step === 'listening' && wake.checking ? 'Checking for a wake phrase…'
+        : null
+
   const label = step === 'recording' ? `Listening… ${seconds}s, release to stop`
     : step === 'sending' ? 'Transcribing on this laptop…'
-      : 'Hold to talk'
+      : 'Hold to talk (Alt+M)'
 
   return (
-    <div className="relative shrink-0">
-      {(note || step === 'recording' || step === 'sending') && (
+    <div className="relative flex shrink-0 items-end gap-1">
+      {(note || step === 'recording' || step === 'sending' || wakeNote) && (
         <p role="status" className="absolute bottom-full right-0 mb-2 w-max max-w-64 rounded-md bg-ink px-2 py-1 text-xs text-white shadow">
-          {note ?? label}
+          {note ?? (step === 'idle' ? wakeNote : label)}
         </p>
       )}
+      <button
+        type="button"
+        onClick={() => setWakeOn(!wakeOn)}
+        aria-pressed={wakeOn}
+        aria-label={wakeOn ? 'Stop listening for “Hey Tala!” / “Tala, Tala”' : 'Listen for “Hey Tala!” / “Tala, Tala”'}
+        title={wakeOn
+          ? 'Listening on this laptop for “Hey Tala!” or “Tala, Tala”. Click to stop.'
+          : 'Say “Hey Tala!” or “Tala, Tala” (either one), then your question. Keeps the mic on; heard speech is checked on this laptop and dropped unless it starts with the wake phrase.'}
+        className={`relative grid h-9 w-9 place-items-center rounded-full border ${
+          wake.step === 'armed' ? 'border-brand bg-brand text-white'
+            : wakeOn ? 'border-brand bg-brand-soft text-brand-text'
+              : 'border-line bg-white text-muted hover:border-brand hover:text-ink'
+        }`}
+      >
+        {wakeOn ? <Ear size={16} /> : <EarOff size={16} />}
+        {wake.step === 'listening' && wake.hearing && (
+          <span className="absolute right-1 top-1 h-2 w-2 animate-pulse rounded-full bg-red-600" aria-hidden="true" />
+        )}
+      </button>
       <button
         type="button"
         disabled={disabled || step === 'sending'}
@@ -130,7 +191,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
         onBlur={release}
         onContextMenu={(e) => e.preventDefault()} // long-press on touch screens
         aria-label={label}
-        title="Hold to talk (transcribed on this laptop)"
+        title="Hold to talk, or hold Alt+M / Option+M (transcribed on this laptop)"
         className={`grid h-9 w-9 touch-none select-none place-items-center rounded-full border disabled:opacity-40 ${
           step === 'recording' ? 'animate-pulse border-red-600 bg-red-600 text-white'
             : 'border-line bg-white text-muted hover:border-brand hover:text-ink'
