@@ -1,6 +1,6 @@
 import type {
   AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
-  Proposal, SystemTier, TimelineResponse,
+  Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
 export class ApiError extends Error {
@@ -72,6 +72,7 @@ export const api = {
     return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
   },
 
+  voiceStatus: () => json<VoiceStatus>('/system/voice'),
   systemTier: () => json<SystemTier>('/system/tier'),
   chooseModel: (chat_model: string | null) => send<SystemTier>('PUT', '/system/model', { chat_model }),
   llmLog: (after = 0) => json<LlmCall[]>(`/system/llm-log?after=${after}`),
