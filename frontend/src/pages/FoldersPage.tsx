@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import HomeChat from '../components/HomeChat'
+import Mascot from '../components/Mascot'
 import { useHomeChatShown } from '../lib/chatSession'
 import { DropZone } from '../components/ImportDrop'
 import { useImportDialog } from '../lib/importDialog'
@@ -25,9 +26,12 @@ export default function FoldersPage({ folders, error, onCreated }: {
       <DropZone onFiles={(u) => { setCreating(null); importDialog.open(u) }}>
       <main className={`min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8 ${chatShown ? 'md:pr-[25.5rem] xl:pr-[30rem]' : ''}`}>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="mr-auto w-full sm:w-auto">
+          <div className="mr-auto flex w-full items-center gap-3 sm:w-auto">
+            <Mascot pose="folder" className="hidden h-20 w-20 sm:block" />
+            <div>
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your folders</h1>
             <p className="mt-1 text-muted">Each folder is sealed: its chat only sees that folder. Ask across all folders below.</p>
+            </div>
           </div>
           <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
             <Plus size={16} /> New Case

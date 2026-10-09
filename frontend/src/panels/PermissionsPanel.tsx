@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Lock } from 'lucide-react'
 import { api } from '../api/client'
+import Mascot from '../components/Mascot'
 import type { Grant, Grants } from '../api/types'
 import { useFolder } from '../lib/folderContext'
 
@@ -43,10 +44,15 @@ export default function PermissionsPanel() {
 
   return (
     <div className="h-full overflow-y-auto p-4">
-      <h2 className="font-bold">What the AI may do here</h2>
-      <p className="mt-1 text-xs text-muted">
-        Applies to {folder.name} only. Checked by the app on every action, not by the AI.
-      </p>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="font-bold">What the AI may do here</h2>
+          <p className="mt-1 text-xs text-muted">
+            Applies to {folder.name} only. Checked by the app on every action, not by the AI.
+          </p>
+        </div>
+        <Mascot pose="key" className="h-16 w-11" />
+      </div>
       {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
 
       <ul className="mt-4 space-y-3">

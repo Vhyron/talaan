@@ -3,6 +3,7 @@ import { Ban, Check, ClipboardCheck, Clock, Eye, Lock, MessageSquare, SendHorizo
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import Mascot from '../components/Mascot'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
@@ -210,6 +211,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           </div>
 
           <div ref={scroller} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-sm">
+            {empty && <Mascot pose="hug" className="mx-auto h-24 w-24" />}
             {empty && (
               <p className="text-muted">
                 Answers come only from files in this {folder.mode}, with sources you can click. Ask about the

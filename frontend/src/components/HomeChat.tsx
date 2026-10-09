@@ -5,6 +5,7 @@ import type { Folder, Source } from '../api/types'
 import { askHome, HOME_CHAT_OPEN, newHomeChat, useHomeChat } from '../lib/chatSession'
 import { fileLabel } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
+import Mascot from './Mascot'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 
 /** A citation from the home chat: names its folder and opens the file there with the lines highlighted. */
@@ -139,7 +140,11 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
                 </div>
               ),
             )}
-            {busy && <div className="rounded-xl bg-white px-3 py-2 text-muted">Searching every folder on this laptop… {elapsed}s</div>}
+            {busy && (
+              <div className="flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-muted">
+                <Mascot pose="search" className="h-12 w-8" /> Searching every folder on this laptop… {elapsed}s
+              </div>
+            )}
             <div ref={end} />
           </div>
           <div className="p-4 pt-0">

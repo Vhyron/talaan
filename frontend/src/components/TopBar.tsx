@@ -22,9 +22,10 @@ export default function TopBar({ modelVersion = 0 }: { modelVersion?: number }) 
       >
         <Menu size={20} />
       </button>
-      <Link to="/" className="flex min-w-0 items-baseline gap-2">
+      <Link to="/" className="flex min-w-0 items-center gap-1.5">
+        {/* Balintong curled up and sealed: the app's mark. */}
+        <img src="/talaan_3.png" alt="" className="h-8 w-8 shrink-0" />
         <span className="text-lg font-extrabold">Talaan</span>
-        <span className="hidden truncate text-xs text-muted sm:inline">Sealed client files</span>
       </Link>
       <div className="ml-auto flex min-w-0 items-center gap-2">
         <Link
