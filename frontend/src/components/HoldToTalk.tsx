@@ -10,7 +10,7 @@ type Step = 'idle' | 'opening' | 'recording' | 'sending'
 const MIN_MS = 1500
 
 /**
- * Hold to talk: press and hold (mouse, touch, or Space/Enter on the focused button), speak,
+ * Hold to talk: press and hold (mouse, touch, Space/Enter on the focused button, or Alt+M anywhere), speak,
  * release. The speech is transcribed on this laptop and handed to `onText`, which puts it in
  * the chat box to edit and send. Nothing is saved or asked until the user sends it.
  */
@@ -63,7 +63,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
       // Released while the browser was asking for the mic (first use): don't record.
       mic.getTracks().forEach((t) => t.stop())
       setStep('idle')
-      return setNote('Microphone ready. Hold the button while you speak.')
+      return setNote('Microphone ready. Hold the button (or Alt+M) while you speak.')
     }
     stream.current = mic
     const rec = new MediaRecorder(mic)
@@ -73,7 +73,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
       stopTracks()
       if (Date.now() - startedAt.current < MIN_MS) {
         setStep('idle')
-        return setNote('Hold the button while you speak, then let go.')
+        return setNote('Hold the button (or Alt+M) while you speak, then let go.')
       }
       const type = rec.mimeType || 'audio/webm'
       void transcribe(new Blob(chunks, { type }), `dictation.${extFor(type)}`)
@@ -89,6 +89,34 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
     if (recorder.current?.state === 'recording') recorder.current.stop()
   }
 
+  // Hotkey: hold Alt+M (Option+M on a Mac) anywhere on the page, release either key to stop.
+  // Chosen to avoid browser and OS shortcuts: Ctrl+Space switches input language on macOS and
+  // toggles the IME on Windows; Alt+Space opens the Windows window menu; Ctrl/Cmd+letters are
+  // browser commands. e.code, not e.key: Option+M types "µ" on a Mac.
+  const keys = useRef({ press, release })
+  keys.current = { press, release }
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyM' || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      e.preventDefault() // no "µ" typed into the box
+      if (!e.repeat) void keys.current.press()
+    }
+    const up = (e: KeyboardEvent) => {
+      if (!held.current || (e.code !== 'KeyM' && e.key !== 'Alt')) return
+      e.preventDefault() // releasing Alt mustn't focus Firefox's menu bar on Windows
+      keys.current.release()
+    }
+    const lost = () => { if (held.current) keys.current.release() } // switched window mid-hold
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    window.addEventListener('blur', lost)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+      window.removeEventListener('blur', lost)
+    }
+  }, [])
+
   async function transcribe(audio: Blob, name: string) {
     setStep('sending')
     try {
@@ -103,7 +131,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
 
   const label = step === 'recording' ? `Listening… ${seconds}s, release to stop`
     : step === 'sending' ? 'Transcribing on this laptop…'
-      : 'Hold to talk'
+      : 'Hold to talk (Alt+M)'
 
   return (
     <div className="relative shrink-0">
@@ -130,7 +158,7 @@ export default function HoldToTalk({ folderId, disabled, onText }: {
         onBlur={release}
         onContextMenu={(e) => e.preventDefault()} // long-press on touch screens
         aria-label={label}
-        title="Hold to talk (transcribed on this laptop)"
+        title="Hold to talk, or hold Alt+M / Option+M (transcribed on this laptop)"
         className={`grid h-9 w-9 touch-none select-none place-items-center rounded-full border disabled:opacity-40 ${
           step === 'recording' ? 'animate-pulse border-red-600 bg-red-600 text-white'
             : 'border-line bg-white text-muted hover:border-brand hover:text-ink'
