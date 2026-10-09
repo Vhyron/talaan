@@ -30,7 +30,7 @@ cd talaan
 # 1. Local models (one-time download): embeddings + the chat model for your RAM
 ollama pull qwen3-embedding:0.6b
 ollama pull qwen3.5:2b      # 8 GB RAM (Budget)
-ollama pull gemma4:e4b      # 16 GB+ RAM (High); skip on 8 GB
+ollama pull gemma4:e4b      # 19 GB+ RAM (High, e.g. 24/32 GB); skip on 8–16 GB
 
 # 2. Backend (Python): install, cache the speech model, load the demo folders
 cd backend
@@ -83,7 +83,7 @@ Talaan's users (HR investigators and clinicians) handle files containing health 
 
 | Use | Model | Runs on |
 |---|---|---|
-| Chat, answers, timeline, actions | One of three, picked by detected hardware: `qwen3.5:2b` (8 GB, Budget), `qwen3.5:4b` (12 GB, Mid), `gemma4:e4b` (16 GB+, High). Any of the three can be chosen on the Settings page. Pinned 2026-10-09; tags and digests in [docs/05](docs/05-models.md#pinned-tags) | Ollama |
+| Chat, answers, timeline, actions | One of three, picked by detected hardware: `qwen3.5:2b` (Budget, under 14 GB RAM), `qwen3.5:4b` (Mid, 14 GB+), `gemma4:e4b` (High, 19 GB+). Budgets count the chat model, the embedding model and 6 GB for the OS, browser and backend. Any of the three can be chosen on the Settings page. Pinned 2026-10-09; tags and digests in [docs/05](docs/05-models.md#pinned-tags) | Ollama |
 | Embeddings (retrieval) | `qwen3-embedding:0.6b` with every chat model | Ollama |
 | Speech-to-text | faster-whisper `small` (CTranslate2 int8, ~464 MB) | CPU, in the backend |
 

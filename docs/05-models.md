@@ -9,9 +9,9 @@
 | Role | Tag | Ollama digest | Size | Tested |
 |---|---|---|---|---|
 | Embeddings (every chat model) | `qwen3-embedding:0.6b` | `ac6da0dfba84` | 0.64 GB (Q8_0) | Yes, 8 GB M2 |
-| Chat, Budget (8 GB) | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
-| Chat, Mid (12 GB) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
-| Chat, High (16 GB+) | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | Yes, bake-off 23/27 on 32 GB + 4 GB GPU (see below); not yet on a 16 GB laptop |
+| Chat, Budget (under 14 GB RAM) | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
+| Chat, Mid (14–18 GB RAM) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
+| Chat, High (19 GB+ RAM) | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | Yes, bake-off 23/27 on 32 GB + 4 GB GPU (see below); not yet on a 16 GB laptop |
 
 **2026-10-10: cut to these three chat models**, all bake-off tested. The untested `gemma4:26b` and `qwen3.5:9b` are no longer offered. Thinking mode is off on every call (see below); the Ask panel never turns it on.
 
@@ -21,11 +21,15 @@ Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking 
 
 Not plans or subscriptions: every model runs locally and free. The class only says what hardware a model is sized for. API ids stay `light` / `standard` / `pro`.
 
-| Class | Typical device | Chat model | Embeddings | Speech-to-text |
-|---|---|---|---|---|
-| Budget | 8 GB RAM, no GPU | `qwen3.5:2b` (~2.7 GB) | `qwen3-embedding:0.6b` | faster-whisper `small` |
-| Mid | 12 GB RAM | `qwen3.5:4b` (~3.3 GB; slow on 8 GB, 31 s median) | `qwen3-embedding:0.6b` | faster-whisper `small` |
-| **High** | 16 GB RAM, Apple Silicon 16 GB, or 8 GB+ GPU | **`gemma4:e4b`** (needs ~10 GB VRAM or 16 GB unified memory) | `qwen3-embedding:0.6b` | faster-whisper `small` |
+| Class | Needs (system RAM) | Typical device | Chat model |
+|---|---|---|---|
+| Budget | 13 GB (the floor: smaller machines still get it, flagged "may be slow") | 8–12 GB laptops | `qwen3.5:2b` (2.7 GB weights, ~4.5 GB loaded) |
+| Mid | 14 GB | 16 GB laptops, Apple Silicon 16 GB | `qwen3.5:4b` (3.3 GB weights, ~5.5 GB loaded) |
+| **High** | 19 GB | 24–32 GB+ | **`gemma4:e4b`** (6.6 GB weights, ~10 GB loaded) |
+
+Every class uses `qwen3-embedding:0.6b` and faster-whisper `small`.
+
+**How a model is judged to fit (generous on purpose):** needs = chat model loaded at `num_ctx` 16384 + the embedding model loaded (2.32 GB in `ollama ps`, budgeted 2.5 GB) + 6 GB reserve for the OS, the browser running the web app, the backend and Whisper. All of it must fit in **system RAM** at the same time. GPU memory is not counted as extra room: on a small card the model spills into RAM anyway (gemma4:e4b on the 4 GB GTX 1050 Ti dev machine), so a GPU only makes answers faster. The numbers live in `backend/app/llm/models.py` (`chat_mem_gb`, `EMBED_MEM_GB`, `RESERVE_GB`).
 
 **Automatic** runs the class model for this device if installed, else the largest installed one of the three that fits, else any installed one of the three. Other installed Ollama models are never picked.
 

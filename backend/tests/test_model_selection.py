@@ -16,15 +16,24 @@ def no_env_override(monkeypatch):
     monkeypatch.setattr(config, "CHAT_MODEL", None)
 
 
-@pytest.mark.parametrize(("hw", "tag"), [(M2_8GB, "qwen3.5:2b"), (PC_12GB, "qwen3.5:4b"), (MAC_16GB, "gemma4:e4b"),
-                                         (PC_RTX_16GB, "gemma4:e4b")])
+PC_32GB_SMALL_GPU = Hardware(ram_gb=32, gpu="GTX 1050 Ti (4 GB)", vram_gb=4, free_disk_gb=70)
+
+
+# Budget = chat model + embedding model + 6 GB for the OS, browser, backend and Whisper, in system RAM.
+@pytest.mark.parametrize(("hw", "tag"), [
+    (M2_8GB, "qwen3.5:2b"),       # below every budget: the smallest model, flagged as maybe slow
+    (PC_12GB, "qwen3.5:2b"),
+    (MAC_16GB, "qwen3.5:4b"),     # gemma4:e4b needs 19 GB with everything else running
+    (PC_RTX_16GB, "qwen3.5:4b"),  # a big GPU doesn't count as extra room
+    (PC_32GB_SMALL_GPU, "gemma4:e4b"),
+])
 def test_auto_picks_tier_model(hw, tag):
     assert selection.resolve(hw, ALL) == selection.Active(tag, "auto")
 
 
 def test_falls_back_to_largest_installed_that_fits():
-    # 16 GB Mac, High's gemma4:e4b not pulled: use Mid's qwen3.5:4b before dropping to Budget.
-    assert selection.resolve(MAC_16GB, ["qwen3.5:2b", "qwen3.5:4b"]).tag == "qwen3.5:4b"
+    # 32 GB PC, High's gemma4:e4b not pulled: use Mid's qwen3.5:4b before dropping to Budget.
+    assert selection.resolve(PC_32GB_SMALL_GPU, ["qwen3.5:2b", "qwen3.5:4b"]).tag == "qwen3.5:4b"
 
 
 def test_only_the_three_pinned_models_are_offered():

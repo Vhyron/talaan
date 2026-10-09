@@ -18,7 +18,7 @@ Talaan: a local-AI notes app for sensitive client files (HR investigation cases,
 - Model runtime: **Ollama** via its native API (`/api/chat`, `/api/embed`; needed for per-request `num_ctx`, `think` and JSON schema), with a configurable base URL
 - Storage: plain Markdown/PDF files on disk, one SQLite `index.db` per folder (FTS + embeddings as blobs, similarity with numpy), plus one `app.db` for grants, audit log and conversations
 - PDF: PyMuPDF · Transcription: faster-whisper
-- Models: see [docs/05-models.md](docs/05-models.md). Three chat models, picked by hardware (Budget `qwen3.5:2b`, Mid `qwen3.5:4b`, High `gemma4:e4b`; Automatic picks the best installed one that fits) and switchable on the Settings page; pinned tags only in `backend/app/llm/models.py`. Embeddings `qwen3-embedding:0.6b` on every tier. All model calls go through `backend/app/llm/client.py`
+- Models: see [docs/05-models.md](docs/05-models.md). Three chat models, picked by hardware (Budget `qwen3.5:2b`, Mid `qwen3.5:4b`, High `gemma4:e4b`; Automatic picks the best installed one whose RAM budget, chat + embedding model + 6 GB for OS/browser/backend, fits) and switchable on the Settings page; pinned tags only in `backend/app/llm/models.py`. Embeddings `qwen3-embedding:0.6b` on every tier. All model calls go through `backend/app/llm/client.py`
 
 ## Commands
 

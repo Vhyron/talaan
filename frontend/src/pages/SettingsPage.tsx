@@ -95,7 +95,7 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
           <ModelRow
             title={`Automatic (${tier.auto_chat_model ?? recommended.chat_model})`}
-            detail="Best installed model below that fits this device"
+            detail="Best installed model below that fits in this device's RAM alongside the embedding model, OS and browser"
             active={tier.active_source === 'auto'}
             busy={switching === 'auto'}
             disabled={switching !== null || tier.active_source === 'env'}
@@ -105,7 +105,7 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
             <ModelRow
               key={m.tag}
               title={m.tag}
-              detail={modelDetail(m)}
+              detail={modelDetail(m, tier.tiers.find((t) => t.id === m.tier)?.min_ram_gb)}
               tierLabel={TIER_NAME[m.tier]}
               warn={m.installed && !m.fits}
               active={tier.active_source !== 'auto' && m.active}
@@ -125,10 +125,12 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
   )
 }
 
-function modelDetail(m: ModelOption): string {
-  if (!m.installed) return `Not installed · ollama pull ${m.tag}`
-  if (!m.fits) return 'Installed · sized for bigger hardware, may be slow here'
-  return 'Installed'
+/** `needGb`: RAM for this model + the embedding model + the OS, browser and backend, all at once. */
+function modelDetail(m: ModelOption, needGb?: number): string {
+  const need = needGb ? ` · needs ${needGb} GB RAM with everything running` : ''
+  if (!m.installed) return `Not installed · ollama pull ${m.tag}${need}`
+  if (!m.fits) return `Installed${need}, may be slow here`
+  return `Installed${need}`
 }
 
 function ModelRow({ title, detail, tierLabel, warn, active, busy, disabled, onUse }: {
