@@ -7,6 +7,10 @@ import FoldersPage from './pages/FoldersPage'
 import FolderPage from './pages/FolderPage'
 import SettingsPage from './pages/SettingsPage'
 import { NavContext } from './lib/nav'
+import { TreeContext, type TreeCtx } from './lib/tree'
+import { ImportDialogContext } from './lib/importDialog'
+import type { Upload } from './lib/upload'
+import ImportFolder from './components/ImportFolder'
 
 export default function App() {
   const [folders, setFolders] = useState<Folder[]>([])
@@ -28,16 +32,53 @@ export default function App() {
 
   const nav = useMemo(() => ({ open: navOpen, setOpen: setNavOpen }), [navOpen])
 
+  // Sidebar tree: several folders can stay expanded while you move between them.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
+  const [treeVersion, setTreeVersion] = useState(0)
+  const flip = (set: Set<string>, key: string) => {
+    const next = new Set(set)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    return next
+  }
+  const expand = useCallback((id: string) => setExpanded((s) => (s.has(id) ? s : new Set(s).add(id))), [])
+  const changed = useCallback(() => setTreeVersion((v) => v + 1), [])
+  const tree: TreeCtx = useMemo(() => ({
+    expanded,
+    toggle: (id) => setExpanded((s) => flip(s, id)),
+    expand,
+    collapsedDirs,
+    toggleDir: (key) => setCollapsedDirs((s) => flip(s, key)),
+    version: treeVersion,
+    changed,
+  }), [expanded, expand, collapsedDirs, treeVersion, changed])
+
+  // App-wide "Import folder" dialog: null = closed, [] = open empty, else dropped files.
+  const [importing, setImporting] = useState<Upload[] | null>(null)
+  const importDialog = useMemo(() => ({ open: (dropped?: Upload[]) => setImporting(dropped ?? []) }), [])
+
   return (
     <NavContext.Provider value={nav}>
+    <TreeContext.Provider value={tree}>
+    <ImportDialogContext.Provider value={importDialog}>
       <div className="flex h-dvh flex-col">
         <TopBar modelVersion={modelVersion} />
         <Routes>
-          <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={refresh} />} />
+          <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={() => { refresh(); changed() }} />} />
           <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
           <Route path="/settings" element={<SettingsPage onModelChanged={() => setModelVersion((v) => v + 1)} />} />
         </Routes>
       </div>
+      {importing && (
+        <ImportFolder
+          initial={importing}
+          onDone={() => { setImporting(null); refresh(); changed() }}
+          onClose={() => setImporting(null)}
+        />
+      )}
+    </ImportDialogContext.Provider>
+    </TreeContext.Provider>
     </NavContext.Provider>
   )
 }

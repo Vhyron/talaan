@@ -1,5 +1,6 @@
 """A2: folders and files on disk, through the API."""
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -65,3 +66,65 @@ def test_import_types_and_no_overwrite():
 def test_import_strips_directories():
     r = c.post(f"/folders/{F}/import", files={"files": ("../../escape.md", b"x")})
     assert r.status_code == 200 and r.json()[0]["path"] == "escape.md"
+
+
+# --- Subfolders and import destinations -----------------------------------------
+
+
+def test_create_and_list_subfolders(talaan_home):
+    assert c.post(f"/folders/{F}/dirs", json={"path": "Interviews"}).json() == {"path": "Interviews"}
+    assert c.post(f"/folders/{F}/dirs", json={"path": "Interviews/Follow-ups"}).status_code == 201
+    assert c.get(f"/folders/{F}/dirs").json() == ["Interviews", "Interviews/Follow-ups"]
+    assert c.post(f"/folders/{F}/dirs", json={"path": "Interviews"}).status_code == 409
+
+
+@pytest.mark.parametrize("bad", ["..", "../Case-2026-019_Villanueva/x", ".talaan", ".hidden", "a:b", "x/../../y", "  "])
+def test_subfolder_names_are_sealed(bad):
+    assert c.post(f"/folders/{F}/dirs", json={"path": bad}).status_code in (400, 403)
+    assert ".talaan" not in c.get(f"/folders/{F}/dirs").json()
+
+
+def test_import_into_subfolder(talaan_home):
+    c.post(f"/folders/{F}/dirs", json={"path": "Interviews"})
+    r = c.post(f"/folders/{F}/import", files={"files": ("follow-up.md", b"# x")}, data={"dest": "Interviews"})
+    assert r.status_code == 200 and r.json()[0]["path"] == "Interviews/follow-up.md"
+    assert c.get(f"/folders/{F}/files/Interviews/follow-up.md").text == "# x"
+    assert "Interviews/follow-up.md" in [f["path"] for f in c.get(f"/folders/{F}/files").json()]
+
+
+def test_import_dest_must_exist_and_be_sealed():
+    assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"x")}, data={"dest": "Nope"}).status_code == 404
+    assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"x")}, data={"dest": "../Chart_M-Reyes"}).status_code == 400
+    assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"x")}, data={"dest": ".talaan"}).status_code == 400
+
+
+def test_import_keep_paths_recreates_subfolders(talaan_home):
+    files = [("files", ("Interviews/r-santos.md", b"a")), ("files", ("Interviews/Notes/n.txt", b"b")), ("files", ("top.md", b"c"))]
+    r = c.post(f"/folders/{F}/import", files=files, data={"keep_paths": "true"})
+    assert [x["path"] for x in r.json()] == ["Interviews/r-santos.md", "Interviews/Notes/n.txt", "top.md"]
+    assert "Interviews/Notes" in c.get(f"/folders/{F}/dirs").json()
+
+
+@pytest.mark.parametrize("name", ["../escape.md", "Interviews/../../escape.md", ".talaan/evil.md", "a/.hidden/x.md"])
+def test_import_keep_paths_cannot_escape(talaan_home, name):
+    r = c.post(f"/folders/{F}/import", files={"files": (name, b"x")}, data={"keep_paths": "true"})
+    assert r.status_code in (400, 403)
+    assert not (talaan_home / "escape.md").exists() and not (talaan_home / "folders" / "escape.md").exists()
+
+
+def test_import_without_keep_paths_still_strips_directories(talaan_home):
+    r = c.post(f"/folders/{F}/import", files={"files": ("Interviews/deep/x.md", b"x")})
+    assert r.json()[0]["path"] == "x.md"
+
+
+def test_import_through_symlinked_subfolder_is_refused(talaan_home):
+    import os
+    outside = talaan_home / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, talaan_home / "folders" / F / "linked", target_is_directory=True)
+    except OSError:
+        pytest.skip("creating symlinks is not permitted on this machine")
+    assert "linked" not in c.get(f"/folders/{F}/dirs").json()
+    r = c.post(f"/folders/{F}/import", files={"files": ("linked/x.md", b"x")}, data={"keep_paths": "true"})
+    assert r.status_code == 403 and not (outside / "x.md").exists()
