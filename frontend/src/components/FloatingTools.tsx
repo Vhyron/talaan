@@ -24,10 +24,10 @@ function usePendingCount(): number {
 }
 
 /**
- * Folder tools as a floating dock: icons on the right edge (desktop) or a pill at
- * the bottom (phone). A tool opens as a floating card beside the dock, or a bottom
- * sheet on phones, so the document keeps the full width. On wide screens the card
- * can be pinned into a side column instead.
+ * Folder tools as a floating dock in the bottom-right corner (bottom centre on
+ * phones). A tool opens as a floating card at the right edge above the dock, or a
+ * bottom sheet on phones, so the document keeps the full width. On wide screens the
+ * card can be pinned into a side column instead.
  */
 export default function FloatingTools({ open, onOpen, pinned, onPin, panels }: {
   open: PanelTab | null
@@ -58,11 +58,12 @@ export default function FloatingTools({ open, onOpen, pinned, onPin, panels }: {
       aria-label={tool.title}
       className={
         docked
-          ? // Pinned: a column beside the document, leaving room for the dock.
-            'mr-[4.75rem] flex min-h-0 w-[26rem] shrink-0 flex-col border-l border-line bg-panel'
-          : // Floating: a card beside the dock (md+), a bottom sheet on phones.
+          ? // Pinned: a column beside the document, the old panel's widths; bottom padding
+            // keeps the panel's own controls clear of the dock in the corner.
+            'flex min-h-0 w-96 shrink-0 flex-col border-l border-line bg-panel pb-16 xl:w-[28rem]'
+          : // Floating: a card at the right edge, above the dock (md+); a bottom sheet on phones.
             'fixed inset-x-0 bottom-0 z-30 flex h-[78dvh] flex-col overflow-hidden rounded-t-2xl border border-line bg-panel pb-16 shadow-2xl ' +
-            'md:inset-x-auto md:top-[8.5rem] md:right-[4.75rem] md:bottom-4 md:h-auto md:w-[26rem] md:rounded-2xl md:pb-0'
+            'md:inset-x-auto md:top-[8.5rem] md:right-3 md:bottom-[4.5rem] md:h-auto md:w-80 md:rounded-2xl md:pb-0 lg:w-96 xl:w-[28rem]'
       }
     >
       <header className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line bg-white pr-1 pl-3">
@@ -90,8 +91,8 @@ export default function FloatingTools({ open, onOpen, pinned, onPin, panels }: {
       <nav
         role="toolbar"
         aria-label="Folder tools"
-        aria-orientation="vertical"
-        className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 gap-0.5 rounded-full border border-line bg-white/95 p-1 shadow-lg backdrop-blur md:top-1/2 md:right-3 md:bottom-auto md:left-auto md:translate-x-0 md:-translate-y-1/2 md:flex-col"
+        // Phone: bottom centre with labels. Larger screens: bottom-right corner, icons only.
+        className="fixed bottom-3 left-1/2 z-40 flex -translate-x-1/2 gap-0.5 rounded-full border border-line bg-white/95 p-1 shadow-lg backdrop-blur md:right-3 md:left-auto md:translate-x-0"
       >
         {TOOLS.map(({ id, label, title, icon: Icon }) => {
           const active = open === id

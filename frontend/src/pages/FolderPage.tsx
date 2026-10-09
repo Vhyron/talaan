@@ -6,6 +6,7 @@ import type { FileEntry, Folder } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
+import FolderOverview from '../components/FolderOverview'
 import VoiceNote from '../components/VoiceNote'
 import FloatingTools, { type PanelTab } from '../components/FloatingTools'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
@@ -35,6 +36,7 @@ export default function FolderPage({ folders, error }: { folders: Folder[]; erro
   return <FolderView key={folder.id} folder={folder} folders={folders} error={error} />
 }
 
+// active = -1 is the folder overview; 0.. is an open file.
 type Tabs = { paths: string[]; active: number }
 
 // Open tabs per folder for this session, so switching between folders keeps them.
@@ -44,7 +46,7 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const tree = useTree()
   const location = useLocation()
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: 0 })
+  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: -1 })
   const [highlight, setHighlight] = useState<Highlight>(null)
   // Which folder tool is open in the floating card (or pinned column), if any.
   const [tool, setTool] = useState<PanelTab | null>(null)
@@ -70,7 +72,6 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     const exists = new Set(files.map((f) => f.path))
     setTabs((t) => {
       const paths = t.paths.filter((p) => exists.has(p))
-      if (!paths.length) return { paths: [files[0].path], active: 0 }
       return paths.length === t.paths.length ? t : { paths, active: Math.min(t.active, paths.length - 1) }
     })
   }, [files])
@@ -86,10 +87,19 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }, [])
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
-  const requested = (location.state as { open?: string } | null)?.open
+  const navState = location.state as { open?: string; overview?: boolean } | null
+  const requested = navState?.open
   useEffect(() => {
     if (requested) openSource(requested)
   }, [requested, location.key, openSource])
+  // A click on the folder's name in the sidebar asks for its overview.
+  const wantsOverview = navState?.overview
+  useEffect(() => {
+    if (wantsOverview) {
+      setTabs((t) => ({ ...t, active: -1 }))
+      setHighlight(null)
+    }
+  }, [wantsOverview, location.key])
 
   const select = (i: number) => {
     setTabs((t) => ({ ...t, active: i }))
@@ -97,10 +107,12 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }
 
   const close = (i: number) => {
-    setTabs(({ paths, active }) => ({
-      paths: paths.filter((_, j) => j !== i),
-      active: Math.max(0, active > i || active === paths.length - 1 ? active - 1 : active),
-    }))
+    setTabs(({ paths, active }) => {
+      const rest = paths.filter((_, j) => j !== i)
+      // Closing the open tab moves to its neighbour; closing the last one shows the overview.
+      const next = active > i ? active - 1 : active === i ? Math.min(i, rest.length - 1) : active
+      return { paths: rest, active: next }
+    })
     setHighlight(null)
   }
 
@@ -137,7 +149,7 @@ function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect,
 }) {
   const { folder, files, openSource } = useFolder()
   const imp = useImport()
-  const current = tabs.paths[tabs.active]
+  const current = tabs.active >= 0 ? tabs.paths[tabs.active] : undefined
   const [pinned, setPinned] = usePersistentFlag('talaan.tools.pinned')
 
   return (
@@ -168,14 +180,12 @@ function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect,
           </span>
         </div>
         <FileTabs tabs={tabs.paths} active={tabs.active} onSelect={onSelect} onClose={onClose} />
-        {/* Bottom padding on phones keeps text clear of the floating tool pill. */}
-        <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
+        {/* Bottom padding keeps the end of the text clear of the floating tool dock. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-20">
           {current ? (
             <FileViewer key={current} path={current} highlight={highlight} />
           ) : (
-            <p className="p-6 text-muted sm:p-10">
-              {files.length ? 'Open a file from the folder list.' : 'This folder is empty. Drop files here, or hover the folder in the list and use Import here.'}
-            </p>
+            <FolderOverview onOpen={(p) => openSource(p)} />
           )}
         </div>
       </DropZone>

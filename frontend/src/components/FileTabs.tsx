@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react'
-import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, X } from 'lucide-react'
 import { fileLabel } from '../lib/format'
 
-/** Open files as tabs. The arrows step to the previous/next tab. */
+/** Open files as tabs, after a fixed Overview tab (active = -1). The arrows step between them. */
 export default function FileTabs({ tabs, active, onSelect, onClose }: {
   tabs: string[]
   active: number
@@ -15,11 +15,19 @@ export default function FileTabs({ tabs, active, onSelect, onClose }: {
     strip.current?.children[active]?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [active, tabs.length])
 
-  if (!tabs.length) return null
   const arrow = 'grid w-8 shrink-0 place-items-center text-muted hover:bg-panel disabled:opacity-30 disabled:hover:bg-transparent'
   return (
     <div className="flex h-9 shrink-0 items-stretch border-b border-line bg-panel/40">
-      <button className={arrow} disabled={active <= 0} onClick={() => onSelect(active - 1)} aria-label="Previous tab">
+      <button
+        role="tab"
+        aria-selected={active === -1}
+        onClick={() => onSelect(-1)}
+        title="Folder overview"
+        className={`flex shrink-0 items-center gap-1.5 border-r border-line px-3 text-sm ${active === -1 ? 'bg-white font-semibold' : 'text-muted hover:bg-white/60'}`}
+      >
+        <LayoutGrid size={14} /> <span className="hidden sm:inline">Overview</span>
+      </button>
+      <button className={arrow} disabled={active <= -1} onClick={() => onSelect(active - 1)} aria-label="Previous tab">
         <ChevronLeft size={16} />
       </button>
       <div ref={strip} className="flex min-w-0 flex-1 overflow-x-auto [scrollbar-width:none]">

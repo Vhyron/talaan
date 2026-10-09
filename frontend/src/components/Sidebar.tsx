@@ -1,12 +1,13 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
 import { useNav } from '../lib/nav'
 import { useTree } from '../lib/tree'
 import { useImportDialog } from '../lib/importDialog'
+import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
 
@@ -16,6 +17,42 @@ if (typeof document !== 'undefined') {
   document.addEventListener('pointerdown', () => { pointerIsDown = true }, true)
   document.addEventListener('pointerup', () => { pointerIsDown = false }, true)
   document.addEventListener('pointercancel', () => { pointerIsDown = false }, true)
+}
+
+const MIN_W = 200
+const MAX_W = 480
+const WIDTH_KEY = 'talaan.sidebar.width'
+
+/** Sidebar width in px (desktop), dragged from its right edge and remembered. */
+function useSidebarWidth(): [number, (e: ReactPointerEvent) => void] {
+  const [width, setWidth] = useState(() => {
+    try {
+      const v = Number(localStorage.getItem(WIDTH_KEY))
+      return v >= MIN_W && v <= MAX_W ? v : 256
+    } catch {
+      return 256
+    }
+  })
+  const start = (e: ReactPointerEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = width
+    let latest = startW
+    const move = (ev: PointerEvent) => {
+      latest = Math.min(MAX_W, Math.max(MIN_W, startW + ev.clientX - startX))
+      setWidth(latest)
+    }
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      document.body.style.cursor = ''
+      try { localStorage.setItem(WIDTH_KEY, String(latest)) } catch { /* not persisted */ }
+    }
+    document.body.style.cursor = 'col-resize'
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
+  return [width, start]
 }
 
 const GROUPS: { mode: Mode; label: string }[] = [
@@ -37,10 +74,15 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
   const tree = useTree()
   const importDialog = useImportDialog()
   const navigate = useNavigate()
+  // Desktop only: below `lg` the sidebar is already a drawer.
+  const [collapsed, setCollapsed] = usePersistentFlag('talaan.sidebar.collapsed')
+  const [width, startResize] = useSidebarWidth()
 
   function openFolder(f: Folder) {
     tree.expand(f.id)
-    if (f.id !== activeId) navigate(`/folders/${encodeURIComponent(f.id)}`)
+    nav.setOpen(false)
+    // Clicking a folder (even the one you're in) shows its overview of files.
+    navigate(`/folders/${encodeURIComponent(f.id)}`, { state: { overview: true } })
   }
 
   function openFile(folderId: string, path: string) {
@@ -54,15 +96,52 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
     {nav.open && (
       <div className="fixed inset-0 z-30 bg-ink/30 lg:hidden" onClick={() => nav.setOpen(false)} aria-hidden="true" />
     )}
+    {collapsed && (
+      <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-r border-line bg-panel/50 py-2 lg:flex" aria-label="Folders (collapsed)">
+        <button
+          onClick={() => setCollapsed(false)}
+          className="grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink"
+          aria-label="Show folders"
+          title="Show folders"
+        >
+          <PanelLeftOpen size={18} />
+        </button>
+        <button
+          onClick={() => importDialog.open()}
+          className="mt-auto grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink"
+          aria-label="Import folder"
+          title="Import folder (new Case/Chart)"
+        >
+          <FolderInput size={17} />
+        </button>
+      </aside>
+    )}
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-white text-sm shadow-xl transition-transform lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:bg-panel/50 lg:shadow-none ${
+      className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-white text-sm shadow-xl transition-transform lg:static lg:z-auto lg:w-[var(--sidebar-w)] lg:translate-x-0 lg:bg-panel/50 lg:shadow-none ${
         nav.open ? 'translate-x-0' : '-translate-x-full'
-      }`}
+      } ${collapsed ? 'lg:hidden' : ''} lg:relative`}
+      style={{ '--sidebar-w': `${width}px` } as CSSProperties}
     >
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4 lg:hidden">
-        <span className="font-bold">Folders</span>
-        <button onClick={() => nav.setOpen(false)} className="grid h-9 w-9 place-items-center rounded-md hover:bg-panel" aria-label="Close folders">
+      <div
+        onPointerDown={startResize}
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize folders"
+        title="Drag to resize"
+        className="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize hover:bg-brand/20 active:bg-brand/30 lg:block"
+      />
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4 lg:h-10 lg:pr-1.5 lg:pl-3">
+        <span className="font-bold lg:text-[11px] lg:font-semibold lg:tracking-[0.16em] lg:text-muted lg:uppercase">Folders</span>
+        <button onClick={() => nav.setOpen(false)} className="grid h-9 w-9 place-items-center rounded-md hover:bg-panel lg:hidden" aria-label="Close folders">
           <X size={18} />
+        </button>
+        <button
+          onClick={() => setCollapsed(true)}
+          className="hidden h-8 w-8 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink lg:grid"
+          aria-label="Hide folders"
+          title="Hide folders"
+        >
+          <PanelLeftClose size={16} />
         </button>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Folders">
@@ -89,11 +168,11 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
                       </button>
                       <button
                         onClick={() => openFolder(f)}
-                        className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left ${active ? 'font-semibold' : ''}`}
+                        className={`flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug ${active ? 'font-semibold' : ''}`}
                         aria-current={active ? 'page' : undefined}
                       >
-                        {expanded ? <FolderOpen size={15} className="shrink-0" /> : <FolderIcon size={15} className="shrink-0" />}
-                        <span className="truncate">{f.name}</span>
+                        {expanded ? <FolderOpen size={15} className="mt-0.5 shrink-0" /> : <FolderIcon size={15} className="mt-0.5 shrink-0" />}
+                        <span className="line-clamp-2 break-words" title={f.name}>{f.name}</span>
                       </button>
                     </Row>
                     {expanded && (
@@ -188,13 +267,13 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
             <Row depth={depth} actions={<DirActions folderId={folderId} dir={d.path} />}>
               <button
                 onClick={() => tree.toggleDir(key)}
-                className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left"
+                className="flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug"
                 aria-expanded={open}
                 title={d.path}
               >
-                {open ? <ChevronDown size={13} className="shrink-0" /> : <ChevronRight size={13} className="shrink-0" />}
-                {open ? <FolderOpen size={14} className="shrink-0" /> : <FolderIcon size={14} className="shrink-0" />}
-                <span className="truncate">{d.name}</span>
+                {open ? <ChevronDown size={13} className="mt-0.5 shrink-0" /> : <ChevronRight size={13} className="mt-0.5 shrink-0" />}
+                {open ? <FolderOpen size={14} className="mt-0.5 shrink-0" /> : <FolderIcon size={14} className="mt-0.5 shrink-0" />}
+                <span className="line-clamp-2 break-words">{d.name}</span>
               </button>
             </Row>
             {open && (
@@ -210,10 +289,10 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
           <button
             onClick={() => onOpenFile(path)}
             title={path}
-            className={`flex min-w-0 flex-1 items-center gap-1.5 py-1.5 pl-[1.1rem] text-left ${path === currentPath ? '' : 'text-muted'}`}
+            className={`flex min-w-0 flex-1 items-start gap-1.5 py-1.5 pl-[1.1rem] text-left leading-snug ${path === currentPath ? '' : 'text-muted'}`}
           >
-            <FileText size={14} className="shrink-0" />
-            <span className="truncate">{fileLabel(path)}</span>
+            <FileText size={14} className="mt-0.5 shrink-0" />
+            <span className="line-clamp-2 break-words">{fileLabel(path)}</span>
           </button>
         </Row>
       ))}
