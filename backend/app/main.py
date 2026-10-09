@@ -276,18 +276,30 @@ def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse
     return res
 
 
+class _Stopped(Exception):
+    """Raised in the ask thread once the streaming client has disconnected."""
+
+
 @app.post("/folders/{folder_id}/ask/stream")
 def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
     """Same as /ask, as NDJSON lines while it works: `status` and `answer` (live text, display only),
     then `done` with the final AskResponse, or `error`."""
     _folder(folder_id)
     events: queue.Queue[dict | None] = queue.Queue()
+    stopped = threading.Event()  # the client went away (Stop pressed): stop generating at the next token
+
+    def emit(event: dict) -> None:
+        if stopped.is_set():
+            raise _Stopped
+        events.put(event)
 
     def work() -> None:
         try:
-            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put,
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=emit,
                               scope=body.scope)
             events.put({"type": "done", "response": res.model_dump(mode="json")})
+        except _Stopped:
+            return
         except OllamaError as e:
             events.put({"type": "error", "message": str(e)})
         except Exception:
@@ -306,8 +318,11 @@ def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
     threading.Thread(target=work, daemon=True, name="ask-stream").start()
 
     def lines():
-        while (event := events.get()) is not None:
-            yield json.dumps(event) + "\n"
+        try:
+            while (event := events.get()) is not None:
+                yield json.dumps(event) + "\n"
+        finally:
+            stopped.set()
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, SquarePen } from 'lucide-react'
+import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, Square, SquarePen } from 'lucide-react'
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
@@ -17,6 +17,8 @@ type Msg =
   | { role: 'user'; text: string }
   | { role: 'assistant'; res: AskResponse; proposalStatus?: ProposalStatus | null }
   | { role: 'error'; text: string }
+  /** You pressed Stop: whatever was written so far, not saved or sent back as history. */
+  | { role: 'stopped'; text: string }
 
 /** What the model is doing right now, shown while the answer streams in. */
 type Live = { status: string; answer: string }
@@ -32,6 +34,8 @@ const EMPTY: Chat = { sessionId: null, messages: [], busy: false }
 // so switching away and coming back shows it again (like tabsByFolder in FolderPage). An answer
 // that arrives after you moved to another scope lands in the chat it was asked in.
 const chatByFolder = new Map<string, Chat>()
+/** The question still being answered per chat, so Stop can cancel it. */
+const runningByChat = new Map<string, AbortController>()
 
 function useFolderChat(key: string) {
   const [, rerender] = useState(0)
@@ -100,7 +104,8 @@ export default function AskPanel({ onShowApprovals, onShow }: {
   const { folder, currentPath, dir, openDir, version, bump } = useFolder()
   const index = useIndexStatus()
   const scope = chatScope(currentPath, dir)
-  const [chat, update, put] = useFolderChat(`${folder.id}::${scope.key}`)
+  const chatKey = `${folder.id}::${scope.key}`
+  const [chat, update, put] = useFolderChat(chatKey)
   const { messages, busy, sessionId } = chat
   const [question, setQuestion] = useState('')
   const [view, setView] = useState<'chat' | 'history'>('chat')
@@ -160,6 +165,8 @@ export default function AskPanel({ onShowApprovals, onShow }: {
     const history = historyOf(messages)
     setQuestion('')
     update((c) => ({ ...c, busy: true, live: { status: 'Starting', answer: '' }, messages: [...c.messages, { role: 'user', text: q }] }))
+    const ctrl = new AbortController()
+    runningByChat.set(chatKey, ctrl)
     try {
       const res = await api.askStream(folder.id, q, { path: currentPath, scope: dir || null, history, session_id: sessionId }, (e) => {
         update((c) => {
@@ -168,12 +175,22 @@ export default function AskPanel({ onShowApprovals, onShow }: {
           if (e.type === 'answer') return { ...c, live: { ...c.live, answer: c.live.answer + e.text } }
           return c
         })
-      })
+      }, ctrl.signal)
       update((c) => ({ sessionId: res.session_id ?? c.sessionId, busy: false, messages: [...c.messages, { role: 'assistant', res }] }))
       if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
     } catch (e) {
-      update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
+      if (ctrl.signal.aborted) {
+        update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'stopped', text: withoutMarkers(c.live?.answer ?? '') }] }))
+      } else {
+        update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
+      }
+    } finally {
+      if (runningByChat.get(chatKey) === ctrl) runningByChat.delete(chatKey)
     }
+  }
+
+  function stop() {
+    runningByChat.get(chatKey)?.abort()
   }
 
   function newChat() {
@@ -226,7 +243,7 @@ export default function AskPanel({ onShowApprovals, onShow }: {
           folderId={folder.id}
           emptyText={`No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}
           activeId={sessionId}
-          activeCount={messages.filter((m) => m.role !== 'error').length}
+          activeCount={messages.filter((m) => m.role !== 'error' && m.role !== 'stopped').length}
           onOpen={resume}
           onDeleted={(sid) => {
             if (sid === sessionId) update(() => EMPTY)
@@ -265,6 +282,14 @@ export default function AskPanel({ onShowApprovals, onShow }: {
               if (m.role === 'user') {
                 return <div key={i} className="ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 leading-6 break-words whitespace-pre-wrap text-white">{m.text}</div>
               }
+              if (m.role === 'stopped') {
+                return (
+                  <div key={i} className="space-y-1 rounded-xl bg-white px-3 py-2">
+                    {m.text && <ChatMarkdown text={m.text} />}
+                    <p className="flex items-center gap-1.5 text-xs text-muted"><Square size={11} /> Stopped</p>
+                  </div>
+                )
+              }
               if (m.role === 'error') {
                 return <div key={i} className="rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 break-words whitespace-pre-wrap text-warn-text">{m.text}</div>
               }
@@ -297,9 +322,15 @@ export default function AskPanel({ onShowApprovals, onShow }: {
                   else void send(t)
                 }}
               />
-              <button onClick={() => void send()} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
-                <SendHorizontal size={16} />
-              </button>
+              {busy ? (
+                <button onClick={stop} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-dark text-white" aria-label="Stop" title="Stop">
+                  <Square size={14} fill="currentColor" />
+                </button>
+              ) : (
+                <button onClick={() => void send()} disabled={!question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+                  <SendHorizontal size={16} />
+                </button>
+              )}
             </div>
           </div>
         </>

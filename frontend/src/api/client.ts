@@ -72,10 +72,11 @@ export const api = {
   homeChat: () => json<ChatSession | null>('/chat'),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
-  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */
-  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void) => {
+  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer; `signal` stops it. */
+  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void, signal?: AbortSignal) => {
     const r = await req(`${f(id)}/ask/stream`, {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, ...opts }),
     })
