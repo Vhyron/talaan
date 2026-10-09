@@ -6,8 +6,10 @@ import type { FileEntry, Folder } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
+import FolderOverview from '../components/FolderOverview'
 import VoiceNote from '../components/VoiceNote'
-import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
+import FloatingTools, { type PanelTab } from '../components/FloatingTools'
+import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { DropZone } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
 import { useTree } from '../lib/tree'
@@ -34,6 +36,7 @@ export default function FolderPage({ folders, error }: { folders: Folder[]; erro
   return <FolderView key={folder.id} folder={folder} folders={folders} error={error} />
 }
 
+// active = -1 is the folder overview; 0.. is an open file.
 type Tabs = { paths: string[]; active: number }
 
 // Open tabs per folder for this session, so switching between folders keeps them.
@@ -43,11 +46,10 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const tree = useTree()
   const location = useLocation()
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: 0 })
+  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: -1 })
   const [highlight, setHighlight] = useState<Highlight>(null)
-  const [panel, setPanel] = useState<PanelTab>('ask')
-  // Phones show one view at a time: the document or the selected panel.
-  const [mobileView, setMobileView] = useState<'doc' | 'panel'>('doc')
+  // Which folder tool is open in the floating card (or pinned column), if any.
+  const [tool, setTool] = useState<PanelTab | null>(null)
   const [version, setVersion] = useState(0)
 
   // Any change to files or subfolders (import, approval, new subfolder) bumps
@@ -70,7 +72,6 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     const exists = new Set(files.map((f) => f.path))
     setTabs((t) => {
       const paths = t.paths.filter((p) => exists.has(p))
-      if (!paths.length) return { paths: [files[0].path], active: 0 }
       return paths.length === t.paths.length ? t : { paths, active: Math.min(t.active, paths.length - 1) }
     })
   }, [files])
@@ -81,14 +82,24 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
       return i >= 0 ? { paths, active: i } : { paths: [...paths, path], active: paths.length }
     })
     setHighlight(start ? { start, end: end ?? start } : null)
-    setMobileView('doc')
+    // On phones the tool sheet covers the document: close it to show the cited lines.
+    if (window.matchMedia('(max-width: 767px)').matches) setTool(null)
   }, [])
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
-  const requested = (location.state as { open?: string } | null)?.open
+  const navState = location.state as { open?: string; overview?: boolean } | null
+  const requested = navState?.open
   useEffect(() => {
     if (requested) openSource(requested)
   }, [requested, location.key, openSource])
+  // A click on the folder's name in the sidebar asks for its overview.
+  const wantsOverview = navState?.overview
+  useEffect(() => {
+    if (wantsOverview) {
+      setTabs((t) => ({ ...t, active: -1 }))
+      setHighlight(null)
+    }
+  }, [wantsOverview, location.key])
 
   const select = (i: number) => {
     setTabs((t) => ({ ...t, active: i }))
@@ -96,10 +107,12 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }
 
   const close = (i: number) => {
-    setTabs(({ paths, active }) => ({
-      paths: paths.filter((_, j) => j !== i),
-      active: Math.max(0, active > i || active === paths.length - 1 ? active - 1 : active),
-    }))
+    setTabs(({ paths, active }) => {
+      const rest = paths.filter((_, j) => j !== i)
+      // Closing the open tab moves to its neighbour; closing the last one shows the overview.
+      const next = active > i ? active - 1 : active === i ? Math.min(i, rest.length - 1) : active
+      return { paths: rest, active: next }
+    })
     setHighlight(null)
   }
 
@@ -115,14 +128,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
         error={error}
         tabs={tabs}
         highlight={highlight}
-        panel={panel}
-        onPanel={setPanel}
-        mobileView={mobileView}
-        onMobileView={(v) => {
-          if (v === 'doc') return setMobileView('doc')
-          setPanel(v)
-          setMobileView('panel')
-        }}
+        tool={tool}
+        onTool={setTool}
         onSelect={select}
         onClose={close}
       />
@@ -130,24 +137,22 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   )
 }
 
-function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileView, onMobileView, onSelect, onClose }: {
+function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect, onClose }: {
   folders: Folder[]
   error: string | null
   tabs: Tabs
   highlight: Highlight
-  panel: PanelTab
-  onPanel: (t: PanelTab) => void
-  mobileView: 'doc' | 'panel'
-  onMobileView: (v: 'doc' | PanelTab) => void
+  tool: PanelTab | null
+  onTool: (t: PanelTab | null) => void
   onSelect: (i: number) => void
   onClose: (i: number) => void
 }) {
   const { folder, files, openSource } = useFolder()
   const imp = useImport()
-  const current = tabs.paths[tabs.active]
+  const current = tabs.active >= 0 ? tabs.paths[tabs.active] : undefined
+  const [pinned, setPinned] = usePersistentFlag('talaan.tools.pinned')
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex min-h-0 flex-1">
       <Sidebar
         folders={folders}
@@ -157,7 +162,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         onOpenFile={(p) => openSource(p)}
       />
 
-      <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
+      <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })}>
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-xs sm:px-4">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
             <Lock size={11} className="shrink-0" />
@@ -171,36 +176,33 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
           )}
           <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
           <span className="ml-auto sm:ml-0 lg:ml-auto">
-            <VoiceNote onProposed={() => onMobileView('approvals')} />
+            <VoiceNote onProposed={() => onTool('approvals')} />
           </span>
         </div>
         <FileTabs tabs={tabs.paths} active={tabs.active} onSelect={onSelect} onClose={onClose} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Bottom padding keeps the end of the text clear of the floating tool dock. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-20">
           {current ? (
             <FileViewer key={current} path={current} highlight={highlight} />
           ) : (
-            <p className="p-6 text-muted sm:p-10">
-              {files.length ? 'Open a file from the folder list.' : 'This folder is empty. Drop files here, or hover the folder in the list and use Import here.'}
-            </p>
+            <FolderOverview onOpen={(p) => openSource(p)} />
           )}
         </div>
       </DropZone>
 
-      <RightPanel
-        tab={panel}
-        onTab={onPanel}
-        wide={panel === 'audit' || panel === 'approvals' || panel === 'timeline'}
-        mobileVisible={mobileView === 'panel'}
+      <FloatingTools
+        open={tool}
+        onOpen={onTool}
+        pinned={pinned}
+        onPin={setPinned}
         panels={{
-          ask: <AskPanel onShowApprovals={() => onMobileView('approvals')} />,
+          ask: <AskPanel onShowApprovals={() => onTool('approvals')} />,
           timeline: <TimelinePanel />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,
           audit: <AuditPanel />,
         }}
       />
-    </div>
-    <MobileTabs view={mobileView === 'doc' ? 'doc' : panel} onView={onMobileView} />
     </div>
   )
 }
