@@ -42,7 +42,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | todo |
 | [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | review |
 | [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | review |
-| [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | todo |
+| [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | review |
 | [C4](C4-permission-panel.md) | Permission panel | C | P0 | 1h | C2 | todo |
 | [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | todo |
 | [C6](C6-audit-log-view.md) | Audit log view and export | C | P0 | 1h | C2 | todo |
