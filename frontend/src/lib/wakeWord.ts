@@ -1,10 +1,12 @@
-// "Hey Tala" / "Tala, Tala": spotting the wake phrase in a local Whisper transcript.
+// Two separate wake phrases, spotted in a local Whisper transcript: "Hey Tala!" (English)
+// and "Tala, Tala" (Tagalog).
 
+// Spellings Whisper produces for the name; not other trigger words.
 const TALA = '(?:tala|talla|thala|tahla)'
-const HEY = '(?:hey|hay|hi|hoy|uy|oy|ok|okay|hello)'
-// "hey tala", "hey tala tala" or "tala tala" at the very start. A lone "tala" doesn't count:
-// it's an everyday Tagalog word (star, list), so it would trigger on ordinary talk.
-const WAKE = new RegExp(`^(?:${HEY} ${TALA}(?: ${TALA})?|${TALA} ${TALA})(?: |$)`)
+const HEY = '(?:hey|hay)' // "hay" is how Whisper sometimes writes "hey"
+// Either phrase, at the very start. A lone "tala" doesn't count: it's an everyday Tagalog
+// word (star, list), so it would trigger on ordinary talk.
+const WAKE = new RegExp(`^(?:${HEY} ${TALA}|${TALA} ${TALA})(?: |$)`)
 
 const normalize = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim()

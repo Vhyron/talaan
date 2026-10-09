@@ -15,7 +15,7 @@ const MIN_MS = 1500
  * Voice input for a chat box, all transcribed on this laptop:
  * - Hold to talk: press and hold (mouse, touch, Space/Enter on the focused button, or Alt+M
  *   anywhere), speak, release. The question is sent when you let go.
- * - "Hey Tala" / "Tala, Tala" (opt-in, the ear button): say the wake phrase and your question.
+ * - Wake phrases (opt-in, the ear button): say "Hey Tala!" or "Tala, Tala" (either one), then your question.
  * Either way `onSend` gets the text; it is asked like a typed question (and audited then).
  */
 export default function HoldToTalk({ folderId, disabled, onSend }: {
@@ -140,7 +140,7 @@ export default function HoldToTalk({ folderId, disabled, onSend }: {
   const wake = useWakeListener(wakeOn, { folderId, paused: step !== 'idle', onCommand: (t) => send.current(t) })
   const wakeNote = wake.step === 'armed' ? 'Tala is listening. Ask your question…'
     : wake.step === 'error' ? wake.message
-      : wake.step === 'listening' && wake.checking ? 'Checking for “Hey Tala”…'
+      : wake.step === 'listening' && wake.checking ? 'Checking for a wake phrase…'
         : null
 
   const label = step === 'recording' ? `Listening… ${seconds}s, release to stop`
@@ -158,10 +158,10 @@ export default function HoldToTalk({ folderId, disabled, onSend }: {
         type="button"
         onClick={() => setWakeOn(!wakeOn)}
         aria-pressed={wakeOn}
-        aria-label={wakeOn ? 'Stop listening for “Hey Tala”' : 'Listen for “Hey Tala”'}
+        aria-label={wakeOn ? 'Stop listening for “Hey Tala!” / “Tala, Tala”' : 'Listen for “Hey Tala!” / “Tala, Tala”'}
         title={wakeOn
-          ? 'Listening for “Hey Tala” or “Tala, Tala” on this laptop. Click to stop.'
-          : 'Say “Hey Tala” or “Tala, Tala”, then your question. Keeps the mic on; heard speech is checked on this laptop and dropped unless it starts with the wake phrase.'}
+          ? 'Listening on this laptop for “Hey Tala!” or “Tala, Tala”. Click to stop.'
+          : 'Say “Hey Tala!” or “Tala, Tala” (either one), then your question. Keeps the mic on; heard speech is checked on this laptop and dropped unless it starts with the wake phrase.'}
         className={`relative grid h-9 w-9 place-items-center rounded-full border ${
           wake.step === 'armed' ? 'border-brand bg-brand text-white'
             : wakeOn ? 'border-brand bg-brand-soft text-brand-text'

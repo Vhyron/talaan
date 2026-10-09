@@ -6,20 +6,20 @@ export type WakeState =
   | { step: 'off' }
   | { step: 'starting' }
   | { step: 'listening'; hearing: boolean; checking: boolean }
-  | { step: 'armed' } // heard just "Hey Tala": the next thing said is the question
+  | { step: 'armed' } // heard just a wake phrase: the next thing said is the question
   | { step: 'error'; message: string }
 
 const PREROLL_MS = 400 // kept from before the voice crossed the threshold, so "Hey" isn't clipped
 const HANGOVER_MS = 700 // this much quiet ends a phrase
 const MAX_MS = 15000 // a phrase longer than this is cut and checked anyway
 const MIN_MS = 350 // shorter blips (a cough, a click) are ignored
-const ARMED_MS = 8000 // after a bare "Hey Tala", how long to wait for the question
+const ARMED_MS = 8000 // after a bare wake phrase, how long to wait for the question
 const MAX_QUEUE = 3
 
 /**
  * Wake phrase, fully on this laptop: while `enabled`, the mic level is watched in the browser;
  * each spoken phrase is cut out and transcribed by the local Whisper (POST /voice/dictate),
- * and only a phrase starting with "Hey Tala" or "Tala, Tala" does anything. Everything else
+ * and only a phrase starting with one of the two wake phrases, "Hey Tala!" or "Tala, Tala", does anything. Everything else
  * is dropped: not saved, not sent to the model, not logged. (The browser's own speech
  * recognition isn't used: Chrome's sends audio to Google.)
  */
