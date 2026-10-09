@@ -155,7 +155,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
         <div className="mr-auto min-w-0">
           <h2 className="flex items-center gap-2 font-bold"><Library size={17} className="text-brand-text" /> Ask across all Spaces</h2>
           <p className={`mt-0.5 text-xs text-muted ${expanded ? 'hidden sm:block' : ''}`}>
-            Reads only the Spaces you include (Permissions › Include in home chat; off by default). Each answer names the Space it came from.
+            Reads only the Spaces you include (Permissions › Include in home chat; on for new Spaces). Each answer names the Space it came from.
           </p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-brand-text">

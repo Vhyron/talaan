@@ -20,20 +20,24 @@ CASE_NAME, CHART_NAME, VILLA_NAME = "Lakbay Logistics Inc", "Santos Family Clini
 
 @pytest.fixture(autouse=True)
 def included(talaan_home):
-    """The home chat reads only Spaces the user included (off by default): include the demo ones."""
+    """The home chat reads only Spaces the user included (on for new Spaces): include the demo ones."""
     for fid in (CASE, CHART, VILLA):
         set_grants(fid, Grants(home_chat=True))
 
 
-def test_spaces_are_left_out_of_the_home_chat_by_default(model):
+def test_new_spaces_are_in_the_home_chat_by_default():
+    assert Grants().home_chat
+
+
+def test_spaces_left_out_of_the_home_chat_are_not_searched(model):
     for fid in (CASE, CHART, VILLA):
-        set_grants(fid, Grants())
+        set_grants(fid, Grants(home_chat=False))
     r = ask("Which clients have a penicillin allergy?")
     assert r["refused"] and r["answer"] == global_ask.NO_SPACES and model.calls == []
 
 
 def test_only_included_spaces_are_searched(model):
-    set_grants(CHART, Grants())  # the clinic is not included
+    set_grants(CHART, Grants(home_chat=False))  # the clinic is not included
     ask("penicillin allergy")
     assert "Santos Family Clinic" not in model.calls[0][1]["content"].split("Question:")[0]
 
