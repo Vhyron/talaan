@@ -44,47 +44,70 @@ The index lets the app find the right passages fast. Each document is split into
 
 The policy engine never exposes `.talaan/` or `app.db` to the model.
 
-## Repo layout (proposal)
+## Repo layout
+
+Folders marked *(planned)* belong to tickets not merged yet.
 
 ```
 talaan/
   backend/
     app/
       main.py            FastAPI app and routes
-      schemas.py         Pydantic models, incl. the action schema
-      policy/            grants, decisions, path sealing
-      index/             chunking, embeddings, SQLite search
-      llm/               Ollama client, prompts, tool calls
-      transcribe/        faster-whisper wrapper
-      audit/             audit log writer and reader
-      system/            hardware tier detection
+      config.py          TALAAN_HOME, OLLAMA_BASE_URL, CHAT_MODEL, EMBED_MODEL, NUM_CTX
+      schemas.py         Shared contract, incl. the action schema (mirrored in frontend/src/api/types.ts)
+      db.py              app.db: grants, audit, proposals, conversations
+      folders.py         Folders and files on disk, import
+      fixtures.py        Sample responses for routes not built yet (removed as tickets land)
+      policy/
+        paths.py         resolve_in_folder: path sealing
+        grants.py        Per-folder grants
+        engine.py        handle(): validate, seal, decide, execute; approve / reject
+        proposals.py     Pending proposals and diffs
+      audit/             Audit log writer, reader and export
+      index/             (planned, B2–B3) chunking, embeddings, SQLite search
+      llm/               (planned, B1, B4–B6) Ollama client, prompts, tool calls
+      transcribe/        (planned, D1) faster-whisper wrapper
+      system/            (planned, D7) hardware tier detection
+    tests/
     pyproject.toml
   frontend/
     src/
-      pages/             Folders, Folder view, Setup
-      components/        Ask panel, Sources, Permission panel, Approval diff, Audit log, Recorder
+      api/               types.ts (mirrors schemas.py), client.ts
+      pages/             Folders page, Folder view
+      components/        Top bar, sidebar tree, file tabs, file viewer, right-hand tabs, import, source chip
+      panels/            Ask, Timeline, Permissions, Approvals, Audit
+      lib/               Folder context, formatting, hooks
   demo-data/
   docs/
-  README.md              setup + run instructions for judges
+  tickets/
+  CLAUDE.md
+  README.md              (D5) setup + run instructions for judges
 ```
 
-## API (draft)
+## API
 
 | Method | Path | Purpose |
 |---|---|---|
+| GET | `/health` | Status and the configured chat and embedding model tags |
 | GET / POST | `/folders` | List or create folders |
-| POST | `/folders/{id}/import` | Add files |
+| GET | `/folders/{id}` | One folder |
+| GET | `/folders/{id}/files` | List files (`.talaan/` hidden) |
+| GET | `/folders/{id}/files/{path}` | File content (PDFs as `application/pdf`) |
+| POST | `/folders/{id}/import` | Add .md, .txt or .pdf files |
 | POST | `/folders/{id}/index` | Build or refresh the index |
 | POST | `/folders/{id}/ask` | Question → answer with sources, or proposed action |
 | POST | `/folders/{id}/timeline` | Timeline with sources |
 | GET / PUT | `/folders/{id}/grants` | Read or change permissions |
-| GET | `/folders/{id}/proposals` | Pending actions awaiting approval |
-| POST | `/proposals/{pid}/approve` · `/reject` | User decision |
-| GET | `/folders/{id}/audit` | Audit log |
+| GET | `/folders/{id}/proposals` | Pending actions awaiting approval, with diffs |
+| POST | `/proposals/{pid}/approve` · `/reject` | User decision (UI only, never called by model code) |
+| GET | `/folders/{id}/audit` | Audit log, newest first |
+| GET | `/folders/{id}/audit/export?format=json\|csv` | Audit log download |
 | POST | `/folders/{id}/transcribe` | Audio → transcript draft (needs Create) |
 | GET | `/system/tier` | Detected hardware tier and recommended models |
 
 ## Run locally (target README for judges)
+
+Model tags below are the pre-bake-off defaults. **Replace them with the tags pinned in B1** (see 05-models.md) before submission.
 
 ```bash
 # 1. models
