@@ -24,6 +24,8 @@ function title(e: AuditEvent): string {
   if (e.event === 'grant_change') return `Permission changed: ${GRANT_LABEL[e.action ?? ''] ?? words(e.action ?? '')}`
   if (e.event === 'question') return 'Question asked'
   if (e.event === 'answer') return 'Answer given'
+  if (e.event === 'session_renamed') return 'Chat renamed'
+  if (e.event === 'session_deleted') return 'Chat deleted'
   const action = ACTION_NOUN[e.action ?? ''] ?? (e.action ? words(e.action) : 'action')
   if (e.event === 'proposed_action') return `Proposed ${action}`
   if (e.event === 'executed') return `Executed ${action}`

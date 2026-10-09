@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -79,6 +79,11 @@ export const api = {
     }
     throw new ApiError(502, 'The answer stopped before it finished. Please ask again.')
   },
+  chats: (id: string, q = '') => json<ChatSessionSummary[]>(`${f(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+  chat: (id: string, sid: string) => json<ChatSession>(`${f(id)}/chats/${encodeURIComponent(sid)}`),
+  renameChat: (id: string, sid: string, title: string) =>
+    send<ChatSessionSummary>('PATCH', `${f(id)}/chats/${encodeURIComponent(sid)}`, { title }),
+  deleteChat: (id: string, sid: string) => req(`${f(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),

@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import ask as ask_mod
+from app import chats
 from app.index import Hit
 from app.llm import client
 from app.llm.client import ChatResult
@@ -66,6 +67,8 @@ def model(monkeypatch):
     state = type("M", (), {"reply": None, "calls": [], "schemas": []})()
 
     def fake_chat(messages, schema=None, **kw):
+        if schema is chats.Title:  # the background chat title (C8), not part of answering
+            return ChatResult(content="", model="fake:1b", seconds=0, data={"title": "Test title"})
         state.calls.append(messages)
         state.schemas.append(schema)
         return ChatResult(content="", model="fake:1b", seconds=0, data=state.reply)
@@ -318,6 +321,8 @@ def test_answer_stream_decodes_partial_json():
 def test_ask_stream_sends_status_live_text_then_final(model, monkeypatch):
     def fake_chat(messages, schema=None, think=False, on_delta=None, **kw):
         model.calls.append(think)
+        if on_delta is None:  # the chat title call after the first answer
+            return ChatResult(content="", model="fake:1b", seconds=0, data={"title": "Open items"})
         for piece in ['{"answer": "The roster ', 'is open [S1].", "refused": false}']:
             on_delta("content", piece)
         return ChatResult(content="", model="fake:1b", seconds=0,

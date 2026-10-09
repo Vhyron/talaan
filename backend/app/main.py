@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
@@ -19,6 +19,7 @@ from app import config
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
+from app import chats
 from app import folders, index
 from app import timeline as case_timeline
 from app import transcribe as voice
@@ -28,7 +29,7 @@ from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
+    AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
     Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
@@ -144,8 +145,14 @@ def build_index(folder_id: str) -> IndexStatus:
 
 
 @app.post("/folders/{folder_id}/ask")
-def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    return ask_mod.ask(folder_id, body.question, body.path, body.history)
+def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse:
+    """Saved to a chat: `session_id` continues one, none starts a new one (returned in the response)."""
+    res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id)
+    # First turn: title the chat after the answer is sent. Not after a refusal, which is decided in
+    # code without the model, so the LLM log shows no model call for an out-of-scope question.
+    if body.session_id is None and res.session_id and not res.refused:
+        tasks.add_task(chats.auto_title, folder_id, res.session_id, body.question)
+    return res
 
 
 @app.post("/folders/{folder_id}/ask/stream")
@@ -157,15 +164,22 @@ def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
 
     def work() -> None:
         try:
-            res = ask_mod.ask(folder_id, body.question, body.path, body.history, emit=events.put)
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put)
             events.put({"type": "done", "response": res.model_dump(mode="json")})
         except OllamaError as e:
             events.put({"type": "error", "message": str(e)})
         except Exception:
             logging.getLogger("talaan").exception("ask/stream failed")
             events.put({"type": "error", "message": "Something went wrong answering this question. Please ask again."})
-        finally:
-            events.put(None)
+        else:
+            events.put(None)  # the answer is complete: close the stream before titling the chat
+            if body.session_id is None and res.session_id and not res.refused:  # same as /ask
+                try:
+                    chats.auto_title(folder_id, res.session_id, body.question)
+                except Exception:
+                    logging.getLogger("talaan").exception("chat title failed")
+            return
+        events.put(None)
 
     threading.Thread(target=work, daemon=True, name="ask-stream").start()
 
@@ -181,6 +195,35 @@ def timeline(folder_id: str, refresh: bool = False) -> TimelineResponse:
     """Dated events and flags for human review, every one with sources. Cached per index
     version and chat model; `refresh=true` rebuilds anyway."""
     return case_timeline.build(_folder(folder_id), refresh)
+
+
+# --- Chat sessions (C8) -------------------------------------------------------
+# User-only: the model has no action that reaches saved chats.
+
+
+@app.get("/folders/{folder_id}/chats")
+def list_chats(folder_id: str, q: str | None = None) -> list[ChatSessionSummary]:
+    _folder(folder_id)
+    return chats.list_sessions(folder_id, q)
+
+
+@app.get("/folders/{folder_id}/chats/{sid}")
+def get_chat(folder_id: str, sid: str) -> ChatSession:
+    _folder(folder_id)
+    return chats.get_session(folder_id, sid)
+
+
+@app.patch("/folders/{folder_id}/chats/{sid}")
+def rename_chat(folder_id: str, sid: str, body: ChatRename) -> ChatSessionSummary:
+    _folder(folder_id)
+    return chats.rename(folder_id, sid, body.title)
+
+
+@app.delete("/folders/{folder_id}/chats/{sid}", status_code=204)
+def delete_chat(folder_id: str, sid: str) -> None:
+    """Removes the chat only. The audit log keeps every question and answer."""
+    _folder(folder_id)
+    chats.delete(folder_id, sid)
 
 
 # --- Grants, proposals, audit (A3–A5) -----------------------------------------

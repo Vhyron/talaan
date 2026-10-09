@@ -28,7 +28,7 @@ Chosen for speed of building and ease of debugging over a 20-hour hackathon, not
 
 The index lets the app find the right passages fast. Each document is split into chunks; each chunk gets a keyword entry and an embedding (numbers representing meaning). A question retrieves the best-matching chunks, and only those go to the model, tagged with file and position for citations.
 
-**One index per folder makes sealing physical:** retrieval can't reach another client's chunks. Conversations, grants and the audit log are stored separately in the app database.
+**One index per folder makes sealing physical:** retrieval can't reach another client's chunks. Saved chats, grants and the audit log are stored separately in the app database, which the model can't reach.
 
 ## Data layout
 
@@ -39,7 +39,7 @@ The index lets the app find the right passages fast. Each document is split into
       .talaan/index.db            <- this folder's index only
     Chart_M-Reyes/
       .talaan/index.db
-  app.db                          <- grants, audit log, conversations (outside all folders)
+  app.db                          <- grants, audit log, saved chats (outside all folders)
 ```
 
 The policy engine never exposes `.talaan/` or `app.db` to the model.
@@ -55,7 +55,8 @@ talaan/
       main.py            FastAPI app and routes
       config.py          TALAAN_HOME, OLLAMA_BASE_URL, CHAT_MODEL, EMBED_MODEL, NUM_CTX
       schemas.py         Shared contract, incl. the action schema (mirrored in frontend/src/api/types.ts)
-      db.py              app.db: grants, audit, proposals, conversations
+      db.py              app.db: grants, audit, proposals, chat_sessions + chat_messages
+      chats.py           Saved Ask chats per folder: save each turn, list/search, resume, rename, delete
       folders.py         Folders and files on disk, import
       fixtures.py        Sample responses for routes not built yet (removed as tickets land)
       policy/
@@ -75,7 +76,7 @@ talaan/
       api/               types.ts (mirrors schemas.py), client.ts
       pages/             Folders page, Folder view
       components/        Top bar, sidebar tree, file tabs, file viewer, right-hand tabs, import, source chip
-      panels/            Ask, Timeline, Permissions, Approvals, Audit
+      panels/            Ask (+ ChatHistory), Timeline, Permissions, Approvals, Audit
       lib/               Folder context, formatting, hooks
   demo-data/
   docs/
