@@ -6,7 +6,8 @@ TALAAN_HOME = Path(os.environ.get("TALAAN_HOME", Path.home() / "Talaan")).expand
 FOLDERS_DIR = TALAAN_HOME / "folders"
 APP_DB = TALAAN_HOME / "app.db"
 
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+# 127.0.0.1, not localhost: on Windows localhost tries IPv6 first and adds ~2 s per call.
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4:e4b")  # pin after the B1 bake-off
 EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:0.6b")
 NUM_CTX = int(os.environ.get("NUM_CTX", "16384"))

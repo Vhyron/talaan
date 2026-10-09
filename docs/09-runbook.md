@@ -83,7 +83,7 @@ All optional, set as environment variables before starting the backend (see `bac
 | Variable | Default | Use |
 |---|---|---|
 | `TALAAN_HOME` | `~/Talaan` | Where folders and `app.db` live |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama, or LM Studio's OpenAI-compatible URL |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama, or LM Studio's OpenAI-compatible URL. Use `127.0.0.1`, not `localhost`: on Windows `localhost` tries IPv6 first and adds ~2 s to every model call |
 | `CHAT_MODEL` | `gemma4:e4b` | Chat model tag |
 | `EMBED_MODEL` | `qwen3-embedding:0.6b` | Embedding model. Changing it means re-indexing every folder |
 | `NUM_CTX` | `16384` | Context window sent on every request |
@@ -110,20 +110,32 @@ cd backend; uv run pytest
 cd frontend; npx tsc -b; npm run lint; npm run build
 ```
 
-All four must pass before opening a PR. The acceptance questions Q1–Q9 in [demo-data/README.md](../demo-data/README.md) are the end-to-end check once the AI tickets (B4, B5) are merged; D4 automates them.
+All four must pass before opening a PR.
+
+### Acceptance test (D4)
+
+The nine ground-truth questions in [demo-data/README.md](../demo-data/README.md), plus the sealing and prompt-injection rules, against the running backend:
+
+```powershell
+cd backend
+uv run scripts/seed_demo.py --reset     # always start from the demo state
+uv run scripts/acceptance.py            # backend on http://127.0.0.1:8000
+uv run scripts/acceptance.py --only 4,5,9 --base http://127.0.0.1:8011
+```
+
+It prints PASS/FAIL per question with the reason and real seconds per answer, and exits non-zero on any failure. It is the sign-off for milestone M2: everything must pass before rehearsals. Until B4/B5 merge, only Q3, Q4 and Q9 pass (the routes still return sample answers). Timings may be quoted in the pitch, so only quote numbers from a real run on the demo laptop.
 
 ## 6. Reset before a demo or rehearsal
 
-Rehearsals approve drafts, change grants and fill the audit log. Reset to the pristine demo state:
+Rehearsals approve drafts, change grants and fill the audit log. One command gets back to the demo state (from `backend/`):
 
 ```powershell
-# Stop the backend first (Ctrl+C), then:
-Remove-Item -Recurse -Force "$HOME\Talaan"
-New-Item -ItemType Directory -Force "$HOME\Talaan\folders" | Out-Null
-Copy-Item -Recurse demo-data\hr\*, demo-data\clinic\* "$HOME\Talaan\folders\"
+uv run scripts/seed_demo.py --reset
 ```
 
-This deletes `app.db` too: grants go back to defaults, the audit log and pending proposals are cleared. Indexes are rebuilt on the next index call. D3 replaces this with a reset script.
+It restores the four demo folders from `demo-data/` (removing files added during rehearsal), resets their grants to the defaults, clears their proposals, audit log and chat history, rebuilds their indexes and warms the Ollama models so the first answer isn't slow. Other folders and their history are left alone. Add `--no-warm` to skip the model warm-up.
+
+For a completely clean `TALAAN_HOME` (e.g. a new laptop): `uv run scripts/seed_demo.py --fresh --yes`. It refuses to wipe a folder that contains anything other than `folders/` and `app.db`, in case `TALAAN_HOME` points somewhere wrong.
 
 **Never edit the files in `demo-data/`** to "fix" the demo. `2026-09-26_email_from-representative.md` contains a deliberate prompt injection; it is a test fixture.
 
@@ -133,10 +145,11 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 
 - [ ] `git pull` on the branch being demoed; `uv sync` and `npm ci` if dependencies changed
 - [ ] Models pulled and listed in `ollama list` (exact pinned tags)
-- [ ] Demo data reset (section 6)
+- [ ] `uv run scripts/seed_demo.py --reset` (section 6)
 - [ ] Backend and frontend running; `http://localhost:8000/health` shows the pinned model tags
 - [ ] Ask one question per folder so the models are loaded and warm (`ollama ps`)
 - [ ] **Turn Wi-Fi off**, refresh the app, run the full 5-minute script from [06-demo-and-pitch.md](06-demo-and-pitch.md)
+- [ ] `uv run scripts/acceptance.py` passes 9/9 with Wi-Fi off
 - [ ] Check Audit → Blocked only shows the injection attempt; then reset again
 - [ ] Backup demo video on the laptop and on a USB stick
 
