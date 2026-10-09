@@ -6,6 +6,10 @@ export type FolderCtx = {
   files: FileEntry[]
   /** The file in the active viewer tab, if any: the chat focuses on it. */
   currentPath: string | undefined
+  /** The subfolder whose overview is open ("" = the whole Space): the chat's scope when no file is open. */
+  dir: string
+  /** Show the overview of a subfolder ("" = the whole Space). */
+  openDir: (dir: string) => void
   /** Open a file in a tab and highlight lines start..end (1-based). */
   openSource: (path: string, start?: number, end?: number) => void
   /** Re-fetch the file list (after imports or approvals). */
@@ -23,7 +27,17 @@ export function useFolder(): FolderCtx {
   return ctx
 }
 
-/** "Case 2026-014" for cases, "Chart M. Reyes" for charts: used in refusals and labels. */
+/** Case/chart labelling (badges, grouping, the type toggle). Off: every folder is just a Space. */
+export const SHOW_MODE = false
+
+/** "Case" or "Chart" while SHOW_MODE is on, else "Space": used in labels. */
 export function noun(mode: Folder['mode']): string {
+  if (!SHOW_MODE || !mode) return 'Space'
   return mode === 'chart' ? 'Chart' : 'Case'
+}
+
+/** What the chat answers from right now, keyed so each scope keeps its own chat. */
+export function chatScope(currentPath: string | undefined, dir: string): { key: string; label: string } {
+  if (currentPath) return { key: `file:${currentPath}`, label: `this file only (${currentPath.split('/').pop()})` }
+  return dir ? { key: `dir:${dir}`, label: dir } : { key: 'space', label: 'whole Space' }
 }

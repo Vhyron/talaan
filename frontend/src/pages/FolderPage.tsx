@@ -19,7 +19,7 @@ import AskPanel from '../panels/AskPanel'
 import AuditPanel from '../panels/AuditPanel'
 import PermissionsPanel from '../panels/PermissionsPanel'
 import TimelinePanel from '../panels/TimelinePanel'
-import { FolderContext, noun, useFolder, type FolderCtx } from '../lib/folderContext'
+import { FolderContext, useFolder, type FolderCtx } from '../lib/folderContext'
 
 export default function FolderPage({ folders, error }: { folders: Folder[]; error: string | null }) {
   const { id = '' } = useParams()
@@ -37,13 +37,16 @@ export default function FolderPage({ folders, error }: { folders: Folder[]; erro
   return <FolderView key={folder.id} folder={folder} folders={folders} error={error} />
 }
 
-// active = -1 is the folder overview; 0.. is an open file.
-type Tabs = { paths: string[]; active: number }
+// active = -1 is the overview of `dir` ("" = the whole Space); 0.. is an open file.
+type Tabs = { paths: string[]; active: number; dir: string }
 
 // Open tabs per folder for this session, so switching between folders keeps them.
 const tabsByFolder = new Map<string, Tabs>()
 
-const renameTabs = (t: Tabs, from: string, to: string): Tabs => ({ ...t, paths: t.paths.map((p) => movedPath(p, from, to)) })
+// Tabs and the open subfolder overview follow a rename.
+const renameTabs = (t: Tabs, from: string, to: string): Tabs => ({
+  ...t, paths: t.paths.map((p) => movedPath(p, from, to)), dir: t.dir && movedPath(t.dir, from, to),
+})
 
 // Remembered tabs of folders not on screen follow renames too.
 onRenamed(({ folderId, from, to }) => {
@@ -55,7 +58,10 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const tree = useTree()
   const location = useLocation()
   const [files, setFiles] = useState<FileEntry[]>([])
-  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: -1 })
+  const loaded = useRef(false) // the file list has arrived at least once (an empty Space is [] too)
+  const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: -1, dir: '' })
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
   const [highlight, setHighlight] = useState<Highlight>(null)
   // Which folder tool is open in the floating card (or pinned column), if any.
   const [tool, setTool] = useState<PanelTab | null>(null)
@@ -66,7 +72,17 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   // Any change to files or subfolders (import, approval, new subfolder) bumps
   // tree.version; this view and every open sidebar tree refetch from that.
   useEffect(() => {
-    api.files(folder.id).then(setFiles).catch(() => setFiles([]))
+    api.files(folder.id).then((fs) => { loaded.current = true; setFiles(fs) }).catch(() => setFiles([]))
+    // The open subfolder was moved to Trash (or is otherwise gone): show the Space's overview instead,
+    // so the chat isn't left scoped to a folder that no longer exists. Checked against a fresh list
+    // only, so a rename (the view already follows it) never trips it.
+    api.dirs(folder.id).then((ds) => {
+      const dir = tabsRef.current.dir
+      if (dir && !ds.includes(dir)) {
+        setNotice(`${dir} was removed. Showing the whole Space.`)
+        setTabs((t) => (t.dir === dir ? { ...t, dir: '' } : t))
+      }
+    }).catch(() => {})
   }, [folder.id, tree.version])
   const refreshFiles = tree.changed
 
@@ -84,13 +100,13 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
 
   // Drop tabs for files that no longer exist; open the first file if nothing is open.
   useEffect(() => {
-    if (!files.length) return
+    if (!loaded.current) return
     const exists = new Set(files.map((f) => f.path))
     const gone = tabs.paths.filter((p) => !exists.has(p))
     if (gone.length) setNotice(`${gone[0]} was renamed or removed. Ask again to get current sources.`)
     setTabs((t) => {
       const paths = t.paths.filter((p) => exists.has(p))
-      return paths.length === t.paths.length ? t : { paths, active: Math.min(t.active, paths.length - 1) }
+      return paths.length === t.paths.length ? t : { ...t, paths, active: Math.min(t.active, paths.length - 1) }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the file list changes
   }, [files])
@@ -104,9 +120,9 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
       return
     }
     setNotice(null)
-    setTabs(({ paths }) => {
-      const i = paths.indexOf(path)
-      return i >= 0 ? { paths, active: i } : { paths: [...paths, path], active: paths.length }
+    setTabs((t) => {
+      const i = t.paths.indexOf(path)
+      return i >= 0 ? { ...t, active: i } : { ...t, paths: [...t.paths, path], active: t.paths.length }
     })
     setHighlight(start ? { start, end: end ?? start } : null)
     // On phones the tool sheet covers the document: close it to show the cited lines.
@@ -115,21 +131,24 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
   // A file to open can arrive with the navigation: from another folder's sidebar tree, or a
-  // source in the home-page chat (which also passes the cited lines to highlight).
-  const navState = location.state as { open?: string; start?: number; end?: number; overview?: boolean } | null
+  // source in the home-page chat (which also passes the cited lines to highlight). A Space's or
+  // subfolder's name in the sidebar asks for its overview (`dir`, "" for the whole Space).
+  const navState = location.state as { open?: string; start?: number; end?: number; overview?: boolean; dir?: string } | null
   const requested = navState?.open
   useEffect(() => {
     if (requested) openSource(requested, navState?.start, navState?.end)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per navigation
   }, [requested, location.key, openSource])
-  // A click on the folder's name in the sidebar asks for its overview.
+  const openDir = useCallback((dir: string) => {
+    setTabs((t) => ({ ...t, active: -1, dir }))
+    setHighlight(null)
+  }, [])
+  // A click on a Space's or subfolder's name in the sidebar asks for its overview.
   const wantsOverview = navState?.overview
+  const wantsDir = navState?.dir ?? ''
   useEffect(() => {
-    if (wantsOverview) {
-      setTabs((t) => ({ ...t, active: -1 }))
-      setHighlight(null)
-    }
-  }, [wantsOverview, location.key])
+    if (wantsOverview) openDir(wantsDir)
+  }, [wantsOverview, wantsDir, location.key, openDir])
 
   const select = (i: number) => {
     setTabs((t) => ({ ...t, active: i }))
@@ -137,11 +156,11 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   }
 
   const close = (i: number) => {
-    setTabs(({ paths, active }) => {
+    setTabs(({ paths, active, dir }) => {
       const rest = paths.filter((_, j) => j !== i)
       // Closing the open tab moves to its neighbour; closing the last one shows the overview.
       const next = active > i ? active - 1 : active === i ? Math.min(i, rest.length - 1) : active
-      return { paths: rest, active: next }
+      return { paths: rest, active: next, dir }
     })
     setHighlight(null)
   }
@@ -149,8 +168,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   // The file in the active tab (none on the overview): the Ask chat focuses on it.
   const currentPath = tabs.active >= 0 ? tabs.paths[tabs.active] : undefined
   const ctx: FolderCtx = useMemo(
-    () => ({ folder, files, currentPath, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
-    [folder, files, currentPath, openSource, refreshFiles, version],
+    () => ({ folder, files, currentPath, dir: tabs.dir, openDir, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
+    [folder, files, currentPath, tabs.dir, openDir, openSource, refreshFiles, version],
   )
 
   return (
@@ -183,7 +202,7 @@ function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight
   onSelect: (i: number) => void
   onClose: (i: number) => void
 }) {
-  const { folder, files, openSource } = useFolder()
+  const { folder, files, dir, openSource } = useFolder()
   const imp = useImport()
   const current = tabs.active >= 0 ? tabs.paths[tabs.active] : undefined
   const [pinned, setPinned] = usePersistentFlag('talaan.tools.pinned')
@@ -194,6 +213,7 @@ function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight
         folders={folders}
         error={error}
         activeId={folder.id}
+        activeDir={current ? undefined : dir}
         currentPath={current}
         onOpenFile={(p) => openSource(p)}
       />
@@ -202,7 +222,7 @@ function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-xs sm:px-4">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
             <Lock size={11} className="shrink-0" />
-            <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
+            <span className="truncate">Sealed: AI can only see this Space</span>
           </span>
           <span className="hidden shrink-0 text-muted sm:inline">{files.length} {files.length === 1 ? 'file' : 'files'}</span>
           {notice && (
@@ -238,7 +258,7 @@ function FolderLayout({ folders, error, tabs, notice, onDismissNotice, highlight
         onPin={setPinned}
         panels={{
           ask: <AskPanel onShowApprovals={() => onTool('approvals')} />,
-          timeline: <TimelinePanel />,
+          timeline: <TimelinePanel key={dir} />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,
           audit: <AuditPanel />,

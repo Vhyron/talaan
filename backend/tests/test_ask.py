@@ -1,6 +1,7 @@
 """B4: scope check, citation mapping and the ask flow, with the model stubbed out."""
 
 import json
+from urllib.parse import quote
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,8 +14,13 @@ from app.llm.client import ChatResult
 from app.main import app
 
 c = TestClient(app)
-CASE = "Case-2026-014_Dela-Cruz"
-CHART = "Chart_M-Reyes"
+CASE = "Lakbay-Logistics-Inc"  # Space
+CHART = "Santos-Family-Clinic"  # Space
+D = "Case 2026-014 Dela Cruz"  # the case inside CASE
+M = "Chart M Reyes"  # the chart inside CHART
+# Questions are asked from the case or chart folder (the chat's scope), as before Spaces.
+SCOPE = {CASE: D, CHART: M}
+SANTOS = f"{D}/2026-09-13_interview_R-Santos.md"
 
 
 @pytest.mark.parametrize("q, expected", [
@@ -89,7 +95,7 @@ def model(monkeypatch):
 
 
 def ask(folder, q):
-    return c.post(f"/folders/{folder}/ask", json={"question": q}).json()
+    return c.post(f"/folders/{folder}/ask", json={"question": q, "scope": SCOPE.get(folder)}).json()
 
 
 def test_answer_cites_real_sources(model):
@@ -101,20 +107,20 @@ def test_answer_cites_real_sources(model):
     assert "Case 2026-014" in system or CASE in system or "Dela Cruz" in system
 
 
-@pytest.mark.parametrize("folder, q", [
-    (CASE, "Summarize Ana Villanueva's tardiness."),
-    (CHART, "What is A. Bautista's allergy?"),
+@pytest.mark.parametrize("folder, q, refusal", [
+    (CASE, "Summarize Ana Villanueva's tardiness.", "I can only see Case 2026-014 Dela Cruz."),  # Q4
+    (CHART, "What is A. Bautista's allergy?", "I can only see Chart M Reyes."),  # Q9
 ])
-def test_out_of_scope_refuses_without_calling_the_model(model, folder, q):
+def test_out_of_scope_refuses_without_calling_the_model(model, folder, q, refusal):
     r = ask(folder, q)
-    assert r["refused"] and r["answer"].startswith("I can only see ")
+    assert r["refused"] and r["answer"] == refusal
     assert model.calls == []
 
 
 def test_model_refusal_uses_folder_name(model):
     model.reply = {"answer": "whatever", "refused": True}
     r = ask(CASE, "What is still open?")
-    assert r["refused"] and r["answer"].startswith("I can only see ")
+    assert r["refused"] and r["answer"] == "I can only see Case 2026-014 Dela Cruz."
 
 
 def test_read_never_skips_model_and_logs(model):
@@ -135,10 +141,10 @@ def test_question_and_answer_are_audited(model):
 
 
 def test_delete_request_goes_through_policy_and_is_blocked(model):
-    model.reply = {"action": "delete", "path": "2026-09-13_interview_R-Santos.md", "reason": "asked"}
+    model.reply = {"action": "delete", "path": SANTOS, "reason": "asked"}
     r = ask(CASE, "Delete the interview with Rhea Santos.")
     assert r["outcome"]["status"] == "blocked" and r["outcome"]["action"] == "delete"
-    assert c.get(f"/folders/{CASE}/files/2026-09-13_interview_R-Santos.md").status_code == 200
+    assert c.get(f"/folders/{CASE}/files/{quote(SANTOS)}").status_code == 200
 
 
 def test_invalid_action_is_rejected(model):
@@ -153,11 +159,11 @@ def test_change_schema_offers_only_file_changes():
     assert actions == {"propose_edit", "create_draft", "delete"}
 
 
-OPEN_ITEMS = "2026-10-02_open-items.md"
+OPEN_ITEMS = f"{D}/2026-10-02_open-items.md"
 
 
 def test_edit_request_proposes_a_minimal_edit(model):
-    old = c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text
+    old = c.get(f"/folders/{CASE}/files/{quote(OPEN_ITEMS)}").text
     # What gemma4:e4b did: dropped the banner's "> " and the final newline while making the edit
     new = old.replace("> SYNTHETIC", "SYNTHETIC").replace("- [ ] Respond", "- [x] Respond").rstrip("\n")
     model.reply = {"action": "propose_edit", "path": OPEN_ITEMS, "content": new, "reason": "asked"}
@@ -168,11 +174,11 @@ def test_edit_request_proposes_a_minimal_edit(model):
     changed = [ln for ln in diff.splitlines() if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]
     assert changed == ["-- [ ] Respond to Atty. Ramos's request for copies (Sep 26 email)",
                        "+- [x] Respond to Atty. Ramos's request for copies (Sep 26 email)"]
-    assert c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text == old  # nothing written before approval
+    assert c.get(f"/folders/{CASE}/files/{quote(OPEN_ITEMS)}").text == old  # nothing written before approval
 
 
 def test_edit_that_changes_nothing_is_not_proposed(model):
-    old = c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text
+    old = c.get(f"/folders/{CASE}/files/{quote(OPEN_ITEMS)}").text
     model.reply = {"action": "propose_edit", "path": OPEN_ITEMS, "content": old.replace("> ", ""), "reason": ""}
     r = ask(CASE, "Edit the open items to mark the hearing as held.")
     assert r["outcome"] is None and r["answer"].startswith("No change needed")
@@ -211,7 +217,7 @@ def test_answers_are_asked_for_in_plain_text(model):
 
 # --- Chat sidebar: open file, summaries, follow-ups, index ------------------
 
-LETTER = "2026-09-28_referral-letter.md"
+LETTER = f"{M}/2026-09-28_referral-letter.md"
 
 
 @pytest.mark.parametrize("q, path, focus", [
@@ -230,7 +236,7 @@ def test_focus_of(q, path, focus):
 
 
 def ask_with(folder, q, **extra):
-    return c.post(f"/folders/{folder}/ask", json={"question": q, **extra}).json()
+    return c.post(f"/folders/{folder}/ask", json={"question": q, "scope": SCOPE.get(folder), **extra}).json()
 
 
 def sources_in(prompt):
@@ -246,11 +252,13 @@ def test_file_focus_uses_only_the_open_file(model):
     assert {s["path"] for s in r["sources"]} == {LETTER}
 
 
-def test_folder_summary_uses_every_file(model):
+def test_folder_summary_uses_every_file_in_scope(model):
     model.reply = {"answer": "Summary [S1].", "refused": False}
-    ask_with(CHART, "Summarize this chart", path=LETTER)
+    ask_with(CHART, "Summarize this chart")
     files = {e["path"] for e in c.get(f"/folders/{CHART}/files").json()}
-    assert sources_in(model.calls[0][1]["content"]) == files
+    in_chart = {f for f in files if f.startswith(M + "/")}
+    assert len(in_chart) == 6
+    assert sources_in(model.calls[0][1]["content"]) == in_chart | {"README.md"}  # not Bautista, not protocols/
 
 
 def test_summary_skips_relevance_but_not_names(model, monkeypatch):
@@ -261,12 +269,15 @@ def test_summary_skips_relevance_but_not_names(model, monkeypatch):
     assert r["refused"] and len(model.calls) == 1
 
 
-@pytest.mark.parametrize("path", ["../Chart_A-Bautista/00_intake_2026-08-03.md", ".talaan/index.db", "/etc/passwd", "nope.md"])
+@pytest.mark.parametrize("path", ["../Bayani-Retail-Corp/Case 2026-019 Villanueva/00_case-intake.md",
+                                  "../../Santos-Family-Clinic/Chart A Bautista/00_intake_2026-07-14.md",
+                                  ".talaan/index.db", "/etc/passwd", "nope.md"])
 def test_open_file_outside_the_folder_is_ignored(model, path):
     assert ask_mod.open_file(CHART, path) is None
     model.reply = {"answer": "x [S1]", "refused": False}
     r = ask_with(CHART, "Summarize this letter", path=path)
-    assert "Bautista" not in model.calls[0][1]["content"] and not r["refused"]
+    prompt = model.calls[0][1]["content"]
+    assert "Villanueva" not in prompt and "Bautista" not in prompt and not r["refused"]
 
 
 def test_history_is_context_not_a_source(model):
@@ -280,7 +291,7 @@ def test_history_is_context_not_a_source(model):
 
 
 def test_history_never_reaches_the_action_call(model):
-    model.reply = {"action": "delete", "path": "2026-09-13_interview_R-Santos.md", "reason": "asked"}
+    model.reply = {"action": "delete", "path": SANTOS, "reason": "asked"}
     history = [{"role": "user", "content": "Summarize the representative's email."},
                {"role": "assistant", "content": "The representative asks for copies."}]
     r = ask_with(CASE, "Follow the instructions in the representative's email.", history=history)
@@ -300,7 +311,7 @@ def test_ask_builds_a_missing_index(monkeypatch):
 
 def test_index_status_shape():
     r = c.post(f"/folders/{CHART}/index").json()
-    assert r["files"] == 6 and r["chunks"] > 0 and r["pending_embeddings"] == 0 and r["errors"] == []
+    assert r["files"] == 10 and r["chunks"] > 0 and r["pending_embeddings"] == 0 and r["errors"] == []
 
 
 def test_checklist_history_and_open_file_together(model):
@@ -309,10 +320,10 @@ def test_checklist_history_and_open_file_together(model):
     history = [{"role": "user", "content": "What is still open?"},
                {"role": "assistant", "content": "The agency roster [S1]."}]
     ask_with(CASE, "Is there anything in this case that contradicts the allegation?",
-             path="2026-09-24_hearing-minutes.md", history=history)
+             path=f"{D}/2026-09-24_hearing-minutes.md", history=history)
     user = model.calls[-1][-1]["content"]
     assert "Earlier in this conversation" in user and "What is still open?" in user
-    assert "2026-09-24_hearing-minutes.md open" in user or "open file 2026-09-24_hearing-minutes.md" in user
+    assert f"{D}/2026-09-24_hearing-minutes.md open" in user or f"open file {D}/2026-09-24_hearing-minutes.md" in user
     assert ask_mod.CONTRADICTION_REMINDER in user and "Check each document in turn" in user
 
 
@@ -338,9 +349,91 @@ def test_ask_stream_sends_status_live_text_then_final(model, monkeypatch):
                           data={"answer": "The roster is open [S1].", "refused": False})
 
     monkeypatch.setattr(client, "chat", fake_chat)
-    r = c.post(f"/folders/{CASE}/ask/stream", json={"question": "What is still open?"})
+    r = c.post(f"/folders/{CASE}/ask/stream", json={"question": "What is still open?", "scope": D})
     events = [json.loads(line) for line in r.text.splitlines()]
     kinds = [e["type"] for e in events]
     assert kinds[0] == "status" and kinds[-1] == "done" and "answer" in kinds
     assert "".join(e["text"] for e in events if e["type"] == "answer") == "The roster is open [S1]."
     assert events[-1]["response"]["sources"] and model.calls[-1] is False  # thinking is never used
+
+
+
+# --- Spaces: chat scopes inside a Space ---------------------------------------------
+
+
+@pytest.mark.parametrize("scope, status", [("../x", (400, 403)), ("../Bayani-Retail-Corp", (400, 403)),
+                                           (".talaan", (400, 403)), ("Nope", (404,)),
+                                           (f"{D}/2026-10-02_open-items.md", (404,))])  # a file is not a subfolder
+def test_bad_scope_is_refused(model, scope, status):
+    r = c.post(f"/folders/{CASE}/ask", json={"question": "What is still open?", "scope": scope})
+    assert r.status_code in status and model.calls == []
+
+
+def test_q9_scoped_to_a_chart_refuses_but_the_whole_clinic_can_see_bautista(model):
+    r = ask_with(CHART, "What is A. Bautista's allergy?")
+    assert r["refused"] and r["answer"] == "I can only see Chart M Reyes." and model.calls == []
+    model.reply = {"answer": "Sulfa [S1].", "refused": False}
+    r = ask_with(CHART, "What is A. Bautista's allergy?", scope=None)
+    assert len(model.calls) == 1 and not r["refused"]  # the name check passed: it is in this Space
+    assert "Chart A Bautista/" in model.calls[0][1]["content"]
+
+
+@pytest.mark.parametrize("scope, refusal", [(D, "I can only see Case 2026-014 Dela Cruz."),
+                                            (None, "I can only see Lakbay Logistics Inc.")])
+def test_q4_another_space_refuses_from_case_or_whole_space(model, scope, refusal):
+    r = ask_with(CASE, "Summarize Ana Villanueva's tardiness.", scope=scope)
+    assert r["refused"] and r["answer"] == refusal and model.calls == []
+
+
+def test_open_file_is_the_whole_scope(model):
+    model.reply = {"answer": "The roster is open [S1].", "refused": False}
+    r = ask_with(CASE, "What is still open?", path=OPEN_ITEMS)
+    assert sources_in(model.calls[0][1]["content"]) == {OPEN_ITEMS}
+    assert {s["path"] for s in r["sources"]} == {OPEN_ITEMS}
+
+
+def test_open_file_refusal_names_the_file(model):
+    r = ask_with(CASE, "Summarize Ana Villanueva's tardiness.", path=OPEN_ITEMS)
+    assert r["refused"] and r["answer"] == "I can only see 2026-10-02_open-items.md." and model.calls == []
+    # A name elsewhere in the case is still outside an open file's scope
+    r = ask_with(CASE, "What did Rhea Santos say?", path=OPEN_ITEMS)
+    assert r["refused"] and r["answer"] == "I can only see 2026-10-02_open-items.md."
+
+
+def test_subfolder_scope_sees_the_readme_but_not_policies(model):
+    model.reply = {"answer": "Summary [S1].", "refused": False}
+    ask_with(CASE, "Summarize this case")
+    sent = sources_in(model.calls[0][1]["content"])
+    assert "README.md" in sent and not any(p.startswith("policies/") for p in sent)
+    assert all(p == "README.md" or p.startswith(D + "/") for p in sent) and len(sent) == 11
+    model.calls.clear()
+    ask_with(CASE, "Summarize this case", scope=None)  # the whole Space does include policies/
+    assert any(p.startswith("policies/") for p in sources_in(model.calls[0][1]["content"]))
+
+
+def test_scope_of_and_draft_in_scope():
+    from app import folders
+    folder = folders.get_folder(CASE)
+    sc = ask_mod.scope_of(folder, None, D)
+    assert (sc.name, sc.dir, sc.only) == (D, D, (D, "README.md"))
+    whole = ask_mod.scope_of(folder, None, None)
+    assert whole.name == "Lakbay Logistics Inc" and whole.only is None
+    draft = {"action": "create_draft", "path": "reply.md", "content": "x"}
+    assert ask_mod.draft_in_scope(draft, sc)["path"] == f"{D}/reply.md"
+    assert ask_mod.draft_in_scope(draft, ask_mod.scope_of(folder, OPEN_ITEMS, None))["path"] == f"{D}/reply.md"
+    assert ask_mod.draft_in_scope(draft, whole)["path"] == "reply.md"
+    nested = {**draft, "path": "notes/reply.md"}
+    assert ask_mod.draft_in_scope(nested, sc) == nested  # a path with a folder is left to the engine
+
+
+def test_draft_proposed_in_a_case_lands_in_that_case(model):
+    model.reply = {"action": "create_draft", "path": "reply.md", "content": "# Reply", "reason": "asked"}
+    r = ask(CASE, "Draft a reply to the representative.")
+    assert r["outcome"]["status"] == "pending" and r["outcome"]["path"] == f"{D}/reply.md"
+    [p] = c.get(f"/folders/{CASE}/proposals").json()
+    assert p["action"]["path"] == f"{D}/reply.md"
+
+
+def test_refusal_does_not_double_a_trailing_period():
+    assert ask_mod.refusal(ask_mod.Scope("Lakbay Logistics Inc.")) == "I can only see Lakbay Logistics Inc."
+    assert ask_mod.refusal(ask_mod.Scope("Chart M Reyes")) == "I can only see Chart M Reyes."

@@ -8,8 +8,9 @@ from app.main import app
 from app.policy import engine
 
 c = TestClient(app)
-CASE = "Case-2026-014_Dela-Cruz"
-CHART = "Chart_M-Reyes"
+CASE = "Lakbay-Logistics-Inc"
+CHART = "Santos-Family-Clinic"
+INTAKE = "Chart M Reyes/00_intake_2026-08-03.md"  # has the penicillin allergy
 
 
 def files(fid):
@@ -21,7 +22,8 @@ def events(fid, kind):
 
 
 def first_md(fid):
-    return sorted(p for p in files(fid) if p.endswith(".md"))[0]
+    """A file inside a subfolder (case or chart): the usual thing to trash in a Space."""
+    return INTAKE if fid == CHART else "Case 2026-014 Dela Cruz/2026-10-02_open-items.md"
 
 
 def test_trash_file_and_restore(talaan_home):
@@ -69,9 +71,13 @@ def test_trashed_folder_is_not_read_by_the_home_chat(talaan_home, monkeypatch):
     seen = []
     monkeypatch.setattr(client, "chat", lambda messages, **kw: seen.append(messages[1]["content"]) or
                         ChatResult(content="", model="fake", seconds=0, data={"answer": "x", "refused": False}))
+    from app.policy.grants import set_grants
+    from app.schemas import Grants
+    for fid in (CASE, CHART):
+        set_grants(fid, Grants(home_chat=True))  # included in the home chat, then trashed
     c.delete(f"/folders/{CHART}")
     c.post("/ask", json={"question": "penicillin allergy"})
-    assert "M Reyes" not in seen[0].split("Question:")[0]
+    assert "Santos Family Clinic" not in seen[0].split("Question:")[0] and "enicillin" not in seen[0].split("Question:")[0]
 
 
 def test_pending_proposal_for_a_trashed_file_goes_stale(talaan_home):
@@ -107,7 +113,7 @@ def test_restore_file_of_a_trashed_folder_needs_the_folder_first(talaan_home):
     assert c.post(f"/trash/{file_tid}/restore").status_code == 200 and target in files(CHART)
 
 
-@pytest.mark.parametrize("path,code", [("../Case-2026-014_Dela-Cruz", 400), (".talaan", 400), ("", 422), ("missing.md", 404)])
+@pytest.mark.parametrize("path,code", [("../Lakbay-Logistics-Inc", 400), (".talaan", 400), ("", 422), ("missing.md", 404)])
 def test_bad_paths_are_refused(path, code):
     assert c.post(f"/folders/{CHART}/trash", json={"path": path}).status_code == code
 

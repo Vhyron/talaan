@@ -10,10 +10,10 @@ DEMO = Path(__file__).resolve().parents[2] / "demo-data"
 
 @pytest.fixture(autouse=True)
 def talaan_home(tmp_path, monkeypatch):
-    """Fresh ~/Talaan per test, seeded with the demo folders."""
+    """Fresh ~/Talaan per test, seeded with the demo Spaces."""
     folders = tmp_path / "folders"
-    for group in ("hr", "clinic"):
-        for src in (DEMO / group).iterdir():
+    for src in DEMO.iterdir():
+        if src.is_dir():
             shutil.copytree(src, folders / src.name)
     monkeypatch.setattr(config, "TALAAN_HOME", tmp_path)
     monkeypatch.setattr(config, "FOLDERS_DIR", folders)

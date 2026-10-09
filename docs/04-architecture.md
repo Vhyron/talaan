@@ -35,9 +35,12 @@ The index lets the app find the right passages fast. Each document is split into
 ```
 ~/Talaan/
   folders/
-    Case-2026-014_Dela-Cruz/      <- user files (plain Markdown, PDFs)
-      .talaan/index.db            <- this folder's index only
-    Chart_M-Reyes/
+    Lakbay-Logistics-Inc/         <- a Space: the sealed unit (plain Markdown, PDFs)
+      README.md                   <- what this Space is
+      policies/                   <- Space-level files
+      Case 2026-014 Dela Cruz/    <- subfolder = a chat scope, not a seal
+      .talaan/index.db            <- this Space's index only
+    Santos-Family-Clinic/
       .talaan/index.db
   app.db                          <- grants, audit log, saved chats (outside all folders)
 ```

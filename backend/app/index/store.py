@@ -10,6 +10,7 @@ import re
 import sqlite3
 import threading
 from collections import defaultdict
+from collections.abc import Sequence
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
@@ -197,31 +198,40 @@ def _keyword_ids(db: sqlite3.Connection, query: str, limit: int) -> list[int]:
     return [r[0] for r in db.execute("SELECT rowid FROM fts WHERE fts MATCH ? ORDER BY rank LIMIT ?", (match, limit))]
 
 
-def contains(folder_id: str, phrase: str) -> bool:
-    """Whether this folder's text contains the phrase (word for word, any case). For the
-    scope check (B4): a name in the question that appears nowhere in the folder means refuse."""
+def in_scope(path: str, only: Sequence[str] | None) -> bool:
+    """`only` is a chat scope inside the Space: Space-relative subfolders and files. None is the
+    whole Space."""
+    return only is None or any(path == p or path.startswith(p + "/") for p in only)
+
+
+def contains(folder_id: str, phrase: str, only: Sequence[str] | None = None) -> bool:
+    """Whether this folder's text (within `only`) contains the phrase (word for word, any case).
+    For the scope check (B4): a name in the question that appears nowhere in scope means refuse."""
     words = re.findall(r"\w+", phrase.lower())
     if not words:
         return False
     with closing(_db(folder_id)) as db:
-        return db.execute("SELECT 1 FROM fts WHERE fts MATCH ? LIMIT 1", (f'"{" ".join(words)}"',)).fetchone() is not None
+        rows = db.execute("SELECT c.path FROM fts JOIN chunks c ON c.id = fts.rowid WHERE fts MATCH ?",
+                          (f'"{" ".join(words)}"',))
+        return any(in_scope(path, only) for (path,) in rows)
 
 
-def retrieve(folder_id: str, query: str, k: int | None = 8) -> list[Hit]:
+def retrieve(folder_id: str, query: str, k: int | None = 8, only: Sequence[str] | None = None) -> list[Hit]:
     """The k best chunks for `query` from this folder only: embedding similarity (numpy) and
     FTS5 BM25, merged by reciprocal rank fusion and deduplicated by chunk. k=None returns
     every chunk, ranked: for small folders and questions that need the whole file set
     ("does anything contradict the allegation?" is reasoning, not lookup).
 
-    Takes a folder_id, never a path or a list of folders. If Ollama is down it falls back
-    to keyword search alone (similarity None).
+    Takes a folder_id, never a path or a list of folders; `only` narrows it to a chat scope
+    inside that folder. If Ollama is down it falls back to keyword search alone (similarity None).
     """
     with closing(_db(folder_id)) as db:
-        rows = {r[0]: r for r in db.execute("SELECT id, path, page, start_line, end_line, text, embedding FROM chunks")}
+        rows = {r[0]: r for r in db.execute("SELECT id, path, page, start_line, end_line, text, embedding FROM chunks")
+                if in_scope(r[1], only)}
         if not rows:
             return []
         everything, k = k is None, len(rows) if k is None else k
-        keyword = _keyword_ids(db, query, 2 * k)
+        keyword = [cid for cid in _keyword_ids(db, query, 4 * k if only else 2 * k) if cid in rows][: 2 * k]
 
     sims: dict[int, float] = {}
     embedded = [r for r in rows.values() if r[6] is not None]
@@ -258,13 +268,14 @@ def retrieve(folder_id: str, query: str, k: int | None = 8) -> list[Hit]:
     return hits
 
 
-def all_chunks(folder_id: str) -> list[Hit]:
-    """Every chunk of this folder in reading order (file, page, line), for whole-folder tasks
-    like the B5 timeline. Unranked: similarity None, score 0."""
+def all_chunks(folder_id: str, only: Sequence[str] | None = None) -> list[Hit]:
+    """Every chunk of this folder (within `only`) in reading order (file, page, line), for
+    whole-folder tasks like the B5 timeline. Unranked: similarity None, score 0."""
     with closing(_db(folder_id)) as db:
         rows = db.execute("SELECT path, start_line, end_line, text, page FROM chunks"
                           " ORDER BY path, COALESCE(page, 0), start_line, id").fetchall()
-    return [Hit(path, start, end, text, page, None, False, 0.0) for path, start, end, text, page in rows]
+    return [Hit(path, start, end, text, page, None, False, 0.0) for path, start, end, text, page in rows
+            if in_scope(path, only)]
 
 
 def file_chunks(folder_id: str, path: str) -> list[Hit]:

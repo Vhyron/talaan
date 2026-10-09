@@ -30,7 +30,7 @@ from app.llm.models import EMBED_MODEL
 from app.schemas import (
     FolderRename, GlobalAskRequest, PathRef, PathRename, TrashItem,
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
+    AppSettings, AskRequest, AskResponse, AuditEvent, ChatRename, ChatSession, ChatSessionSummary, DirCreate, FileEntry, Folder, FolderCreate, FolderRename, Grants, IndexStatus, LlmCall, ModelChoice,
     Outcome,
     Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
@@ -268,7 +268,7 @@ def home_chat() -> ChatSession | None:
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse:
     """Saved to a chat: `session_id` continues one, none starts a new one (returned in the response)."""
-    res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id)
+    res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, scope=body.scope)
     # First turn: title the chat after the answer is sent. Not after a refusal, which is decided in
     # code without the model, so the LLM log shows no model call for an out-of-scope question.
     if body.session_id is None and res.session_id and not res.refused:
@@ -285,7 +285,8 @@ def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
 
     def work() -> None:
         try:
-            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put)
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put,
+                              scope=body.scope)
             events.put({"type": "done", "response": res.model_dump(mode="json")})
         except OllamaError as e:
             events.put({"type": "error", "message": str(e)})
@@ -312,10 +313,11 @@ def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
 
 
 @app.post("/folders/{folder_id}/timeline")
-def timeline(folder_id: str, refresh: bool = False) -> TimelineResponse:
-    """Dated events and flags for human review, every one with sources. Cached per index
-    version and chat model; `refresh=true` rebuilds anyway."""
-    return case_timeline.build(_folder(folder_id), refresh)
+def timeline(folder_id: str, refresh: bool = False, scope: str | None = None) -> TimelineResponse:
+    """Dated events and flags for human review, every one with sources. `scope` is a subfolder
+    (e.g. one case in the Space). Cached per index version, chat model and scope; `refresh=true`
+    rebuilds anyway."""
+    return case_timeline.build(_folder(folder_id), refresh, folders.scope_dir(folder_id, scope))
 
 
 # --- Chat sessions (C8) -------------------------------------------------------

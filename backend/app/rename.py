@@ -95,8 +95,13 @@ def _update_proposals(folder_id: str, old: str, new: str) -> None:
 
 
 def _update_chats(folder_id: str, old: str, new: str) -> None:
-    """Saved chat sources: this folder's chats, and home-chat sources from this folder."""
+    """Saved chat sources: this folder's chats, and home-chat sources from this folder. A chat
+    scoped to a renamed subfolder (or one inside it) follows it."""
     with connect() as db:
+        for r in db.execute("SELECT id, scope FROM chat_sessions WHERE folder_id = ? AND scope IS NOT NULL",
+                            (folder_id,)).fetchall():
+            if moved := _moved(r["scope"], old, new):
+                db.execute("UPDATE chat_sessions SET scope = ? WHERE id = ?", (moved, r["id"]))
         rows = db.execute(
             "SELECT id, folder_id, response FROM chat_messages WHERE response IS NOT NULL AND folder_id IN (?, ?)",
             (folder_id, chats.ALL),

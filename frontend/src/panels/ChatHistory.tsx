@@ -122,7 +122,7 @@ export default function ChatHistory({ folderId, emptyText, activeId, activeCount
                       <span className="block text-xs text-muted">
                         {(() => {
                           const n = Math.ceil((s.id === activeId ? Math.max(activeCount, s.message_count) : s.message_count) / 2)
-                          return `${ago(s.updated_at)} · ${n} ${n === 1 ? 'question' : 'questions'}`
+                          return `${s.scope ? `${s.scope} · ` : ''}${ago(s.updated_at)} · ${n} ${n === 1 ? 'question' : 'questions'}`
                         })()}
                         {s.id === activeId ? ' · open now' : ''}
                       </span>

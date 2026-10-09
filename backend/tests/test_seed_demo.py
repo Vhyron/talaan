@@ -16,8 +16,11 @@ spec = importlib.util.spec_from_file_location("seed_demo", Path(__file__).parent
 seed = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(seed)
 
-F = "Case-2026-014_Dela-Cruz"
-SANTOS = "2026-09-13_interview_R-Santos.md"
+F = "Lakbay-Logistics-Inc"
+D = "Case 2026-014 Dela Cruz"
+SANTOS = f"{D}/2026-09-13_interview_R-Santos.md"
+ITEMS = f"{D}/2026-10-02_open-items.md"
+SPACES = ["Bayani-Retail-Corp", "Lakbay-Logistics-Inc", "Santos-Family-Clinic"]
 
 
 def run(*args):
@@ -26,16 +29,16 @@ def run(*args):
 
 def test_reset_restores_files(talaan_home):
     folder = talaan_home / "folders" / F
-    original = (seed.DEMO_DATA / "hr" / F / SANTOS).read_text(encoding="utf-8")
+    original = (seed.DEMO_DATA / F / SANTOS).read_text(encoding="utf-8")
     (folder / SANTOS).unlink()
-    (folder / "2026-10-02_open-items.md").write_text("edited in rehearsal", encoding="utf-8")
-    (folder / "2026-10-03_call.md").write_text("approved draft", encoding="utf-8")
+    (folder / ITEMS).write_text("edited in rehearsal", encoding="utf-8")
+    (folder / D / "2026-10-03_call.md").write_text("approved draft", encoding="utf-8")
 
     run("--reset")
 
     assert (folder / SANTOS).read_text(encoding="utf-8") == original
-    assert "Open Items" in (folder / "2026-10-02_open-items.md").read_text(encoding="utf-8")
-    assert not (folder / "2026-10-03_call.md").exists()
+    assert "Open Items" in (folder / ITEMS).read_text(encoding="utf-8")
+    assert not (folder / D / "2026-10-03_call.md").exists()
 
 
 def test_reset_clears_state_for_demo_folders_only(talaan_home):
@@ -57,10 +60,10 @@ def test_reset_clears_state_for_demo_folders_only(talaan_home):
 
 def test_reset_writes_folder_metadata(talaan_home):
     run("--reset")
-    meta = json.loads((talaan_home / "folders" / "Chart_M-Reyes" / ".talaan" / "folder.json").read_text(encoding="utf-8"))
-    assert meta["mode"] == "chart" and meta["name"]
+    meta = json.loads((talaan_home / "folders" / "Santos-Family-Clinic" / ".talaan" / "folder.json").read_text(encoding="utf-8"))
+    assert meta["name"] == "Santos Family Clinic"
     meta = json.loads((talaan_home / "folders" / F / ".talaan" / "folder.json").read_text(encoding="utf-8"))
-    assert meta == {**meta, "mode": "case", "name": "Case 2026-014 · Dela Cruz"}
+    assert meta == {**meta, "name": "Lakbay Logistics Inc."}
 
 
 def test_fresh_needs_confirmation(talaan_home):
@@ -74,7 +77,7 @@ def test_fresh_wipes_everything_then_seeds(talaan_home):
     log_event(F, "user", "question")
     run("--fresh", "--yes")
     names = sorted(p.name for p in (talaan_home / "folders").iterdir())
-    assert names == ["Case-2026-014_Dela-Cruz", "Case-2026-019_Villanueva", "Chart_A-Bautista", "Chart_M-Reyes"]
+    assert names == SPACES
     assert list_events(F) == []
 
 
@@ -83,3 +86,14 @@ def test_fresh_refuses_unexpected_home(talaan_home):
     with pytest.raises(SystemExit, match="Refusing to wipe"):
         run("--fresh", "--yes")
     assert (talaan_home / "my-thesis.docx").exists()
+
+
+def test_reset_removes_legacy_demo_folders(talaan_home):
+    for fid in seed.LEGACY:
+        (talaan_home / "folders" / fid).mkdir()
+        log_event(fid, "user", "question", reason="old demo")
+    (talaan_home / "folders" / "Case-2026-099").mkdir()
+    run("--reset")
+    names = sorted(p.name for p in (talaan_home / "folders").iterdir())
+    assert names == sorted([*SPACES, "Case-2026-099"])
+    assert all(list_events(fid) == [] for fid in seed.LEGACY)

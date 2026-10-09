@@ -8,8 +8,16 @@ from app.audit import log_event
 from app.main import app
 
 c = TestClient(app)
-F = "Case-2026-014_Dela-Cruz"
-DEFAULTS = {"read": "allow", "suggest_edits": "needs_approval", "create_drafts": "needs_approval", "delete": "never"}
+F = "Lakbay-Logistics-Inc"
+DEFAULTS = {"read": "allow", "suggest_edits": "needs_approval", "create_drafts": "needs_approval", "delete": "never",
+            "home_chat": False}
+
+
+def test_home_chat_toggle_is_logged():
+    assert c.put(f"/folders/{F}/grants", json={**DEFAULTS, "home_chat": True}).json()["home_chat"] is True
+    assert c.get(f"/folders/{F}/grants").json()["home_chat"] is True
+    [ev] = [e for e in c.get(f"/folders/{F}/audit").json() if e["action"] == "home_chat"]
+    assert (ev["actor"], ev["event"], ev["decision"]) == ("user", "grant_change", "on")
 
 
 def test_default_grants():
@@ -41,13 +49,13 @@ def test_grants_reject_unknown_values():
 
 def test_grants_are_per_folder():
     c.put(f"/folders/{F}/grants", json={**DEFAULTS, "read": "never"})
-    assert c.get("/folders/Chart_M-Reyes/grants").json() == DEFAULTS
+    assert c.get("/folders/Santos-Family-Clinic/grants").json() == DEFAULTS
 
 
 def test_audit_newest_first_and_scoped():
     log_event(F, "user", "question", reason="first")
     log_event(F, "model", "proposed_action", action="delete", path="x.md", model_tag="gemma4:e4b")
-    log_event("Chart_M-Reyes", "user", "question", reason="other folder")
+    log_event("Santos-Family-Clinic", "user", "question", reason="other folder")
     events = c.get(f"/folders/{F}/audit").json()
     assert [e["event"] for e in events] == ["proposed_action", "question"]
 

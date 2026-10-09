@@ -2,8 +2,9 @@
 
 export type Mode = 'case' | 'chart'
 
-export type Folder = { id: string; name: string; mode: Mode; created_at: string }
-export type FolderCreate = { name: string; mode: Mode }
+/** A Space: one sealed top-level folder. `mode` is legacy labelling, hidden while SHOW_MODE is off. */
+export type Folder = { id: string; name: string; mode: Mode | null; created_at: string }
+export type FolderCreate = { name: string; mode?: Mode | null }
 export type FileEntry = { path: string; size: number; mtime: string }
 
 export type ActionName = 'search' | 'read' | 'propose_edit' | 'create_draft' | 'delete'
@@ -16,7 +17,8 @@ export type Action =
   | { action: 'delete'; path: string; reason: string }
 
 export type Grant = 'allow' | 'needs_approval' | 'never'
-export type Grants = { read: Grant; suggest_edits: Grant; create_drafts: Grant; delete: Grant }
+export type Grants = { read: Grant; suggest_edits: Grant; create_drafts: Grant; delete: Grant; home_chat: boolean }
+export type GrantKey = Exclude<keyof Grants, 'home_chat'>
 
 export type Outcome = {
   status: 'executed' | 'pending' | 'blocked'
@@ -33,8 +35,11 @@ export type Source = { path: string; start: number; end: number; snippet: string
 
 /** An earlier chat turn, sent so follow-ups make sense. Context only, never a source. */
 export type Turn = { role: 'user' | 'assistant'; content: string }
-/** `path` is the file open in the viewer; the backend re-checks it against the folder. */
-export type AskRequest = { question: string; path?: string; history?: Turn[]; session_id?: string | null }
+/**
+ * `path` is the file open in the viewer (answers come from it only); the backend re-checks it.
+ * `scope` is a subfolder of the Space (null/"" = the whole Space), ignored when `path` is set.
+ */
+export type AskRequest = { question: string; path?: string; scope?: string | null; history?: Turn[]; session_id?: string | null }
 /** Lines from POST /ask/stream. `answer` is live text for display; `done` carries the final answer. */
 export type AskEvent =
   | { type: 'status'; text: string }
@@ -94,7 +99,8 @@ export type AuditEvent = {
   session_id: string | null
 }
 
-export type ChatSessionSummary = { id: string; title: string; created_at: string; updated_at: string; message_count: number }
+/** `scope`: the subfolder the chat was started in, null for the whole Space. */
+export type ChatSessionSummary = { id: string; title: string; created_at: string; updated_at: string; message_count: number; scope: string | null }
 /** A saved turn. `proposal_status` is the proposal's status now, not when it was proposed. */
 export type ChatMessage = {
   role: 'user' | 'assistant'

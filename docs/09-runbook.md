@@ -53,14 +53,14 @@ Talaan reads client folders from `TALAAN_HOME\folders`, default `C:\Users\<you>\
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\Talaan\folders" | Out-Null
-Copy-Item -Recurse demo-data\hr\*, demo-data\clinic\* "$HOME\Talaan\folders\"
+Get-ChildItem demo-data -Directory | Copy-Item -Recurse -Destination "$HOME\Talaan\folders\"
 ```
 
 ```bash
-mkdir -p ~/Talaan/folders && cp -r demo-data/hr/* demo-data/clinic/* ~/Talaan/folders/
+mkdir -p ~/Talaan/folders && cp -r demo-data/*/ ~/Talaan/folders/
 ```
 
-You should see `Case-2026-014_Dela-Cruz`, `Case-2026-019_Villanueva`, `Chart_A-Bautista` and `Chart_M-Reyes`.
+You should see three Spaces: `Lakbay-Logistics-Inc`, `Bayani-Retail-Corp` and `Santos-Family-Clinic`. `seed_demo.py --reset` also removes the four pre-Spaces demo folders (`Case-2026-014_Dela-Cruz` and so on) if they are still there.
 
 To keep data somewhere else, set `TALAAN_HOME` before starting the backend (e.g. `$env:TALAAN_HOME = "D:\talaan-data"`). The app creates `folders\` and `app.db` there.
 

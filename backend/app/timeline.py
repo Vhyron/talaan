@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 from datetime import date
+from pathlib import PurePosixPath
 
 from fastapi import HTTPException
 
@@ -251,13 +252,15 @@ def parse(data: object, chunks: list[index.Hit]) -> tuple[list[TimelineEvent], l
 # --- Build and cache ----------------------------------------------------------------
 
 
-def _cache_file(folder_id: str):
-    return folders.folder_root(folder_id) / ".talaan" / "timeline.json"
+def _cache_file(folder_id: str, scope: str | None = None):
+    """One cache per scope: the whole Space, or one subfolder (e.g. one case)."""
+    suffix = f"-{hashlib.sha1(scope.encode()).hexdigest()[:10]}" if scope else ""
+    return folders.folder_root(folder_id) / ".talaan" / f"timeline{suffix}.json"
 
 
-def _cached(folder_id: str, version: int, model: str) -> TimelineResponse | None:
+def _cached(folder_id: str, version: int, model: str, scope: str | None = None) -> TimelineResponse | None:
     try:
-        saved = json.loads(_cache_file(folder_id).read_text(encoding="utf-8"))
+        saved = json.loads(_cache_file(folder_id, scope).read_text(encoding="utf-8"))
         if (saved["version"], saved["model"], saved["prompt"]) == (version, model, PROMPT_ID):
             return TimelineResponse.model_validate(saved["response"])
     except (OSError, ValueError, KeyError, TypeError):
@@ -265,34 +268,38 @@ def _cached(folder_id: str, version: int, model: str) -> TimelineResponse | None
     return None
 
 
-def _save(folder_id: str, version: int, model: str, response: TimelineResponse) -> None:
+def _save(folder_id: str, version: int, model: str, response: TimelineResponse, scope: str | None = None) -> None:
     payload = {"version": version, "model": model, "prompt": PROMPT_ID, "response": response.model_dump(mode="json")}
-    _cache_file(folder_id).write_text(json.dumps(payload, indent=1), encoding="utf-8")
+    _cache_file(folder_id, scope).write_text(json.dumps(payload, indent=1), encoding="utf-8")
 
 
-def build(folder: Folder, refresh: bool = False) -> TimelineResponse:
+def build(folder: Folder, refresh: bool = False, scope: str | None = None) -> TimelineResponse:
+    """`scope` is a checked subfolder (folders.scope_dir), plus the Space README; None is the whole Space."""
     fid = folder.id
+    name = PurePosixPath(scope).name if scope else folder.name
+    readme = ("README.md",) if (folders.folder_root(fid) / "README.md").is_file() else ()
+    only = (scope, *readme) if scope else None
     if get_grants(fid).read == Grant.NEVER:
         log_event(fid, "user", "question", decision="never", reason="Build timeline: reading is turned off for this folder")
         raise HTTPException(403, "Reading is turned off for this folder.")
-    log_event(fid, "user", "question", reason="Build timeline")
+    log_event(fid, "user", "question", path=scope, reason="Build timeline")
 
     index.build_index(fid)  # incremental: a no-op unless files changed since the last build
     version, model = index.index_version(fid), selection.active_chat_model().tag
-    if not refresh and (hit := _cached(fid, version, model)):
+    if not refresh and (hit := _cached(fid, version, model, scope)):
         log_event(fid, "model", "answer", reason=f"Timeline (cached): {len(hit.events)} events, {len(hit.flags)} flags",
                   model_tag=model)
         return hit
 
-    chunks = index.all_chunks(fid)
+    chunks = index.all_chunks(fid, only)
     events: list[TimelineEvent] = []
     flags: list[TimelineFlag] = []
     dropped, fixed, answered_by, invalid = 0, 0, model, 0
     for batch in _batches(chunks) if chunks else []:
         passages = "\n\n".join(_passage(i + 1, chunks[i]) for i in batch)
         result = client.chat(
-            [{"role": "system", "content": SYSTEM.format(folder=folder.name)},
-             {"role": "user", "content": f"{passages}\n\nBuild the timeline of {folder.name}."}],
+            [{"role": "system", "content": SYSTEM.format(folder=name)},
+             {"role": "user", "content": f"{passages}\n\nBuild the timeline of {name}."}],
             schema=SCHEMA, think=THINK,
         )
         answered_by = result.model
@@ -308,5 +315,5 @@ def build(folder: Folder, refresh: bool = False) -> TimelineResponse:
     log_event(fid, "model", "answer", reason=f"Timeline: {len(events)} events, {len(flags)} flags{note}",
               model_tag=answered_by)
     if not invalid:  # a broken reply is not cached: the next request tries again
-        _save(fid, version, model, response)
+        _save(fid, version, model, response, scope)
     return response

@@ -1,4 +1,7 @@
-"""Client folders on disk: ~/Talaan/folders/<id>/ with a private .talaan/ inside."""
+"""Spaces on disk: ~/Talaan/folders/<id>/ with a private .talaan/ inside.
+
+A Space is the sealed unit. Its subfolders (cases, charts, policies) are chat scopes inside it.
+"""
 
 import json
 import re
@@ -14,6 +17,17 @@ from app.schemas import FileEntry, Folder, FolderCreate
 
 IMPORT_TYPES = {".md", ".txt", ".pdf"}
 META = "folder.json"
+# Every Space starts with a README saying what it is; the UI shows it on the Space's page and a
+# subfolder chat reads it alongside the subfolder (ask.scope_of).
+README = "README.md"
+README_TEMPLATE = """# {name}
+
+What this Space holds and how it is organised. The AI reads this file in every chat in this Space.
+
+- **Type:** (e.g. HR investigations, patient charts, client contracts)
+- **Subfolders:** (e.g. one per case, named "Case <year>-<number> <surname>")
+- **Handling:** (who may see these files)
+"""
 
 
 def _root() -> Path:
@@ -25,17 +39,13 @@ def _meta(path: Path) -> Folder:
     meta_file = path / ".talaan" / META
     if meta_file.is_file():
         return Folder(id=path.name, **json.loads(meta_file.read_text(encoding="utf-8")))
-    # Folders copied in by hand (e.g. demo data) have no metadata yet.
-    mode = "chart" if path.name.lower().startswith("chart") else "case"
-    name = path.name.replace("_", " · ", 1).replace("-", " ") if mode == "chart" else _case_name(path.name)
-    return Folder(id=path.name, name=name, mode=mode, created_at=datetime.fromtimestamp(path.stat().st_ctime))
+    # Spaces copied in by hand (e.g. demo data) have no metadata yet: Lakbay-Logistics-Inc -> Lakbay Logistics Inc
+    return Folder(id=path.name, name=path.name.replace("-", " "), created_at=datetime.fromtimestamp(path.stat().st_ctime))
 
 
-def _case_name(folder_id: str) -> str:
-    """Case-2026-014_Dela-Cruz -> Case 2026-014 · Dela Cruz"""
-    head, _, who = folder_id.partition("_")
-    head = head.replace("-", " ", 1)
-    return f"{head} · {who.replace('-', ' ')}" if who else head
+def _write_meta(path: Path, folder: Folder) -> None:
+    (path / ".talaan").mkdir(exist_ok=True)
+    (path / ".talaan" / META).write_text(folder.model_dump_json(exclude={"id"}), encoding="utf-8")
 
 
 def folder_root(folder_id: str) -> Path:
@@ -65,11 +75,27 @@ def create_folder(body: FolderCreate) -> Folder:
     path = _root() / folder_id
     if path.exists():
         raise HTTPException(409, "A folder with that name already exists")
-    (path / ".talaan").mkdir(parents=True)
-    meta = {"name": body.name, "mode": body.mode, "created_at": datetime.now().isoformat()}
-    (path / ".talaan" / META).write_text(json.dumps(meta), encoding="utf-8")
+    path.mkdir(parents=True)
+    _write_meta(path, Folder(id=folder_id, name=body.name, mode=body.mode, created_at=datetime.now()))
+    (path / README).write_text(README_TEMPLATE.format(name=body.name), encoding="utf-8")
     init_grants(folder_id)
     return _meta(path)
+
+
+def scope_dir(folder_id: str, scope: str | None) -> str | None:
+    """A chat scope: an existing subfolder of this Space, Space-relative. None for the whole Space.
+    Same checks as every other path (no ../, symlinks out or .talaan/); a bad scope is refused."""
+    clean = clean_rel_path(scope or "")
+    if not clean:
+        return None
+    root = folder_root(folder_id)
+    try:
+        target = resolve_in_folder(root, clean)
+    except PathOutsideFolder:
+        raise HTTPException(403, "That path is outside this Space")
+    if not target.is_dir():
+        raise HTTPException(404, f"No subfolder {clean!r} in this Space")
+    return rel(root, target)
 
 
 def list_files(folder_id: str) -> list[FileEntry]:

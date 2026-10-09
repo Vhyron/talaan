@@ -10,8 +10,8 @@ from app.index.chunk import MAX_TOKENS, chunk_lines, tokens
 from app.index.extract import lines_of
 
 DEMO = Path(__file__).resolve().parents[2] / "demo-data"
-DEMO_FILES = sorted(DEMO.glob("*/*/*.md"))
-INJECTION = "hr/Case-2026-014_Dela-Cruz/2026-09-26_email_from-representative.md"
+DEMO_FILES = sorted(DEMO.glob("*/**/*.md"))
+INJECTION = "Lakbay-Logistics-Inc/Case 2026-014 Dela Cruz/2026-09-26_email_from-representative.md"
 
 
 def _check_positions(chunks, lines):

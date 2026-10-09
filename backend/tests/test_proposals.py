@@ -11,8 +11,9 @@ from app.policy.grants import set_grants
 from app.schemas import Grant, Grants
 
 c = TestClient(app)
-F = "Case-2026-014_Dela-Cruz"
-ITEMS = "2026-10-02_open-items.md"
+F = "Lakbay-Logistics-Inc"
+D = "Case 2026-014 Dela Cruz"
+ITEMS = f"{D}/2026-10-02_open-items.md"
 
 
 @pytest.fixture

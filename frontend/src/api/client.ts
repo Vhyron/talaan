@@ -103,7 +103,9 @@ export const api = {
   renameChat: (id: string | null, sid: string, title: string) =>
     send<ChatSessionSummary>('PATCH', `${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { title }),
   deleteChat: (id: string | null, sid: string) => req(`${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
-  timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
+  /** `scope`: a subfolder of the Space; omitted for the whole Space. */
+  timeline: (id: string, scope?: string) =>
+    send<TimelineResponse>('POST', `${f(id)}/timeline${scope ? `?scope=${encodeURIComponent(scope)}` : ''}`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),
   setGrants: (id: string, grants: Grants) => send<Grants>('PUT', `${f(id)}/grants`, grants),

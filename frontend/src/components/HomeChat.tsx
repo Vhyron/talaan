@@ -60,7 +60,7 @@ function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
         onChange={(e) => setQuestion(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
         rows={rows}
-        aria-label="Ask across all folders"
+        aria-label="Ask across all Spaces"
         placeholder={placeholder}
         className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none"
       />
@@ -143,16 +143,16 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
   return (
     <section
       ref={section}
-      aria-label="Ask across all folders"
+      aria-label="Ask across all Spaces"
       className={`flex scroll-mt-6 flex-col rounded-2xl border border-line bg-panel/60 p-4 sm:scroll-mt-8 sm:p-5 ${
         expanded ? 'h-[calc(100dvh-6.5rem)] min-h-[24rem] sm:h-[calc(100dvh-7.5rem)]' : ''
       }`}
     >
       <div className="flex shrink-0 flex-wrap items-start gap-x-3 gap-y-1">
         <div className="mr-auto min-w-0">
-          <h2 className="flex items-center gap-2 font-bold"><Library size={17} className="text-brand-text" /> Ask across all folders</h2>
+          <h2 className="flex items-center gap-2 font-bold"><Library size={17} className="text-brand-text" /> Ask across all Spaces</h2>
           <p className={`mt-0.5 text-xs text-muted ${expanded ? 'hidden sm:block' : ''}`}>
-            Reads every folder you allow the AI to read. Each answer names the folder it came from; folders set to Read: Never are skipped.
+            Reads only the Spaces you include (Permissions › Include in home chat; off by default). Each answer names the Space it came from.
           </p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-brand-text">
@@ -170,7 +170,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
               onClick={() => (history && hasThread ? setHistory(false) : setHistory(true))}
               aria-pressed={history}
               className={`${toolBtn} ${history ? 'bg-white text-ink' : ''}`}
-              title="Saved chats across all folders"
+              title="Saved chats across all Spaces"
             >
               <Clock size={12} /> {savedLabel}
             </button>
@@ -181,14 +181,14 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
               onClick={() => document.getElementById('folders')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               className={`${toolBtn} ml-auto`}
             >
-              Your folders <ArrowDown size={12} />
+              Your Spaces <ArrowDown size={12} />
             </button>
           </div>
           {history ? (
             <div className="-mx-4 flex min-h-0 flex-1 flex-col">
               <ChatHistory
                 folderId={null}
-                emptyText="No saved chats yet. Every question you ask across all folders is saved here."
+                emptyText="No saved chats yet. Every question you ask across all Spaces is saved here."
                 activeId={sessionId}
                 activeCount={messages.filter((m) => m.role !== 'error').length}
                 onOpen={(sid) => { openHomeChat(sid).catch(() => {}); setHistory(false) }}
@@ -211,7 +211,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
             )}
             {busy && (
               <div className="chat-in flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-muted">
-                <Mascot pose="search" className="h-12 w-8" /> Searching every folder on this laptop… {elapsed}s
+                <Mascot pose="search" className="h-12 w-8" /> Searching every Space on this laptop… {elapsed}s
               </div>
             )}
           </div>

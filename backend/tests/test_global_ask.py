@@ -11,9 +11,31 @@ from app.policy.grants import set_grants
 from app.schemas import Grant, Grants
 
 c = TestClient(app)
-CASE = "Case-2026-014_Dela-Cruz"
-CHART = "Chart_M-Reyes"
-VILLA = "Case-2026-019_Villanueva"
+# Three Spaces: the home chat reads across them (each is still its own sealed folder).
+CASE = "Lakbay-Logistics-Inc"
+CHART = "Santos-Family-Clinic"
+VILLA = "Bayani-Retail-Corp"
+CASE_NAME, CHART_NAME, VILLA_NAME = "Lakbay Logistics Inc", "Santos Family Clinic", "Bayani Retail Corp"
+
+
+@pytest.fixture(autouse=True)
+def included(talaan_home):
+    """The home chat reads only Spaces the user included (off by default): include the demo ones."""
+    for fid in (CASE, CHART, VILLA):
+        set_grants(fid, Grants(home_chat=True))
+
+
+def test_spaces_are_left_out_of_the_home_chat_by_default(model):
+    for fid in (CASE, CHART, VILLA):
+        set_grants(fid, Grants())
+    r = ask("Which clients have a penicillin allergy?")
+    assert r["refused"] and r["answer"] == global_ask.NO_SPACES and model.calls == []
+
+
+def test_only_included_spaces_are_searched(model):
+    set_grants(CHART, Grants())  # the clinic is not included
+    ask("penicillin allergy")
+    assert "Santos Family Clinic" not in model.calls[0][1]["content"].split("Question:")[0]
 
 
 @pytest.fixture
@@ -38,12 +60,12 @@ def doc_ids(prompt: str, folder_name: str) -> list[int]:
 
 
 def test_answers_from_several_folders_with_tagged_sources(model):
-    # Penicillin is in Chart M Reyes; the badge log is in Case 2026-014.
+    # Penicillin is in the clinic (Chart M Reyes); the badge log is in Lakbay (Case 2026-014).
     model.reply = {"answer": "x", "refused": False}
     ask("penicillin allergy and badge entry")
     prompt = model.calls[0][1]["content"]
-    case_s, chart_s = doc_ids(prompt, "Case 2026-014 · Dela Cruz"), doc_ids(prompt, "Chart · M Reyes")
-    assert case_s and chart_s, "both folders should contribute passages"
+    case_s, chart_s = doc_ids(prompt, CASE_NAME), doc_ids(prompt, CHART_NAME)
+    assert case_s and chart_s, "both Spaces should contribute passages"
 
     model.reply = {"answer": f"Penicillin allergy [S{chart_s[0]}]. Badge entry [S{case_s[0]}].", "refused": False}
     r = ask("penicillin allergy and badge entry")
@@ -52,20 +74,21 @@ def test_answers_from_several_folders_with_tagged_sources(model):
 
 
 def test_catalogue_lists_folders_and_files(model):
-    model.reply = {"answer": "You have four folders.", "refused": False}
+    model.reply = {"answer": "You have three Spaces.", "refused": False}
     ask("Which folders do I have?")
     prompt = model.calls[0][1]["content"]
     assert "Folders on this laptop:" in prompt
-    assert "Case 2026-019 · Villanueva (case" in prompt and "attendance-summary.md" in prompt
+    assert f"- {VILLA_NAME} (" in prompt and "attendance-summary.md" in prompt
+    assert f"- {CASE_NAME} (" in prompt and f"- {CHART_NAME} (" in prompt
 
 
 def test_read_never_folder_is_not_searched(model):
-    set_grants(VILLA, Grants(read=Grant.NEVER))
+    set_grants(VILLA, Grants(read=Grant.NEVER, home_chat=True))  # included, but Read is Never
     model.reply = {"answer": "x", "refused": False}
     ask("Ana Villanueva tardiness attendance")
     prompt = model.calls[0][1]["content"]
     before_question = prompt.split("Question:")[0]
-    assert "Case 2026-019" not in before_question and "attendance-summary.md" not in before_question
+    assert VILLA_NAME not in before_question and "attendance-summary.md" not in before_question
     assert all(e["event"] != "question" for e in c.get(f"/folders/{VILLA}/audit").json())
 
 

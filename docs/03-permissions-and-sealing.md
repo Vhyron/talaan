@@ -4,8 +4,10 @@ This is our core strength. The rule: **the model only proposes; a deterministic 
 
 ## Concepts
 
-- **Folder:** one client. Called a *Case* (HR) or a *Chart* (clinic). One folder on disk, one index.
-- **Grant:** what the AI may do in that folder.
+- **Space:** the sealed unit. One top-level folder on disk, one index, one set of grants, one audit log. The user names it after what it holds (a company, a clinic). Its `README.md` says what the Space is.
+- **Subfolder:** a case, chart or policy set inside a Space. Not a separate seal: a **chat scope**.
+- **Chat scope:** what one chat can see, set by where it starts. From the Space: the whole Space. From a subfolder: that subfolder plus the Space's `README.md`. With a file open: only that file. Retrieval, the name check and the refusal text all use the scope (`Scope` in `backend/app/ask.py`, `only=` in `backend/app/index/store.py`).
+- **Grant:** what the AI may do in that Space.
 - **Action:** a structured request from the model, such as reading a file or proposing an edit.
 - **Decision:** Allow, Needs approval, or Never.
 
@@ -44,7 +46,7 @@ Allowed `action` values: `search`, `read`, `propose_edit`, `create_draft`, `dele
 4. **The model receives only retrieved chunks from the open folder**, tagged with file name and position for citations.
 5. **Approvals are made by the user in the UI**, never by the model. Approving re-checks the grant and the path, and refuses if the file changed since the proposal was made.
 6. **After any write, the folder is re-indexed.** An executed edit, draft, transcript or import triggers a refresh of that folder's index, so the next question can cite the new content.
-7. **The home-page chat is the one cross-folder reader, and it is read-only.** It searches every folder whose Read grant is not Never, tags each passage with its folder, makes no action call (nothing can be edited, drafted or deleted from it), and writes the question and answer to the audit log of every folder whose passages were shown to the model. Folder chats stay sealed to their own folder.
+7. **The home-page chat is the one cross-folder reader, and it is read-only.** It searches only the Spaces the user included in it (the per-Space "Include in home chat" permission, `Grants.home_chat`, **off by default** and changed only in the UI, audited as a `grant_change`) whose Read grant is not Never, tags each passage with its Space, makes no action call (nothing can be edited, drafted or deleted from it), and writes the question and answer to the audit log of every folder whose passages were shown to the model. Folder chats stay sealed to their own folder.
 8. **Renaming is the user's, never the model's.** There is no rename action in the schema. Renaming a folder changes only its display name, so its id (and its grants, audit log and chat) stays. Renaming a file or subfolder stays inside the folder (same checks as any path), updates pending proposals and saved chat sources that point at it, re-indexes, and is audited. Old audit entries are never rewritten; the rename entry links old and new paths.
 9. **Deleting by the user goes to the Trash.** Files, subfolders and whole folders the user deletes from the UI move to `TALAAN_HOME/trash/`, outside every folder, where no index or chat can read them; they can be restored (never over something new at the same path) or deleted for good. Pending proposals for a trashed path become stale. Grants, the audit log and saved chats are not deleted with a folder. Each move, restore and permanent delete is audited. This is separate from the model's `delete` action, which stays a proposal under the Delete grant (Never by default).
 10. **Edits and drafts only write `.md` and `.txt` files.** An edit or draft aimed at a PDF or any other type is blocked, so a text edit can never overwrite a binary file.
@@ -78,12 +80,12 @@ The log is shown per folder in the UI and can be exported.
 
 ## Scope refusal
 
-Refuse with **"I can only see {folder name}."**, e.g. "I can only see Case 2026-014 · Dela Cruz" or "I can only see Chart · M Reyes". The text comes from the open folder's name, never hardcoded. Don't guess and don't search elsewhere.
+Refuse with **"I can only see {scope name}."**: the Space, subfolder or file the chat is scoped to, e.g. "I can only see Case 2026-014 Dela Cruz." or "I can only see Santos Family Clinic". The text comes from the open Space or subfolder's name, never hardcoded. Don't guess and don't search elsewhere.
 
 Refuse when **either** check fires. Both run in code before the model writes an answer:
 
 1. **Nothing relevant retrieved.** The best chunk's similarity is below a threshold (`MIN_SCORE = 0.45` in `backend/app/ask.py`, measured in B3 with `qwen3-embedding:0.6b`: answerable questions scored 0.46–0.67, Q4 scored 0.44) and keyword search has no hits. The gap is thin, so the name check below does most of the work.
-2. **A name that isn't in this folder.** Capitalised names in the question (e.g. "Ana Villanueva", "A. Bautista") are checked against this folder's text with keyword search. If a name appears nowhere in the folder, refuse, even if other words in the question match. Each capitalised word is checked on its own ("A. Bautista" checks "Bautista"); the question's first word, months, weekdays and common question words are skipped.
+2. **A name that isn't in this scope.** Capitalised names in the question (e.g. "Ana Villanueva", "A. Bautista") are checked against the chat scope's text with keyword search (a name elsewhere in the same Space still refuses from a subfolder chat). If a name appears nowhere in the folder, refuse, even if other words in the question match. Each capitalised word is checked on its own ("A. Bautista" checks "Bautista"); the question's first word, months, weekdays and common question words are skipped.
 
 Retrieval always returns its closest chunks, so the threshold is what stops a question about Villanueva being answered from loosely related Dela Cruz text. The model is also told to refuse if the sources don't answer the question, but that is a second line of defense, not the main check.
 

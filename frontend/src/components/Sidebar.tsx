@@ -1,9 +1,10 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, Trash2, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, Trash2, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
+import { SHOW_MODE } from '../lib/folderContext'
 import { useNav } from '../lib/nav'
 import { useTree } from '../lib/tree'
 import { useImportDialog } from '../lib/importDialog'
@@ -57,17 +58,18 @@ function useSidebarWidth(): [number, (e: ReactPointerEvent) => void] {
   return [width, start]
 }
 
-const GROUPS: { mode: Mode; label: string }[] = [
-  { mode: 'case', label: 'HR cases' },
-  { mode: 'chart', label: 'Clinic charts' },
-]
+const GROUPS: { mode: Mode | null; label: string }[] = SHOW_MODE
+  ? [{ mode: 'case', label: 'HR cases' }, { mode: 'chart', label: 'Clinic charts' }, { mode: null, label: 'Spaces' }]
+  : [{ mode: null, label: 'Spaces' }]
 
 /** Folder tree. Any number of folders can be expanded; the active one is highlighted.
  * Inline from `lg` up; below that it's a drawer opened from the top bar. */
-export default function Sidebar({ folders, error, activeId, currentPath, onOpenFile }: {
+export default function Sidebar({ folders, error, activeId, activeDir, currentPath, onOpenFile }: {
   folders: Folder[]
   error: string | null
   activeId?: string
+  /** The subfolder whose overview is open in the active Space ("" = the Space itself). */
+  activeDir?: string
   currentPath?: string
   /** Opens a file in the active folder (other folders navigate there first). */
   onOpenFile?: (path: string) => void
@@ -85,6 +87,11 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
     nav.setOpen(false)
     // Clicking a folder (even the one you're in) shows its overview of files.
     navigate(`/folders/${encodeURIComponent(f.id)}`, { state: { overview: true } })
+  }
+
+  function openDir(folderId: string, dir: string) {
+    nav.setOpen(false)
+    navigate(`/folders/${encodeURIComponent(folderId)}`, { state: { overview: true, dir } })
   }
 
   function openFile(folderId: string, path: string) {
@@ -112,7 +119,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
           onClick={() => importDialog.open()}
           className="mt-auto grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink"
           aria-label="Import folder"
-          title="Import folder (new Case/Chart)"
+          title="Import folder (new Space)"
         >
           <FolderInput size={17} />
         </button>
@@ -133,7 +140,16 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
         className="absolute inset-y-0 -right-1 z-10 hidden w-2 cursor-col-resize hover:bg-brand/20 active:bg-brand/30 lg:block"
       />
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4 lg:h-10 lg:pr-1.5 lg:pl-3">
-        <span className="font-bold lg:text-[11px] lg:font-semibold lg:tracking-[0.16em] lg:text-muted lg:uppercase">Folders</span>
+        <span className="font-bold lg:text-[11px] lg:font-semibold lg:tracking-[0.16em] lg:text-muted lg:uppercase">Spaces</span>
+        <button
+          onClick={tree.collapseAll}
+          disabled={tree.expanded.size === 0}
+          className="ml-auto grid h-9 w-9 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent lg:h-8 lg:w-8"
+          aria-label="Collapse all folders"
+          title="Collapse all folders"
+        >
+          <ChevronsDownUp size={16} />
+        </button>
         <button onClick={() => nav.setOpen(false)} className="grid h-9 w-9 place-items-center rounded-md hover:bg-panel lg:hidden" aria-label="Close folders">
           <X size={18} />
         </button>
@@ -149,17 +165,17 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
       <nav className="min-h-0 flex-1 overflow-y-auto p-3" aria-label="Folders">
         {error && <p className="p-2 text-red-700">Backend unreachable: {error}</p>}
         {GROUPS.map(({ mode, label }) => {
-          const group = folders.filter((f) => f.mode === mode)
+          const group = SHOW_MODE ? folders.filter((f) => (f.mode ?? null) === mode) : folders
           if (!group.length) return null
           return (
-            <div key={mode} className="mb-4">
-              <p className="eyebrow px-2 pb-2">{label}</p>
+            <div key={mode ?? 'spaces'} className="mb-4">
+              {SHOW_MODE && <p className="eyebrow px-2 pb-2">{label}</p>}
               {group.map((f) => {
                 const expanded = tree.expanded.has(f.id)
                 const active = f.id === activeId
                 return (
                   <div key={f.id}>
-                    <Row depth={0} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><MoveToTrash kind="folder" folderId={f.id} path="" name={f.name} active={active} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
+                    <Row depth={0} selected={active && activeDir === ''} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><MoveToTrash kind="folder" folderId={f.id} path="" name={f.name} active={active} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
                       <button
                         onClick={() => tree.toggle(f.id)}
                         className="grid h-6 w-5 shrink-0 place-items-center rounded hover:bg-panel"
@@ -172,13 +188,20 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
                         onClick={() => openFolder(f)}
                         className={`flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug ${active ? 'font-semibold' : ''}`}
                         aria-current={active ? 'page' : undefined}
+                        title={f.name}
                       >
                         {expanded ? <FolderOpen size={15} className="mt-0.5 shrink-0" /> : <FolderIcon size={15} className="mt-0.5 shrink-0" />}
-                        <span className="line-clamp-2 break-words" title={f.name}>{f.name}</span>
+                        <span className="line-clamp-2 break-words">{f.name}</span>
                       </button>
                     </Row>
                     {expanded && (
-                      <FolderTree folderId={f.id} currentPath={active ? currentPath : undefined} onOpenFile={(p) => openFile(f.id, p)} />
+                      <FolderTree
+                        folderId={f.id}
+                        currentPath={active ? currentPath : undefined}
+                        activeDir={active ? activeDir : undefined}
+                        onOpenFile={(p) => openFile(f.id, p)}
+                        onOpenDir={(d) => openDir(f.id, d)}
+                      />
                     )}
                   </div>
                 )
@@ -198,10 +221,10 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
         <button
           onClick={() => { nav.setOpen(false); importDialog.open() }}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
-          title="Create a new Case or Chart from a folder on this computer"
+          title="Create a new Space from a folder on this computer"
         >
           <FolderInput size={15} /> Import folder
-          <span className="ml-auto text-[11px] font-normal text-muted">new Case/Chart</span>
+          <span className="ml-auto text-[11px] font-normal text-muted">new Space</span>
         </button>
       </div>
     </aside>
@@ -245,49 +268,65 @@ function buildTree(dirs: string[], files: string[]): Node {
 }
 
 /** One expanded folder: fetches its files and subfolders, refetching when anything changes. */
-function FolderTree({ folderId, currentPath, onOpenFile }: { folderId: string; currentPath?: string; onOpenFile: (path: string) => void }) {
+type TreeProps = {
+  folderId: string
+  currentPath?: string
+  activeDir?: string
+  onOpenFile: (path: string) => void
+  onOpenDir: (dir: string) => void
+}
+
+function FolderTree(props: TreeProps) {
+  const { folderId } = props
   const tree = useTree()
   const [root, setRoot] = useState<Node | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([api.files(folderId), api.dirs(folderId)])
-      .then(([files, dirs]) => { setRoot(buildTree(dirs, files.map((f) => f.path))); setError(null) })
+      // The Space README is shown on the Space's overview, so it is not listed as a file here.
+      .then(([files, dirs]) => { setRoot(buildTree(dirs, files.map((f) => f.path).filter((p) => p !== 'README.md'))); setError(null) })
       .catch((e) => setError(e.message))
   }, [folderId, tree.version])
 
   if (error) return <p className="py-1 pl-8 text-xs text-red-700">{error}</p>
   if (!root) return <p className="py-1 pl-8 text-xs text-muted">Loading…</p>
   if (!root.dirs.length && !root.files.length) return <p className="py-1 pl-8 text-xs text-muted">Empty: import files or add a subfolder.</p>
-  return <Children folderId={folderId} node={root} depth={1} currentPath={currentPath} onOpenFile={onOpenFile} />
+  return <Children {...props} node={root} depth={1} />
 }
 
-function Children({ folderId, node, depth, currentPath, onOpenFile }: {
-  folderId: string; node: Node; depth: number; currentPath?: string; onOpenFile: (path: string) => void
-}) {
+function Children({ node, depth, ...props }: TreeProps & { node: Node; depth: number }) {
+  const { folderId, currentPath, activeDir, onOpenFile, onOpenDir } = props
   const tree = useTree()
   return (
     <>
       {node.dirs.map((d) => {
         const key = `${folderId}/${d.path}`
-        const open = !tree.collapsedDirs.has(key)
+        const open = tree.dirOpen(key)
         return (
           <div key={d.path}>
-            <Row depth={depth} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><MoveToTrash kind="subfolder" folderId={folderId} path={d.path} name={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
+            <Row depth={depth} selected={d.path === activeDir} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><MoveToTrash kind="subfolder" folderId={folderId} path={d.path} name={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
               <button
                 onClick={() => tree.toggleDir(key)}
-                className="flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug"
+                className="grid h-6 w-4 shrink-0 place-items-center self-start rounded hover:bg-white"
+                aria-label={`${open ? 'Collapse' : 'Expand'} ${d.name}`}
                 aria-expanded={open}
-                title={d.path}
               >
-                {open ? <ChevronDown size={13} className="mt-0.5 shrink-0" /> : <ChevronRight size={13} className="mt-0.5 shrink-0" />}
+                {open ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              </button>
+              <button
+                onClick={() => onOpenDir(d.path)}
+                className="flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug"
+                aria-current={d.path === activeDir ? 'page' : undefined}
+                title={`Open ${d.path}: chat about this subfolder only`}
+              >
                 {open ? <FolderOpen size={14} className="mt-0.5 shrink-0" /> : <FolderIcon size={14} className="mt-0.5 shrink-0" />}
                 <span className="line-clamp-2 break-words">{d.name}</span>
               </button>
             </Row>
             {open && (
               d.dirs.length || d.files.length
-                ? <Children folderId={folderId} node={d} depth={depth + 1} currentPath={currentPath} onOpenFile={onOpenFile} />
+                ? <Children {...props} node={d} depth={depth + 1} />
                 : <p className="py-1 text-xs text-muted" style={{ paddingLeft: `${1.6 + (depth + 1) * 0.9}rem` }}>Empty</p>
             )}
           </div>
@@ -308,6 +347,10 @@ function Children({ folderId, node, depth, currentPath, onOpenFile }: {
     </>
   )
 }
+
+// Space is always reserved and the buttons only fade in, so hovering a row never
+// narrows its label (which made long names re-wrap and the tree jump).
+const actionBtn = 'grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100'
 
 /** "New subfolder" and "Import here" for a folder (dir "") or one of its subfolders. */
 function DirActions({ folderId, dir, label }: { folderId: string; dir: string; label?: string }) {
@@ -369,9 +412,7 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
     }
   }
 
-  // Space is always reserved and the buttons only fade in, so hovering a row never
-  // narrows its label (which made long names re-wrap and the tree jump).
-  const btn = 'grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100'
+  const btn = actionBtn
   return (
     <>
       <button onClick={() => { setNaming(true); setNote(null) }} className={btn} aria-label={`New subfolder in ${where}`} title="New subfolder">

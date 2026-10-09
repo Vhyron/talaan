@@ -6,7 +6,7 @@ import SourceChip from '../components/SourceChip'
 import Mascot from '../components/Mascot'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
-import { useFolder } from '../lib/folderContext'
+import { chatScope, useFolder } from '../lib/folderContext'
 import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
 import { movedPath, onRenamed } from '../lib/renamed'
 import ChatHistory from './ChatHistory'
@@ -26,34 +26,38 @@ const withoutMarkers = (text: string) => text.replace(/\s*\[S[\d,;\sS]*\]?/g, ''
 type Chat = { sessionId: string | null; messages: Msg[]; busy: boolean; live?: Live }
 const EMPTY: Chat = { sessionId: null, messages: [], busy: false }
 
-// The open chat per folder for this browser tab, so switching cases or charts and coming back
-// shows it again (like tabsByFolder in FolderPage). An answer that arrives while another folder
-// is open lands here too.
+// The open chat per Space and scope (whole Space, a subfolder, or one file) for this browser tab,
+// so switching away and coming back shows it again (like tabsByFolder in FolderPage). An answer
+// that arrives after you moved to another scope lands in the chat it was asked in.
 const chatByFolder = new Map<string, Chat>()
 
-function useFolderChat(folderId: string) {
-  const [chat, setChat] = useState<Chat>(() => chatByFolder.get(folderId) ?? EMPTY)
+function useFolderChat(key: string) {
+  const [, rerender] = useState(0)
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true
     return () => { mounted.current = false }
   }, [])
-  const update = useCallback((fn: (c: Chat) => Chat) => {
-    const next = fn(chatByFolder.get(folderId) ?? EMPTY)
-    chatByFolder.set(folderId, next)
-    if (mounted.current) setChat(next)
-  }, [folderId])
-  // Sources in the chat follow a file rename (the server already updated the saved chats).
+  const put = useCallback((k: string, next: Chat) => {
+    chatByFolder.set(k, next)
+    if (mounted.current) rerender((n) => n + 1)
+  }, [])
+  const update = useCallback((fn: (c: Chat) => Chat) => put(key, fn(chatByFolder.get(key) ?? EMPTY)), [key, put])
+  // Sources in every chat of this Space follow a file rename (the server already updated the saved chats).
+  const folderId = key.split('::')[0]
   useEffect(() => onRenamed(({ folderId: fid, from, to }) => {
     if (fid !== folderId) return
-    update((c) => ({
-      ...c,
-      messages: c.messages.map((m) => m.role !== 'assistant' ? m : {
-        ...m, res: { ...m.res, sources: m.res.sources.map((src) => ({ ...src, path: movedPath(src.path, from, to) })) },
-      }),
-    }))
-  }), [folderId, update])
-  return [chat, update] as const
+    for (const [k, c] of chatByFolder) {
+      if (!k.startsWith(`${fid}::`)) continue
+      put(k, {
+        ...c,
+        messages: c.messages.map((m) => m.role !== 'assistant' ? m : {
+          ...m, res: { ...m.res, sources: m.res.sources.map((src) => ({ ...src, path: movedPath(src.path, from, to) })) },
+        }),
+      })
+    }
+  }), [folderId, put])
+  return [chatByFolder.get(key) ?? EMPTY, update, put] as const
 }
 
 function fromSession(s: ChatSession): Msg[] {
@@ -78,8 +82,6 @@ function historyOf(messages: Msg[]): Turn[] {
   return turns.slice(-HISTORY_TURNS)
 }
 
-const basename = (path: string) => path.split('/').pop() ?? path
-
 /** Turn "… [S1] … [S2]" into text with inline source chips. */
 function withChips(answer: string, sources: Source[]): ReactNode[] {
   return answer.split(/(\[S\d+\])/g).map((part, i) => {
@@ -90,9 +92,10 @@ function withChips(answer: string, sources: Source[]): ReactNode[] {
 }
 
 export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
-  const { folder, currentPath, version, bump } = useFolder()
+  const { folder, currentPath, dir, openDir, version, bump } = useFolder()
   const index = useIndexStatus()
-  const [chat, update] = useFolderChat(folder.id)
+  const scope = chatScope(currentPath, dir)
+  const [chat, update, put] = useFolderChat(`${folder.id}::${scope.key}`)
   const { messages, busy, sessionId } = chat
   const [question, setQuestion] = useState('')
   const [view, setView] = useState<'chat' | 'history'>('chat')
@@ -119,14 +122,16 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     return () => ro.disconnect()
   }, [view])
 
-  // An empty chat offers to continue the most recent saved one.
+  // An empty chat offers to continue the most recent saved one started in this scope.
   const empty = messages.length === 0
   useEffect(() => {
     if (!empty) return
     let live = true
-    api.chats(folder.id).then((list) => live && setLast(list[0] ?? null)).catch(() => live && setLast(null))
+    api.chats(folder.id)
+      .then((list) => live && setLast(list.find((s) => (s.scope ?? '') === dir) ?? null))
+      .catch(() => live && setLast(null))
     return () => { live = false }
-  }, [folder.id, empty])
+  }, [folder.id, empty, dir])
 
   // An action proposed in this chat may be approved or rejected in Approvals: show its status now.
   const waiting = messages.some((m) => m.role === 'assistant' && m.res.outcome?.status === 'pending')
@@ -149,7 +154,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     setQuestion('')
     update((c) => ({ ...c, busy: true, live: { status: 'Starting', answer: '' }, messages: [...c.messages, { role: 'user', text: q }] }))
     try {
-      const res = await api.askStream(folder.id, q, { path: currentPath, history, session_id: sessionId }, (e) => {
+      const res = await api.askStream(folder.id, q, { path: currentPath, scope: dir || null, history, session_id: sessionId }, (e) => {
         update((c) => {
           if (!c.live) return c
           if (e.type === 'status') return { ...c, live: { ...c.live, status: e.text } }
@@ -169,10 +174,13 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     setView('chat')
   }
 
+  // A saved chat reopens in the scope it was started in: that subfolder's overview, or the Space's.
   async function resume(sid: string) {
     try {
       const s = await api.chat(folder.id, sid)
-      update(() => ({ sessionId: s.id, messages: fromSession(s), busy: false }))
+      const to = s.scope ?? ''
+      put(`${folder.id}::${chatScope(undefined, to).key}`, { sessionId: s.id, messages: fromSession(s), busy: false })
+      openDir(to)
       setView('chat')
     } catch (e) {
       update((c) => ({ ...c, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
@@ -185,7 +193,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-wrap items-center justify-between gap-1 px-4 pt-4">
-        <h2 className="font-bold">{view === 'history' ? 'Saved chats' : `Ask this ${folder.mode}`}</h2>
+        <h2 className="font-bold">{view === 'history' ? 'Saved chats' : 'Ask this Space'}</h2>
         <div className="flex min-w-0 items-center gap-1">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs">
             <Lock size={11} className="shrink-0" /> <span className="truncate">Only sees {folder.name}</span>
@@ -230,11 +238,11 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             {empty && <Mascot pose="hug" className="mx-auto h-24 w-24" />}
             {empty && (
               <p className="text-muted">
-                Answers come only from files in this {folder.mode}, with sources you can click. Ask about the
-                whole {folder.mode} ("Summarize this {folder.mode}") or the open file ("Summarize this note").
+                Answers come only from {currentPath ? 'the open file' : dir ? `files in ${dir}` : 'files in this Space'}, with
+                sources you can click. Open a subfolder or a file to narrow what the chat looks at.
               </p>
             )}
-            {empty && last && !question.trim() && (
+            {empty && last && !currentPath && !question.trim() && (
               <button
                 onClick={() => resume(last.id)}
                 className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-line bg-white px-3 py-2 text-left hover:border-brand"
@@ -255,25 +263,23 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
               }
               return <Answer key={i} res={m.res} proposalStatus={m.proposalStatus} onShowApprovals={onShowApprovals} />
             })}
-            {busy && <LiveAnswer live={chat.live ?? { status: `Reading this ${folder.mode}`, answer: '' }} elapsed={elapsed} />}
+            {busy && <LiveAnswer live={chat.live ?? { status: 'Reading', answer: '' }} elapsed={elapsed} />}
             <div ref={end} />
           </div>
 
           <div className="p-4 pt-0">
-            {currentPath && (
-              <p className="mb-1 flex min-w-0 items-center gap-1 text-xs text-muted" title={currentPath}>
-                <Eye size={12} className="shrink-0" /> <span className="truncate">Looking at {basename(currentPath)}</span>
-              </p>
-            )}
+            <p className="mb-1 flex min-w-0 items-center gap-1 text-xs text-muted" title={currentPath || dir || folder.name}>
+              <Eye size={12} className="shrink-0" /> <span className="truncate">Asking: {scope.label}</span>
+            </p>
             <div className="flex items-end gap-2 rounded-xl border border-line bg-white p-2 focus-within:border-brand">
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
                 rows={2}
-                aria-label={`Ask about this ${folder.mode}`}
+                aria-label={`Ask about ${scope.label}`}
                 className="flex-1 resize-none bg-transparent outline-none"
-                placeholder={folder.mode === 'case' ? 'e.g. Summarize this case · What is still open?' : 'e.g. Summarize this chart · Any allergies?'}
+                placeholder={currentPath ? 'e.g. Summarize this note' : 'e.g. Summarize this · What is still open?'}
               />
               <button onClick={send} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
                 <SendHorizontal size={16} />

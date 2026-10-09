@@ -26,12 +26,12 @@ function groupByDate(events: TimelineEvent[]): [string, TimelineEvent[]][] {
 }
 
 export default function TimelinePanel() {
-  const { folder } = useFolder()
-  // Kept per folder outside the panel: a build survives switching tools or folders.
-  const { data, busy, since, error } = useTimeline(folder.id)
+  const { folder, dir } = useFolder()
+  // Kept per Space and subfolder outside the panel: a build survives switching tools or folders.
+  const { data, busy, since, error } = useTimeline(folder.id, dir)
   const elapsed = useElapsed(busy, since)
-  const noun = folder.mode === 'chart' ? 'chart' : 'case'
-  const build = () => buildTimeline(folder.id)
+  const where = dir ? `${dir}` : 'this Space'
+  const build = () => buildTimeline(folder.id, dir)
 
   const days = data ? groupByDate(data.events) : []
 
@@ -40,7 +40,7 @@ export default function TimelinePanel() {
       <header className="flex items-start gap-3 px-4 pt-4 pb-3">
         <div className="min-w-0 flex-1">
           <h2 className="font-bold">Timeline</h2>
-          <p className="text-xs text-muted">Dated events from every file in this {noun}, each with its source.</p>
+          <p className="text-xs text-muted">Dated events from every file in {where}, each with its source.</p>
         </div>
         {data && !busy && (
           <button
@@ -60,7 +60,7 @@ export default function TimelinePanel() {
             <p className="flex items-center gap-2 text-sm font-semibold">
               <Loader2 size={15} className="animate-spin text-brand-text" /> Building the timeline… <span className="font-mono text-xs font-normal text-muted">{elapsed}s</span>
             </p>
-            <p className="mt-1 text-xs text-muted">Reading every file in this {noun} on this laptop. This can take a minute or two.</p>
+            <p className="mt-1 text-xs text-muted">Reading every file in {where} on this laptop. This can take a minute or two.</p>
             <div className="mt-3 h-1 overflow-hidden rounded-full bg-panel">
               <div className="h-full w-1/3 animate-[timeline-progress_1.4s_ease-in-out_infinite] rounded-full bg-brand" />
             </div>
@@ -120,7 +120,7 @@ export default function TimelinePanel() {
             )}
 
             {!data.events.length ? (
-              <p className="rounded-xl bg-white p-4 text-sm text-muted">No dated events were found in this {noun}.</p>
+              <p className="rounded-xl bg-white p-4 text-sm text-muted">No dated events were found in {where}.</p>
             ) : (
               <ol className="relative space-y-4 before:absolute before:top-2 before:bottom-2 before:left-[5px] before:w-0.5 before:bg-line" aria-label="Events in order">
                 {days.map(([date, events]) => (

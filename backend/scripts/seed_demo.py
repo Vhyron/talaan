@@ -1,6 +1,6 @@
 """Put Talaan into a known, demo-ready state.
 
-    uv run scripts/seed_demo.py --reset     # restore the 4 demo folders, clear their
+    uv run scripts/seed_demo.py --reset     # restore the 3 demo Spaces, clear their
                                             # grants, proposals, audit and chat history
     uv run scripts/seed_demo.py --fresh --yes
                                             # wipe TALAAN_HOME entirely, then seed
@@ -24,14 +24,17 @@ from app.folders import META, _meta  # noqa: E402
 from app.policy.grants import init_grants  # noqa: E402
 
 DEMO_DATA = Path(__file__).resolve().parents[2] / "demo-data"
-GROUPS = ("hr", "clinic")
+# Demo folders from before Spaces (one sealed folder per case or chart). --reset removes them.
+NAMES = {"Lakbay-Logistics-Inc": "Lakbay Logistics Inc.", "Bayani-Retail-Corp": "Bayani Retail Corp."}
+LEGACY = ("Case-2026-014_Dela-Cruz", "Case-2026-019_Villanueva", "Chart_A-Bautista", "Chart_M-Reyes")
 # Only these may exist in TALAAN_HOME before a full wipe. Anything else means the
 # path is probably wrong (e.g. TALAAN_HOME pointed at a real directory).
 WIPEABLE = {"folders", "trash", "app.db", "app.db-journal", "app.db-wal", "app.db-shm"}
 
 
 def demo_folders() -> list[Path]:
-    return sorted(p for g in GROUPS for p in (DEMO_DATA / g).iterdir() if p.is_dir())
+    """Each top-level directory of demo-data/ is one Space."""
+    return sorted(p for p in DEMO_DATA.iterdir() if p.is_dir())
 
 
 def wipe_home(home: Path) -> None:
@@ -48,14 +51,15 @@ def copy_folder(src: Path) -> str:
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(src, dest)
-    # Record name and mode explicitly so the folder never depends on name guessing.
+    # Record the name explicitly so the Space never depends on name guessing.
     meta = _meta(dest).model_dump(mode="json", exclude={"id"})
+    meta["name"] = NAMES.get(src.name, meta["name"])
     (dest / ".talaan").mkdir(exist_ok=True)
     (dest / ".talaan" / META).write_text(json.dumps(meta), encoding="utf-8")
     return src.name
 
 
-def clear_state(folder_ids: list[str]) -> None:
+def clear_state(folder_ids: list[str], regrant: bool = True) -> None:
     """Default grants, no proposals, no audit, no chat history for these folders."""
     marks = ",".join("?" * len(folder_ids))
     with connect() as db:
@@ -68,7 +72,7 @@ def clear_state(folder_ids: list[str]) -> None:
         db.execute(f"DELETE FROM trash WHERE folder_id IN ({marks})", folder_ids)
     for tid in trashed:  # the demo folders' Trash, so a reset demo has nothing to restore over
         shutil.rmtree(config.TALAAN_HOME / "trash" / tid, ignore_errors=True)
-    for fid in folder_ids:
+    for fid in folder_ids if regrant else []:
         init_grants(fid)
 
 
@@ -120,8 +124,14 @@ def main(argv: list[str] | None = None) -> None:
         print("  wiped")
 
     config.FOLDERS_DIR.mkdir(parents=True, exist_ok=True)
+    legacy = [fid for fid in LEGACY if (config.FOLDERS_DIR / fid).is_dir()]
+    for fid in legacy:
+        shutil.rmtree(config.FOLDERS_DIR / fid)
+    if legacy:
+        clear_state(legacy, regrant=False)
+        print(f"  removed {len(legacy)} pre-Spaces demo folders: {', '.join(legacy)}")
     ids = [copy_folder(src) for src in demo_folders()]
-    print(f"  restored {len(ids)} demo folders: {', '.join(ids)}")
+    print(f"  restored {len(ids)} demo Spaces: {', '.join(ids)}")
     clear_state(ids)
     print("  default grants set; proposals, audit and chat history cleared")
 
