@@ -10,6 +10,14 @@ import { useImportDialog } from '../lib/importDialog'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
 
+// Whether a mouse/touch button is currently held anywhere on the page.
+let pointerIsDown = false
+if (typeof document !== 'undefined') {
+  document.addEventListener('pointerdown', () => { pointerIsDown = true }, true)
+  document.addEventListener('pointerup', () => { pointerIsDown = false }, true)
+  document.addEventListener('pointercancel', () => { pointerIsDown = false }, true)
+}
+
 const GROUPS: { mode: Mode; label: string }[] = [
   { mode: 'case', label: 'HR cases' },
   { mode: 'chart', label: 'Clinic charts' },
@@ -245,6 +253,19 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
     }
   }
 
+  function cancel() {
+    setNaming(false)
+    setName('')
+  }
+
+  // Closing the box moves the rows below it. If that happened on mouse-down, the
+  // row you were clicking would jump away before mouse-up and the click would be
+  // lost, so wait for the button to come up first. Keyboard blur closes at once.
+  function cancelAfterClick() {
+    if (!pointerIsDown) return cancel()
+    document.addEventListener('pointerup', () => setTimeout(cancel, 0), { once: true })
+  }
+
   async function create(e: FormEvent) {
     e.preventDefault()
     const clean = name.trim()
@@ -274,17 +295,25 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
       {(naming || note) && (
         <div className="basis-full px-2 pb-1.5" onClick={(e) => e.stopPropagation()}>
           {naming && (
-            <form onSubmit={create} className="flex gap-1">
+            <form
+              onSubmit={create}
+              // Clicking anywhere outside the box cancels it (focus moving to Add or × doesn't).
+              onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Element | null)) cancelAfterClick() }}
+              onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel() } }}
+              className="flex gap-1"
+            >
               <input
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Escape') { setNaming(false); setName('') } }}
                 placeholder="Subfolder name"
                 aria-label={`Name of new subfolder in ${where}`}
                 className="min-w-0 flex-1 rounded border border-line bg-white px-2 py-1 text-xs outline-none focus:border-brand"
               />
               <button className="rounded bg-brand px-2 text-xs font-semibold text-white">Add</button>
+              <button type="button" onClick={cancel} className="grid w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink" aria-label="Cancel new subfolder">
+                <X size={13} />
+              </button>
             </form>
           )}
           {note && <p role="status" className={`mt-1 text-xs ${noteIsError ? 'text-red-700' : 'text-brand-text'}`}>{note}</p>}
