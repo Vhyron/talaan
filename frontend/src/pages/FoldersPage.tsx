@@ -4,6 +4,8 @@ import { FolderInput, Lock, Plus } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
+import HomeChat from '../components/HomeChat'
+import { useHomeChatShown } from '../lib/chatSession'
 import { DropZone } from '../components/ImportDrop'
 import { useImportDialog } from '../lib/importDialog'
 
@@ -14,16 +16,18 @@ export default function FoldersPage({ folders, error, onCreated }: {
 }) {
   const [creating, setCreating] = useState<Mode | null>(null)
   const importDialog = useImportDialog()
+  // The all-folders chat floats at the right edge; on wide screens move the page out from under it.
+  const chatShown = useHomeChatShown()
 
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar folders={folders} error={error} />
       <DropZone onFiles={(u) => { setCreating(null); importDialog.open(u) }}>
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
+      <main className={`min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8 ${chatShown ? 'md:pr-[25.5rem] xl:pr-[30rem]' : ''}`}>
         <div className="flex flex-wrap items-end gap-3">
           <div className="mr-auto w-full sm:w-auto">
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your folders</h1>
-            <p className="mt-1 text-muted">Each folder is sealed. The AI only sees the one you open.</p>
+            <p className="mt-1 text-muted">Each folder is sealed: its chat only sees that folder. Ask across all folders below.</p>
           </div>
           <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
             <Plus size={16} /> New Case
@@ -37,6 +41,8 @@ export default function FoldersPage({ folders, error, onCreated }: {
         </div>
 
         {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
+
+        <HomeChat folders={folders} />
 
 
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">

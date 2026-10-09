@@ -231,6 +231,16 @@ def retrieve(folder_id: str, query: str, k: int | None = 8) -> list[Hit]:
         except OllamaError:
             q = None
         if q is not None:
+            # Vectors of another size come from a different embedder (a stale index): skip them
+            # here (keyword search still finds those chunks) and clear them so the next build
+            # re-embeds them.
+            stale = [r[0] for r in embedded if len(r[6]) != q.nbytes]
+            if stale:
+                with _locks[folder_id], closing(_db(folder_id)) as db:
+                    db.execute("UPDATE chunks SET embedding = NULL WHERE length(embedding) != ?", (q.nbytes,))
+                    db.commit()
+                embedded = [r for r in embedded if len(r[6]) == q.nbytes]
+        if q is not None and embedded:
             matrix = np.frombuffer(b"".join(r[6] for r in embedded), dtype=np.float32).reshape(len(embedded), -1)
             sims = {r[0]: float(s) for r, s in zip(embedded, matrix @ q)}
 

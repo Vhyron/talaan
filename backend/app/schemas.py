@@ -123,6 +123,7 @@ class Source(BaseModel):
     start: int
     end: int
     snippet: str
+    folder_id: str | None = None  # set by the home-page chat (all folders); None inside a folder
 
 
 class Turn(BaseModel):
@@ -130,6 +131,14 @@ class Turn(BaseModel):
 
     role: Literal["user", "assistant"]
     content: str = Field(max_length=4000)
+
+
+class GlobalAskRequest(BaseModel):
+    """Home-page chat across every folder."""
+
+    question: str = Field(min_length=1)
+    history: list[Turn] = Field(default=[], max_length=8)
+    session_id: str | None = None  # continue the home chat thread; None starts a new one
 
 
 class AskRequest(BaseModel):
@@ -148,6 +157,33 @@ class AskResponse(BaseModel):
     outcome: Outcome | None = None
     proposal_id: str | None = None
     session_id: str | None = None  # the saved chat this turn belongs to
+
+
+class TrashItem(BaseModel):
+    """Something the user moved to the Trash: a file, a subfolder or a whole folder."""
+
+    id: str
+    folder_id: str
+    folder_name: str
+    kind: Literal["file", "dir", "folder"]
+    path: str  # where it was, folder-relative ("" for a whole folder)
+    name: str
+    deleted_at: datetime
+
+
+class PathRef(BaseModel):
+    path: str = Field(min_length=1)
+
+
+class FolderRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class PathRename(BaseModel):
+    """Rename a file or subfolder in place: `name` is the new last segment only."""
+
+    path: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=80)
 
 
 class IndexStatus(BaseModel):
@@ -183,6 +219,7 @@ class Proposal(BaseModel):
 
 AuditEventType = Literal[
     "question", "answer", "proposed_action", "decision", "executed", "grant_change", "session_renamed", "session_deleted",
+    "file_deleted", "rename", "deleted", "restored", "purged",
 ]
 
 

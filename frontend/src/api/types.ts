@@ -29,7 +29,7 @@ export type Outcome = {
 }
 
 /** start/end are 1-based line numbers in the file. */
-export type Source = { path: string; start: number; end: number; snippet: string }
+export type Source = { path: string; start: number; end: number; snippet: string; folder_id?: string | null }
 
 /** An earlier chat turn, sent so follow-ups make sense. Context only, never a source. */
 export type Turn = { role: 'user' | 'assistant'; content: string }
@@ -73,7 +73,7 @@ export type Proposal = {
 
 export type AuditEventType =
   | 'question' | 'answer' | 'proposed_action' | 'decision' | 'executed' | 'grant_change'
-  | 'session_renamed' | 'session_deleted'
+  | 'session_renamed' | 'session_deleted' | 'file_deleted' | 'rename' | 'deleted' | 'restored' | 'purged'
 export type AuditEvent = {
   id: number
   timestamp: string
@@ -164,4 +164,15 @@ export type VoiceStatus = {
   problem: 'library' | 'model' | null
   message: string | null
   fix: string | null
+}
+
+/** Something the user moved to the Trash. `path` is where it was ("" for a whole folder). */
+export type TrashItem = {
+  id: string
+  folder_id: string
+  folder_name: string
+  kind: 'file' | 'dir' | 'folder'
+  path: string
+  name: string
+  deleted_at: string
 }

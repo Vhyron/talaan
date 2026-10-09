@@ -130,6 +130,28 @@ def test_import_through_symlinked_subfolder_is_refused(talaan_home):
     assert r.status_code == 403 and not (outside / "x.md").exists()
 
 
+def test_user_can_delete_a_file(talaan_home):
+    r = c.delete(f"/folders/{F}/files/2026-10-02_open-items.md")
+    assert r.status_code == 204
+    assert not (talaan_home / "folders" / F / "2026-10-02_open-items.md").exists()
+    assert "2026-10-02_open-items.md" not in [f["path"] for f in c.get(f"/folders/{F}/files").json()]
+    row = c.get(f"/folders/{F}/audit").json()[0]
+    assert (row["actor"], row["event"], row["action"], row["path"]) == ("user", "file_deleted", "delete", "2026-10-02_open-items.md")
+
+
+@pytest.mark.parametrize("bad", ["..%2F..%2Fapp.db", "%2E%2E/Case-2026-019_Villanueva/2026-10-02_open-items.md", ".talaan/folder.json", "missing.md"])
+def test_delete_file_is_sealed(talaan_home, bad):
+    before = sorted(p for p in talaan_home.rglob("*"))
+    assert c.delete(f"/folders/{F}/files/{bad}").status_code in (403, 404)
+    assert sorted(p for p in talaan_home.rglob("*")) == before
+
+
+def test_delete_refuses_subfolders(talaan_home):
+    c.post(f"/folders/{F}/dirs", json={"path": "Notes"})
+    assert c.delete(f"/folders/{F}/files/Notes").status_code == 404
+    assert (talaan_home / "folders" / F / "Notes").is_dir()
+
+
 # --- Writes only from local pages (Oct 10 review) -------------------------------
 
 
