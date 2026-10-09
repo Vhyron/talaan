@@ -2,7 +2,8 @@
 export function fileLabel(path: string): string {
   const base = path.split('/').pop()!.replace(/\.(md|txt|pdf)$/i, '')
   const parts = base.replace(/^00_/, '').split('_')
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(parts[0]) ? parts.shift() : null
+  const di = parts.findIndex((p) => /^\d{4}-\d{2}-\d{2}$/.test(p))
+  const date = di >= 0 ? parts.splice(di, 1)[0] : null
   const rest = parts.map((s) => s.replace(/-/g, ' ')).join(' ')
   const title = rest.charAt(0).toUpperCase() + rest.slice(1)
   return date ? `${date} · ${title}` : title
