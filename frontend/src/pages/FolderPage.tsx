@@ -12,11 +12,8 @@ import ApprovalsPanel from '../panels/ApprovalsPanel'
 import AskPanel from '../panels/AskPanel'
 import AuditPanel from '../panels/AuditPanel'
 import PermissionsPanel from '../panels/PermissionsPanel'
+import TimelinePanel from '../panels/TimelinePanel'
 import { FolderContext, noun, useFolder, type FolderCtx } from '../lib/folderContext'
-
-function Placeholder({ label }: { label: string }) {
-  return <p className="p-5 text-sm text-muted">{label} arrives in its own ticket.</p>
-}
 
 export default function FolderPage({ folders, error }: { folders: Folder[]; error: string | null }) {
   const { id = '' } = useParams()
@@ -151,10 +148,10 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
       <RightPanel
         tab={panel}
         onTab={onPanel}
-        wide={panel === 'audit' || panel === 'approvals'}
+        wide={panel === 'audit' || panel === 'approvals' || panel === 'timeline'}
         panels={{
           ask: <AskPanel onShowApprovals={() => onPanel('approvals')} />,
-          timeline: <Placeholder label="Timeline" />,
+          timeline: <TimelinePanel />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,
           audit: <AuditPanel />,
