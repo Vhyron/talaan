@@ -368,7 +368,9 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
     }
   }
 
-  const btn = 'grid h-6 w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink lg:hidden lg:group-hover:grid lg:group-focus-within:grid'
+  // Space is always reserved and the buttons only fade in, so hovering a row never
+  // narrows its label (which made long names re-wrap and the tree jump).
+  const btn = 'grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100'
   return (
     <>
       <button onClick={() => { setNaming(true); setNote(null) }} className={btn} aria-label={`New subfolder in ${where}`} title="New subfolder">
