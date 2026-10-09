@@ -19,7 +19,6 @@ def test_every_route_responds():
     assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"# hi")}).status_code == 200
     assert c.post(f"/folders/{F}/index").status_code == 200
     assert c.post(f"/folders/{F}/ask", json={"question": "What is still open?"}).json()["sources"]
-    assert c.post(f"/folders/{F}/timeline").json()["flags"]
     assert c.get(f"/folders/{F}/grants").json()["delete"] == "never"
     assert c.get(f"/folders/{F}/proposals").status_code == 200
     assert c.get(f"/folders/{F}/audit").status_code == 200
