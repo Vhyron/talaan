@@ -7,7 +7,8 @@ import Sidebar from '../components/Sidebar'
 import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
 import VoiceNote from '../components/VoiceNote'
-import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
+import FloatingTools, { type PanelTab } from '../components/FloatingTools'
+import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { DropZone } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
 import { useTree } from '../lib/tree'
@@ -45,9 +46,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const [files, setFiles] = useState<FileEntry[]>([])
   const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: 0 })
   const [highlight, setHighlight] = useState<Highlight>(null)
-  const [panel, setPanel] = useState<PanelTab>('ask')
-  // Phones show one view at a time: the document or the selected panel.
-  const [mobileView, setMobileView] = useState<'doc' | 'panel'>('doc')
+  // Which folder tool is open in the floating card (or pinned column), if any.
+  const [tool, setTool] = useState<PanelTab | null>(null)
   const [version, setVersion] = useState(0)
 
   // Any change to files or subfolders (import, approval, new subfolder) bumps
@@ -81,7 +81,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
       return i >= 0 ? { paths, active: i } : { paths: [...paths, path], active: paths.length }
     })
     setHighlight(start ? { start, end: end ?? start } : null)
-    setMobileView('doc')
+    // On phones the tool sheet covers the document: close it to show the cited lines.
+    if (window.matchMedia('(max-width: 767px)').matches) setTool(null)
   }, [])
 
   // A file clicked in another folder's sidebar tree arrives as navigation state.
@@ -115,14 +116,8 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
         error={error}
         tabs={tabs}
         highlight={highlight}
-        panel={panel}
-        onPanel={setPanel}
-        mobileView={mobileView}
-        onMobileView={(v) => {
-          if (v === 'doc') return setMobileView('doc')
-          setPanel(v)
-          setMobileView('panel')
-        }}
+        tool={tool}
+        onTool={setTool}
         onSelect={select}
         onClose={close}
       />
@@ -130,24 +125,22 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   )
 }
 
-function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileView, onMobileView, onSelect, onClose }: {
+function FolderLayout({ folders, error, tabs, highlight, tool, onTool, onSelect, onClose }: {
   folders: Folder[]
   error: string | null
   tabs: Tabs
   highlight: Highlight
-  panel: PanelTab
-  onPanel: (t: PanelTab) => void
-  mobileView: 'doc' | 'panel'
-  onMobileView: (v: 'doc' | PanelTab) => void
+  tool: PanelTab | null
+  onTool: (t: PanelTab | null) => void
   onSelect: (i: number) => void
   onClose: (i: number) => void
 }) {
   const { folder, files, openSource } = useFolder()
   const imp = useImport()
   const current = tabs.paths[tabs.active]
+  const [pinned, setPinned] = usePersistentFlag('talaan.tools.pinned')
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
     <div className="flex min-h-0 flex-1">
       <Sidebar
         folders={folders}
@@ -157,7 +150,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         onOpenFile={(p) => openSource(p)}
       />
 
-      <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })} className={mobileView === 'panel' ? 'hidden md:flex' : ''}>
+      <DropZone onFiles={(u) => imp.importUploads(u, { keepPaths: true })}>
         <div className="flex h-9 shrink-0 items-center gap-2 border-b border-line px-3 text-xs sm:px-4">
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 font-semibold text-brand-text">
             <Lock size={11} className="shrink-0" />
@@ -171,11 +164,12 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
           )}
           <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
           <span className="ml-auto sm:ml-0 lg:ml-auto">
-            <VoiceNote onProposed={() => onMobileView('approvals')} />
+            <VoiceNote onProposed={() => onTool('approvals')} />
           </span>
         </div>
         <FileTabs tabs={tabs.paths} active={tabs.active} onSelect={onSelect} onClose={onClose} />
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Bottom padding on phones keeps text clear of the floating tool pill. */}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-20 md:pb-0">
           {current ? (
             <FileViewer key={current} path={current} highlight={highlight} />
           ) : (
@@ -186,21 +180,19 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
         </div>
       </DropZone>
 
-      <RightPanel
-        tab={panel}
-        onTab={onPanel}
-        wide={panel === 'audit' || panel === 'approvals' || panel === 'timeline'}
-        mobileVisible={mobileView === 'panel'}
+      <FloatingTools
+        open={tool}
+        onOpen={onTool}
+        pinned={pinned}
+        onPin={setPinned}
         panels={{
-          ask: <AskPanel onShowApprovals={() => onMobileView('approvals')} />,
+          ask: <AskPanel onShowApprovals={() => onTool('approvals')} />,
           timeline: <TimelinePanel />,
           permissions: <PermissionsPanel />,
           approvals: <ApprovalsPanel />,
           audit: <AuditPanel />,
         }}
       />
-    </div>
-    <MobileTabs view={mobileView === 'doc' ? 'doc' : panel} onView={onMobileView} />
     </div>
   )
 }
