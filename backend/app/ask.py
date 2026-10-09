@@ -48,7 +48,11 @@ AM PM ECG CCTV PDF HR""".split())
 
 ACTION_REQUEST = re.compile(
     r"\b(delete|remove|erase|discard|edit|change|update|rewrite|amend|"
-    r"draft|create|write|compose|save|add (?:a )?note|"
+    # "Fix the typos in…", "Replace Daniel with Danny", "Add a summary to…": these went to the Q&A
+    # prompt, where the model could only answer `refused` and the streamed text became a refusal.
+    r"fix|correct|replace|rename|reword|rephrase|proofread|append|insert|add|translate|"
+    r"clean(?:\s+up)?|tidy(?:\s+up)?|fill in|tick(?: off)?|check off|cross off|mark\s+(?:\S+\s+){0,4}?(?:as|done)|"
+    r"draft|create|write|compose|save|"
     # "Follow the instructions in the email": still only a proposal, which the engine then judges
     r"(?:follow|carry out|act on) (?:the |its |any )?(?:instructions?|requests?|notes?)|do what)\b", re.I)
 # A question about the documents is never a change request, whatever verb it uses: "What did the
@@ -179,16 +183,32 @@ def names_in(question: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
-def out_of_scope(folder_id: str, question: str, hits: list[Hit], relevance: bool = True,
-                 only: Sequence[str] | None = None) -> bool:
-    """Names are always checked, within the chat's scope. `relevance=False` skips the similarity
-    threshold, for summaries of this folder or the open file: they are about it by construction."""
-    if any(not index.contains(folder_id, n, only) for n in names_in(question)):
-        return True
+def scope_problem(folder_id: str, question: str, hits: list[Hit], relevance: bool = True,
+                  only: Sequence[str] | None = None, names: bool = True,
+                  where: str = "this folder") -> str | None:
+    """Why the question is out of scope, for the user, or None. Names are checked within the chat's
+    scope (`names=False` for a change request: "Replace Daniel with Danny" names the new text).
+    `relevance=False` skips the similarity threshold, for summaries of this folder or the open file
+    and for change requests: they are about it by construction."""
+    missing = [n for n in names_in(question) if not index.contains(folder_id, n, only)] if names else []
+    if missing:
+        return f"{' and '.join(f'“{n}”' for n in missing)} {'is' if len(missing) == 1 else 'are'} not mentioned in {where}."
     if not hits:
-        return True
+        return f"Nothing in {where} matched the question."
     sims = [h.similarity for h in hits if h.similarity is not None]
-    return relevance and bool(sims) and max(sims) < MIN_SCORE and not any(h.keyword for h in hits)
+    if relevance and sims and max(sims) < MIN_SCORE and not any(h.keyword for h in hits):
+        return (f"Nothing in {where} was close enough to the question (best match {max(sims):.2f}; "
+                f"an answer needs {MIN_SCORE} or a keyword match).")
+    return None
+
+
+def change_hint(question: str) -> str:
+    """For a refused question that reads like a change ("Can I edit…?", "Is it possible to fix…?"):
+    changes are only proposed for instructions."""
+    if ACTION_REQUEST.search(question):
+        return (" To change a file, write it as an instruction, for example "
+                "“Fix the typos in <file name>” or “Add a summary to <file name>”.")
+    return ""
 
 
 def open_file(folder_id: str, path: str | None) -> str | None:
@@ -396,7 +416,8 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     def reply(resp: AskResponse, tag: str | None = None) -> AskResponse:
         """Every answer, refusal and policy outcome is audited and saved to the chat."""
         resp.session_id = sid
-        audit.log_event(folder_id, "model", "answer", reason=resp.answer, model_tag=tag,
+        audit.log_event(folder_id, "model", "answer", model_tag=tag,
+                        reason=f"{resp.answer} ({resp.detail})" if resp.detail else resp.answer,
                         decision="refused" if resp.refused else None, session_id=sid)
         chats.save_turn(folder_id, sid, question, resp, scope=sc.dir)
         return resp
@@ -416,15 +437,12 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     prev = next((t.content for t in reversed(history) if t.role == "user"), "")
     status(f"Searching {sc.name}")
     hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None, only=sc.only)
-    if out_of_scope(folder_id, question, hits, relevance=focus is None, only=sc.only):
+    why = scope_problem(folder_id, question, hits, relevance=focus is None and not is_action, only=sc.only,
+                        names=not is_action, where=sc.name)
+    if why:
         if config.LLM_LIVE_LOG:  # the terminal otherwise shows only an embed, which looks like nothing ran
-            missing = [n for n in names_in(question) if not index.contains(folder_id, n, sc.only)]
-            sims = [h.similarity for h in hits if h.similarity is not None]
-            why = (f"name not in this folder: {', '.join(missing)}" if missing else
-                   "nothing retrieved" if not hits else
-                   f"best match {max(sims):.2f} < {MIN_SCORE} and no keyword hit" if sims else "no relevant match")
             client.live_note(f"[ask] {question[:60]!r} refused before the model: {why}")
-        return reply(AskResponse(answer=refusal(sc), refused=True))
+        return reply(AskResponse(answer=refusal(sc), refused=True, detail=why + change_hint(question)))
 
     chosen: list[Hit] = []
     if focus == "folder":
@@ -474,6 +492,9 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     except ValueError:
         return reply(AskResponse(answer="The model did not return a usable answer. Please ask again."), r.model)
     if data.refused:
-        return reply(AskResponse(answer=refusal(sc), refused=True), r.model)
+        # Whatever the model streamed before deciding to refuse is replaced, so say why.
+        why = (f"The model read {len(chosen)} {'passage' if len(chosen) == 1 else 'passages'} from {files} "
+               f"{'file' if files == 1 else 'files'} in {sc.name} and found no answer to this question there.")
+        return reply(AskResponse(answer=refusal(sc), refused=True, detail=why + change_hint(question)), r.model)
     answer, sources = map_citations(data.answer, chosen)
     return reply(AskResponse(answer=answer, sources=sources), r.model)

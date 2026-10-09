@@ -71,6 +71,14 @@ def test_map_citations_splits_groups():
     ("Can you draft a reply to the representative?", True),
     ("Please delete the old notes.", True),
     ("Could you update the open items?", True),
+    # Change verbs that went to the Q&A prompt and came back "I can only see…" (Oct 10)
+    ("Fix the typos in the open items.", True),
+    ("Replace Fernandez with Fernando in the interview.", True),
+    ("Add a summary to the open items.", True),
+    ("Mark the roster item as done.", True),
+    ("Clean up the hearing minutes.", True),
+    ("Summarize Mark's notes.", False),
+    ("Tell me about the corrected dose.", False),
 ])
 def test_action_requests(q, is_action):
     assert ask_mod.is_action_request(q) == is_action
@@ -114,6 +122,7 @@ def test_answer_cites_real_sources(model):
 def test_out_of_scope_refuses_without_calling_the_model(model, folder, q, refusal):
     r = ask(folder, q)
     assert r["refused"] and r["answer"] == refusal
+    assert "not mentioned" in r["detail"]
     assert model.calls == []
 
 
@@ -121,6 +130,15 @@ def test_model_refusal_uses_folder_name(model):
     model.reply = {"answer": "whatever", "refused": True}
     r = ask(CASE, "What is still open?")
     assert r["refused"] and r["answer"] == "I can only see Case 2026-014 Dela Cruz."
+    assert "found no answer" in r["detail"]
+
+
+def test_change_request_with_a_new_name_reaches_the_action_call(model):
+    """The replacement text is not in the folder yet, so the name check must not refuse it."""
+    model.reply = {"action": "create_draft", "path": "note.md", "content": "Draft for Juana Perez."}
+    r = ask(CASE, "Write a note about Juana Perez.")
+    assert not r["refused"] and len(model.calls) == 1
+    assert r["outcome"]["status"] == "pending"
 
 
 def test_read_never_skips_model_and_logs(model):
