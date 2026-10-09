@@ -6,6 +6,7 @@ import type { FileEntry, Folder } from '../api/types'
 import Sidebar from '../components/Sidebar'
 import FileTabs from '../components/FileTabs'
 import FileViewer, { type Highlight } from '../components/FileViewer'
+import VoiceNote from '../components/VoiceNote'
 import RightPanel, { MobileTabs, type PanelTab } from '../components/RightPanel'
 import { DropZone, ImportButton } from '../components/ImportDrop'
 import { useImport } from '../lib/useImport'
@@ -145,8 +146,11 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, mobileV
             <Lock size={11} className="shrink-0" />
             <span className="truncate">Sealed: AI can only see this {noun(folder.mode).toLowerCase()}</span>
           </span>
-          <span className="shrink-0 text-muted">{files.length} files</span>
-          <span className="ml-auto truncate font-semibold lg:hidden">{folder.name}</span>
+          <span className="hidden shrink-0 text-muted sm:inline">{files.length} files</span>
+          <span className="ml-auto hidden truncate font-semibold sm:inline lg:hidden">{folder.name}</span>
+          <span className="ml-auto sm:ml-0 lg:ml-auto">
+            <VoiceNote onProposed={() => onMobileView('approvals')} />
+          </span>
         </div>
         <FileTabs tabs={tabs.paths} active={tabs.active} onSelect={onSelect} onClose={onClose} />
         <div className="min-h-0 flex-1 overflow-y-auto">
