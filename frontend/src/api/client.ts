@@ -40,11 +40,16 @@ export const api = {
   folder: (id: string) => json<Folder>(f(id)),
   files: (id: string) => json<FileEntry[]>(`${f(id)}/files`),
   file: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`).then((r) => r.text()),
-  importFiles: (id: string, files: File[]) => {
+  /** `path` is the file's name, or its relative path when `keepPaths` (e.g. "Interviews/a.md"). */
+  importFiles: (id: string, uploads: { file: File; path: string }[], opts: { dest?: string; keepPaths?: boolean } = {}) => {
     const form = new FormData()
-    files.forEach((file) => form.append('files', file))
+    uploads.forEach(({ file, path }) => form.append('files', file, path))
+    form.append('dest', opts.dest ?? '')
+    form.append('keep_paths', String(Boolean(opts.keepPaths)))
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
+  dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
+  createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
   reindex: (id: string) => send<{ chunks: number; files: number }>('POST', `${f(id)}/index`),
   ask: (id: string, question: string) => send<AskResponse>('POST', `${f(id)}/ask`, { question }),
