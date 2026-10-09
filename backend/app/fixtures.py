@@ -6,7 +6,7 @@ Each route swaps to a real implementation in its own ticket (A2–A5, B3–B5, D
 from datetime import datetime
 
 from app.schemas import (
-    AuditEvent, Outcome, Proposal, ProposeEditAction,
+    Outcome, Proposal, ProposeEditAction,
     Source, SystemTier, Tier, TimelineEvent, TimelineFlag, TimelineResponse,
 )
 
@@ -57,17 +57,7 @@ PROPOSALS = [
     )
 ]
 
-_F = "Case-2026-014_Dela-Cruz"
 _R = "2026-09-13_interview_R-Santos.md"
-AUDIT = [
-    AuditEvent(id=3, timestamp=T("2026-10-03T10:02:05"), folder_id=_F, actor="model", event="decision",
-               action="delete", path=_R, decision="never", reason="Delete is set to Never", model_tag="gemma4:e4b"),
-    AuditEvent(id=2, timestamp=T("2026-10-03T10:02:04"), folder_id=_F, actor="model", event="proposed_action",
-               action="delete", path=_R, model_tag="gemma4:e4b"),
-    AuditEvent(id=1, timestamp=T("2026-10-03T10:02:00"), folder_id=_F, actor="user", event="question",
-               reason="Summarize the representative's email."),
-]
-
 BLOCKED_DELETE = Outcome(status="blocked", action="delete", path=_R, reason="Delete is set to Never")
 
 _EMBED = "qwen3-embedding:0.6b"

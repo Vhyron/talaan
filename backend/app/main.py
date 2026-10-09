@@ -1,8 +1,5 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
-import csv
-import io
-import json
 from typing import Literal
 
 from fastapi import FastAPI, UploadFile
@@ -10,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 
 from app import fixtures as fx
+from app import audit as audit_log
 from app import folders
+from app.policy import grants
 from app.config import CHAT_MODEL, EMBED_MODEL
 from app.schemas import (
     AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Outcome,
@@ -25,9 +24,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-_grants: dict[str, Grants] = {}
-
 
 def _folder(folder_id: str) -> Folder:
     return folders.get_folder(folder_id)
@@ -111,14 +107,13 @@ def timeline(folder_id: str) -> TimelineResponse:
 @app.get("/folders/{folder_id}/grants")
 def get_grants(folder_id: str) -> Grants:
     _folder(folder_id)
-    return _grants.get(folder_id, Grants())
+    return grants.get_grants(folder_id)
 
 
 @app.put("/folders/{folder_id}/grants")
 def put_grants(folder_id: str, body: Grants) -> Grants:
     _folder(folder_id)
-    _grants[folder_id] = body
-    return body
+    return grants.set_grants(folder_id, body)
 
 
 @app.get("/folders/{folder_id}/proposals")
@@ -140,21 +135,16 @@ def reject(pid: str) -> dict:
 @app.get("/folders/{folder_id}/audit")
 def audit(folder_id: str) -> list[AuditEvent]:
     _folder(folder_id)
-    return [e for e in fx.AUDIT if e.folder_id == folder_id]
+    return audit_log.list_events(folder_id)
 
 
 @app.get("/folders/{folder_id}/audit/export")
 def audit_export(folder_id: str, format: Literal["json", "csv"] = "json") -> Response:
-    events = audit(folder_id)
+    _folder(folder_id)
     headers = {"Content-Disposition": f'attachment; filename="{folder_id}_audit.{format}"'}
     if format == "json":
-        body = json.dumps([e.model_dump(mode="json") for e in events], indent=2)
-        return Response(body, media_type="application/json", headers=headers)
-    buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=list(AuditEvent.model_fields))
-    writer.writeheader()
-    writer.writerows(e.model_dump(mode="json") for e in events)
-    return Response(buf.getvalue(), media_type="text/csv", headers=headers)
+        return Response(audit_log.export_json(folder_id), media_type="application/json", headers=headers)
+    return Response(audit_log.export_csv(folder_id), media_type="text/csv", headers=headers)
 
 
 # --- Voice (D1) and system (D7) ------------------------------------------------
