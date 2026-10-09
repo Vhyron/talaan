@@ -102,7 +102,7 @@ class Grants(BaseModel):
 
 class Outcome(BaseModel):
     status: Literal["executed", "pending", "blocked"]
-    action: ActionName
+    action: ActionName | None = None  # None when the model's output didn't parse
     path: str | None = None
     reason: str | None = None
     proposal_id: str | None = None
