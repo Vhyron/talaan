@@ -14,11 +14,13 @@ How to install, run, test and reset Talaan on a team laptop. Commands are PowerS
 
 If `uv` isn't found after a pip install, use `python -m uv` in place of `uv` everywhere below, or add Python's user `Scripts` folder to PATH.
 
-Hardware: the app detects RAM/GPU and picks the chat model for your tier automatically (Light 8 GB, Standard 16 GB, Pro 32 GB; see [05-models.md](05-models.md)). Keep ~15 GB disk free for models and dependencies.
+Hardware: the app detects RAM/GPU and picks the chat model automatically (Budget `qwen3.5:2b` under 14 GB RAM, Mid `qwen3.5:4b` 14 GB+, High `gemma4:e4b` 19 GB+, counting the embedding model and 6 GB for the OS, browser and backend; see [05-models.md](05-models.md)). Keep ~15 GB disk free for models and dependencies.
 
 ## 2. One-time setup
 
-From the repo root:
+**Quickest:** run `setup.bat` (Windows), `setup.command` / `./setup.sh` (macOS) or `./setup.sh` (Linux) from the repo root. It checks the tools (offering winget / Homebrew installs), runs every step below, and asks which chat model to download, recommending one for the laptop's RAM (`backend/scripts/setup_models.py`). Flags: `-Yes`/`--yes`, `-Model <tag>`/`--model <tag>`, `-All`/`--all`, `-SkipDemo`/`--skip-demo`.
+
+The same steps by hand, from the repo root:
 
 ```powershell
 git clone https://github.com/Vhyron/talaan.git
@@ -33,8 +35,9 @@ cd frontend; npm ci; cd ..
 
 # Models: one-time download, the only step that needs internet
 ollama pull qwen3-embedding:0.6b   # every tier, always
-ollama pull qwen3.5:2b             # Light   (8 GB RAM)
-ollama pull gemma4:e4b             # Standard (16 GB RAM / Apple 16 GB / 8-10 GB GPU)
+ollama pull qwen3.5:2b             # Budget (any machine)
+ollama pull qwen3.5:4b             # Mid    (14 GB+ RAM, e.g. 16 GB)
+ollama pull gemma4:e4b             # High   (19 GB+ RAM, e.g. 24/32 GB)
 
 # Speech-to-text model for voice notes (faster-whisper "small", ~464 MB)
 cd backend; uv run python -m app.transcribe.whisper --download; cd ..

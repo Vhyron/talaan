@@ -9,8 +9,8 @@ _EMBED = "qwen3-embedding:0.6b"
 TIER = SystemTier(
     ram_gb=16, gpu=None, free_disk_gb=120, recommended="standard",
     tiers=[
-        Tier(id="light", name="Light", min_ram_gb=8, chat_model="qwen3.5:2b", embed_model=_EMBED, whisper_model="small", fits=True),
-        Tier(id="standard", name="Standard", min_ram_gb=16, chat_model="gemma4:e4b", embed_model=_EMBED, whisper_model="small", fits=True),
-        Tier(id="pro", name="Pro", min_ram_gb=32, chat_model="gemma4:26b", embed_model=_EMBED, whisper_model="large-v3-turbo", fits=False),
+        Tier(id="light", name="Budget", min_ram_gb=8, chat_model="qwen3.5:2b", embed_model=_EMBED, whisper_model="small", fits=True),
+        Tier(id="standard", name="Mid", min_ram_gb=12, chat_model="qwen3.5:4b", embed_model=_EMBED, whisper_model="small", fits=True),
+        Tier(id="pro", name="High", min_ram_gb=16, chat_model="gemma4:e4b", embed_model=_EMBED, whisper_model="small", fits=True),
     ],
 )

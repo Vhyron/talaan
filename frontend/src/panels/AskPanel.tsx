@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ban, Check, ClipboardCheck, Clock, Eye, Lock, MessageSquare, SendHorizontal, SquarePen } from 'lucide-react'
+import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, SquarePen } from 'lucide-react'
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
@@ -15,8 +15,14 @@ type Msg =
   | { role: 'assistant'; res: AskResponse; proposalStatus?: ProposalStatus | null }
   | { role: 'error'; text: string }
 
+/** What the model is doing right now, shown while the answer streams in. */
+type Live = { status: string; answer: string }
+
+/** Live text is shown before citations are mapped, so hide the raw [S3] markers until the final answer. */
+const withoutMarkers = (text: string) => text.replace(/\s*\[S[\d,;\sS]*\]?/g, '')
+
 /** The chat on screen. Saved on the server turn by turn; `sessionId` is null until the first answer. */
-type Chat = { sessionId: string | null; messages: Msg[]; busy: boolean }
+type Chat = { sessionId: string | null; messages: Msg[]; busy: boolean; live?: Live }
 const EMPTY: Chat = { sessionId: null, messages: [], busy: false }
 
 // The open chat per folder for this browser tab, so switching cases or charts and coming back
@@ -96,7 +102,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
-  }, [messages, busy, view])
+  }, [messages, busy, view, chat.live?.answer])
 
   // A restored chat mounts while the tool card is hidden, where scrolling does nothing: scroll
   // to the latest message when the card is shown.
@@ -140,13 +146,20 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     if (!q || busy || index.state === 'indexing') return
     const history = historyOf(messages)
     setQuestion('')
-    update((c) => ({ ...c, busy: true, messages: [...c.messages, { role: 'user', text: q }] }))
+    update((c) => ({ ...c, busy: true, live: { status: 'Starting', answer: '' }, messages: [...c.messages, { role: 'user', text: q }] }))
     try {
-      const res = await api.ask(folder.id, q, { path: currentPath, history, session_id: sessionId })
+      const res = await api.askStream(folder.id, q, { path: currentPath, history, session_id: sessionId }, (e) => {
+        update((c) => {
+          if (!c.live) return c
+          if (e.type === 'status') return { ...c, live: { ...c.live, status: e.text } }
+          if (e.type === 'answer') return { ...c, live: { ...c.live, answer: c.live.answer + e.text } }
+          return c
+        })
+      })
       update((c) => ({ sessionId: res.session_id ?? c.sessionId, busy: false, messages: [...c.messages, { role: 'assistant', res }] }))
       if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
     } catch (e) {
-      update((c) => ({ ...c, busy: false, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
+      update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
     }
   }
 
@@ -237,11 +250,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
               }
               return <Answer key={i} res={m.res} proposalStatus={m.proposalStatus} onShowApprovals={onShowApprovals} />
             })}
-            {busy && (
-              <div className="rounded-xl bg-white px-3 py-2 text-muted">
-                Reading this {folder.mode} on this laptop… {elapsed}s
-              </div>
-            )}
+            {busy && <LiveAnswer live={chat.live ?? { status: `Reading this ${folder.mode}`, answer: '' }} elapsed={elapsed} />}
             <div ref={end} />
           </div>
 
@@ -268,6 +277,18 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function LiveAnswer({ live, elapsed }: { live: Live; elapsed: number }) {
+  const answer = withoutMarkers(live.answer)
+  return (
+    <div className="space-y-2 rounded-xl bg-white px-3 py-2" aria-live="polite">
+      <p className="flex items-center gap-1.5 text-xs text-muted">
+        <Loader2 size={12} className="animate-spin" /> {answer ? 'Writing the answer' : live.status}… {elapsed}s
+      </p>
+      {answer && <p className="leading-6">{answer}<span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-text-bottom" /></p>}
     </div>
   )
 }
