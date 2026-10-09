@@ -97,3 +97,21 @@ def test_draft_never_overwrites(folder):
 
 def test_missing_file():
     assert handle(F, {"action": "read", "path": "nope.md"}).reason == "File not found"
+
+
+def test_edit_never_touches_a_pdf(folder):
+    pdf = folder / "scan.pdf"
+    pdf.write_bytes(b"%PDF-1.4 fake")
+    edit = {"action": "propose_edit", "path": "scan.pdf", "content": "text"}
+    out = handle(F, edit)  # default grants: blocked, not a pending proposal
+    assert out.status == "blocked" and ".md and .txt" in out.reason
+    set_grants(F, Grants(suggest_edits=Grant.ALLOW))
+    assert handle(F, edit).status == "blocked"
+    assert pdf.read_bytes() == b"%PDF-1.4 fake"
+
+
+def test_draft_only_as_text_file(folder):
+    set_grants(F, Grants(create_drafts=Grant.ALLOW))
+    out = handle(F, {"action": "create_draft", "path": "note.html", "content": "<script></script>"})
+    assert out.status == "blocked" and ".md and .txt" in out.reason
+    assert not (folder / "note.html").exists()

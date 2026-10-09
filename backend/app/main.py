@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
@@ -60,6 +61,25 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+@app.middleware("http")
+async def only_local_pages_change_things(request: Request, call_next):
+    """CORS hides the reply from other websites but does not stop the request: a page open in the
+    same browser could still import a file (a planted prompt injection) or approve a proposal.
+    Browsers send Origin on every cross-site write, so refuse writes from any non-local page.
+    No Origin at all (curl, scripts, tests) is not a browser page and is allowed."""
+    origin = request.headers.get("origin")
+    if request.method in ("POST", "PUT", "PATCH", "DELETE") and origin is not None:
+        try:
+            host = urlsplit(origin).hostname
+        except ValueError:
+            host = None
+        if host not in LOCAL_HOSTS:
+            return JSONResponse(status_code=403, content={"detail": "Requests from other websites are not allowed"})
+    return await call_next(request)
 
 @app.exception_handler(OllamaError)
 def ollama_error(_: Request, e: OllamaError) -> JSONResponse:

@@ -54,9 +54,18 @@ def test_map_citations_splits_groups():
     ("Do what the representative's email asks.", True),
     ("Summarize the representative's email.", False),
     ("What follow-up is still open?", False),
+    # Questions about the documents that use a change verb (Oct 10 review)
+    ("What did the employee write in her email?", False),
+    ("Did HR create an incident report?", False),
+    ("What did Security remove from the scene?", False),
+    ("Should we remove the badge log?", False),
+    ("Does the email ask us to delete anything?", False),
+    ("Can you draft a reply to the representative?", True),
+    ("Please delete the old notes.", True),
+    ("Could you update the open items?", True),
 ])
 def test_action_requests(q, is_action):
-    assert bool(ask_mod.ACTION_REQUEST.search(q)) == is_action
+    assert ask_mod.is_action_request(q) == is_action
 
 
 @pytest.fixture

@@ -40,6 +40,9 @@ ACTION_GRANT = {
     "delete": "delete",
 }
 
+# Edits and drafts write text, so they only ever touch text files (an edit would wipe a PDF).
+WRITABLE_TYPES = {".md", ".txt"}
+
 _ACTION_TYPES = (SearchAction, ReadAction, ProposeEditAction, CreateDraftAction, DeleteAction)
 
 GRANT_LABEL = {
@@ -177,6 +180,8 @@ def _check(action: Action, target: Path | None) -> None:
         raise ActionRefused("File not found")
     if isinstance(action, CreateDraftAction) and target and target.exists():
         raise ActionRefused("A file with that name already exists; drafts never overwrite")
+    if isinstance(action, (ProposeEditAction, CreateDraftAction)) and target and target.suffix.lower() not in WRITABLE_TYPES:
+        raise ActionRefused("Only .md and .txt files can be edited or drafted")
 
 
 def execute(folder_id: str, action: Action, target: Path | None) -> str | None:
