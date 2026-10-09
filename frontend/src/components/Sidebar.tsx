@@ -457,7 +457,7 @@ function Rename({ kind, folderId, path, current }: { kind: 'folder' | 'subfolder
     <>
       <button
         onClick={start}
-        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink lg:hidden lg:group-hover:grid lg:group-focus-within:grid"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
         aria-label={`Rename ${current}`}
         title={`Rename ${kind}`}
       >
@@ -535,7 +535,7 @@ function MoveToTrash({ kind, folderId, path, name, active }: {
     <>
       <button
         onClick={() => { setConfirming(true); setError(null) }}
-        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-red-700 lg:hidden lg:group-hover:grid lg:group-focus-within:grid"
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-red-700 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
         aria-label={`Move ${name} to Trash`}
         title={`Delete ${kind}`}
       >
