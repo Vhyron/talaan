@@ -5,6 +5,7 @@ import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Sour
 import SourceChip from '../components/SourceChip'
 import ChatMarkdown from '../components/ChatMarkdown'
 import Mascot from '../components/Mascot'
+import HoldToTalk from '../components/HoldToTalk'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { chatScope, useFolder } from '../lib/folderContext'
@@ -103,6 +104,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
   const elapsed = useElapsed(busy)
   const end = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
@@ -273,6 +275,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             </p>
             <div className="flex items-end gap-2 rounded-xl border border-line bg-white p-2 focus-within:border-brand">
               <textarea
+                ref={input}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
@@ -280,6 +283,10 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
                 aria-label={`Ask about ${scope.label}`}
                 className="flex-1 resize-none bg-transparent outline-none"
                 placeholder={currentPath ? 'e.g. Summarize this note' : 'e.g. Summarize this · What is still open?'}
+              />
+              <HoldToTalk
+                folderId={folder.id}
+                onText={(t) => { setQuestion((q) => (q.trim() ? `${q.trimEnd()} ${t}` : t)); input.current?.focus() }}
               />
               <button onClick={send} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
                 <SendHorizontal size={16} />
@@ -346,7 +353,10 @@ function Answer({ res, proposalStatus, onShowApprovals }: {
     return (
       <div className="flex gap-2 rounded-xl border border-line bg-white px-3 py-2 text-muted">
         <Lock size={15} className="mt-0.5 shrink-0" />
-        <span className="font-medium whitespace-pre-wrap">{res.answer}</span>
+        <div>
+          <p className="font-medium whitespace-pre-wrap">{res.answer}</p>
+          {res.detail && <p className="mt-1 text-xs leading-5">{res.detail}</p>}
+        </div>
       </div>
     )
   }

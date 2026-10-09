@@ -164,6 +164,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[Source] = []
     refused: bool = False
+    detail: str | None = None  # why a refusal happened, for the user; `answer` stays "I can only see X."
     outcome: Outcome | None = None
     proposal_id: str | None = None
     session_id: str | None = None  # the saved chat this turn belongs to

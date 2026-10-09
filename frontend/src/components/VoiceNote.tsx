@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { Outcome, VoiceStatus } from '../api/types'
 import { useFolder } from '../lib/folderContext'
 import { useElapsed } from '../lib/useElapsed'
+import { extFor } from '../lib/audio'
 
 type State =
   | { step: 'idle'; note?: string }
@@ -15,14 +16,6 @@ type State =
   | { step: 'error'; message: string }
 
 const AUDIO_ACCEPT = '.webm,.wav,.m4a,.mp3,.ogg,audio/*'
-
-/** File extension the backend accepts, from the recorder's MIME type. */
-function extFor(mime: string): string {
-  if (mime.includes('mp4') || mime.includes('aac')) return 'm4a'
-  if (mime.includes('ogg')) return 'ogg'
-  if (mime.includes('wav')) return 'wav'
-  return 'webm'
-}
 
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
@@ -118,7 +111,10 @@ async function openSource(source: Source): Promise<{ stream: MediaStream; shared
 
 /** Record or upload a voice note; it is transcribed on this laptop and proposed as a draft. */
 export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
-  const { folder, bump } = useFolder()
+  const { folder, currentPath, dir, bump } = useFolder()
+  // Saved where you are: the open file's folder, else the open subfolder, else the Space's top level.
+  const saveDir = currentPath ? currentPath.split('/').slice(0, -1).join('/') : dir
+  const saveLabel = saveDir ? `${folder.name} / ${saveDir}` : folder.name
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<State>({ step: 'idle' })
   const recorder = useRef<MediaRecorder | null>(null)
@@ -218,7 +214,7 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
   async function send(audio: Blob, name: string, seconds?: number) {
     setState({ step: 'sending', name, long: (seconds ?? 0) > 300 || audio.size > 5 * 2 ** 20 })
     try {
-      const outcome = await api.transcribe(folder.id, audio, name)
+      const outcome = await api.transcribe(folder.id, audio, name, saveDir)
       bump()
       setState({ step: 'done', outcome })
       if (outcome.status === 'pending') onProposed()
@@ -251,7 +247,7 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
               <div>
                 <h2 className="text-base font-bold">Voice note</h2>
                 <p className="mt-0.5 text-xs text-muted">
-                  Transcribed on this laptop and proposed as a draft in {folder.name}. Nothing is saved until you approve it.
+                  Transcribed on this laptop and proposed as a draft in <b>{saveLabel}</b>. Nothing is saved until you approve it.
                 </p>
               </div>
               <button onClick={close} className="grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-panel" aria-label="Close voice note">

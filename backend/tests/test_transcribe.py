@@ -101,6 +101,37 @@ def test_draft_names_do_not_collide(talaan_home):
     assert first == "2026-10-03_voice-note_1405.md" and draft_name(root, t) == "2026-10-03_voice-note_1405-2.md"
 
 
+def test_draft_goes_in_open_subfolder(fake_whisper, talaan_home):
+    root = talaan_home / "folders" / F
+    (root / "interviews").mkdir()
+    out = c.post(f"/folders/{F}/transcribe", files={"audio": ("note.webm", b"audio")}, data={"dir": "interviews"}).json()
+    assert out["status"] == "pending" and out["path"].startswith("interviews/") and "_voice-note_" in out["path"]
+    assert c.post(f"/proposals/{out['proposal_id']}/approve").json()["status"] == "executed"
+    assert SPEECH in (root / out["path"]).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("bad, code", [("../Other", 400), (".talaan", 400), ("missing", 404)])
+def test_subfolder_is_sealed(fake_whisper, bad, code):
+    r = c.post(f"/folders/{F}/transcribe", files={"audio": ("note.webm", b"audio")}, data={"dir": bad})
+    assert r.status_code == code
+    assert fake_whisper == []  # refused before transcribing
+
+
+def test_dictate_returns_text_only(fake_whisper, talaan_home):
+    r = c.post("/voice/dictate", files={"audio": ("q.webm", b"audio")}, data={"folder_id": F})
+    assert r.json() == {"text": SPEECH}
+    [(_, hotwords)] = fake_whisper
+    assert "Bea Lim" in hotwords
+    assert c.get(f"/folders/{F}/proposals").json() == []  # nothing proposed or saved
+
+
+def test_dictate_without_folder(fake_whisper):
+    assert c.post("/voice/dictate", files={"audio": ("q.webm", b"audio")}).json() == {"text": SPEECH}
+    [(_, hotwords)] = fake_whisper
+    assert not hotwords
+    assert c.post("/voice/dictate", files={"audio": ("q.webm", b"a")}, data={"folder_id": "nope"}).status_code == 404
+
+
 def test_transcription_never_downloads(monkeypatch):
     """Normal use loads from the local cache only; only --download may fetch."""
     import faster_whisper

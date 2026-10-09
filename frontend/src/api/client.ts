@@ -117,10 +117,19 @@ export const api = {
   audit: (id: string) => json<AuditEvent[]>(`${f(id)}/audit`),
   auditExportUrl: (id: string, format: 'json' | 'csv') => `/api${f(id)}/audit/export?format=${format}`,
 
-  transcribe: (id: string, audio: Blob, filename = 'recording.webm') => {
+  /** `dir`: the subfolder the draft is proposed in ("" = the Space's top level). */
+  transcribe: (id: string, audio: Blob, filename = 'recording.webm', dir = '') => {
     const form = new FormData()
     form.append('audio', audio, filename)
+    form.append('dir', dir)
     return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
+  },
+  /** Hold-to-talk: speech -> text for the chat box. Nothing is saved. */
+  dictate: (audio: Blob, filename: string, folderId?: string) => {
+    const form = new FormData()
+    form.append('audio', audio, filename)
+    if (folderId) form.append('folder_id', folderId)
+    return json<{ text: string }>('/voice/dictate', { method: 'POST', body: form })
   },
 
   voiceStatus: () => json<VoiceStatus>('/system/voice'),
