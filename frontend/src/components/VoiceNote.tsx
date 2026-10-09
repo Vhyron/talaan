@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Ban, Check, Mic, RotateCcw, Square, Upload, X } from 'lucide-react'
+import { AlertTriangle, Ban, Check, Copy, Loader2, Mic, RefreshCw, RotateCcw, Square, Upload, X } from 'lucide-react'
 import { api } from '../api/client'
-import type { Outcome } from '../api/types'
+import type { Outcome, VoiceStatus } from '../api/types'
 import { useFolder } from '../lib/folderContext'
 import { useElapsed } from '../lib/useElapsed'
 
@@ -36,6 +36,18 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const recordingFor = useElapsed(state.step === 'recording')
   const sendingFor = useElapsed(state.step === 'sending')
+  // Checked every time the dialog opens: is speech-to-text installed on this laptop?
+  const [voice, setVoice] = useState<VoiceStatus | 'checking' | { unreachable: string }>('checking')
+  const ready = typeof voice === 'object' && 'ready' in voice && voice.ready
+
+  function checkVoice() {
+    setVoice('checking')
+    api.voiceStatus().then(setVoice).catch((e) => setVoice({ unreachable: (e as Error).message }))
+  }
+
+  useEffect(() => {
+    if (open) checkVoice()
+  }, [open])
 
   // Release the microphone and any preview URL when closing or unmounting.
   const stopTracks = () => recorder.current?.stream.getTracks().forEach((t) => t.stop())
@@ -123,13 +135,20 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
               </button>
             </div>
 
+            {!ready && <SetupNotice voice={voice} onRecheck={checkVoice} />}
+
             <div className="mt-5">
               {state.step === 'idle' && (
                 <div className="flex flex-col items-center gap-3">
-                  <button onClick={startRecording} className="grid h-16 w-16 place-items-center rounded-full bg-brand text-white hover:bg-brand-dark" aria-label="Start recording">
+                  <button
+                    onClick={startRecording}
+                    disabled={!ready}
+                    className="grid h-16 w-16 place-items-center rounded-full bg-brand text-white hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+                    aria-label="Start recording"
+                  >
                     <Mic size={26} />
                   </button>
-                  <p className="text-muted">Tap to record</p>
+                  <p className="text-muted">{ready ? 'Tap to record' : voice === 'checking' ? 'Checking speech-to-text…' : 'Recording is off until speech-to-text is set up'}</p>
                   {state.note && <p className="rounded-lg bg-warn-soft px-3 py-2 text-center text-xs text-warn-text">{state.note}</p>}
                 </div>
               )}
@@ -150,7 +169,7 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
                   <audio controls src={state.url} className="w-full" />
                   <p className="truncate text-xs text-muted">{state.name}</p>
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => send(state.audio, state.name)} className="btn-primary text-sm">Transcribe</button>
+                    <button onClick={() => send(state.audio, state.name)} disabled={!ready} className="btn-primary text-sm disabled:cursor-not-allowed">Transcribe</button>
                     <button onClick={() => setState({ step: 'idle' })} className="btn-ghost inline-flex items-center gap-1.5 text-sm">
                       <RotateCcw size={14} /> Discard
                     </button>
@@ -174,7 +193,11 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
 
             {(state.step === 'idle' || state.step === 'ready') && (
               <div className="mt-5 border-t border-line pt-3">
-                <button onClick={() => fileInput.current?.click()} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-text hover:underline">
+                <button
+                  onClick={() => fileInput.current?.click()}
+                  disabled={!ready}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-text hover:underline disabled:cursor-not-allowed disabled:text-muted disabled:no-underline"
+                >
                   <Upload size={13} /> Upload an audio file instead
                 </button>
                 <input
@@ -192,6 +215,54 @@ export default function VoiceNote({ onProposed }: { onProposed: () => void }) {
         document.body,
       )}
     </>
+  )
+}
+
+/** Shown instead of recording when speech-to-text isn't installed (or can't be checked). */
+function SetupNotice({ voice, onRecheck }: { voice: VoiceStatus | 'checking' | { unreachable: string }; onRecheck: () => void }) {
+  const [copied, setCopied] = useState(false)
+  if (voice === 'checking') {
+    return (
+      <p className="mt-4 flex items-center gap-2 rounded-lg bg-panel px-3 py-2 text-muted">
+        <Loader2 size={14} className="animate-spin" /> Checking speech-to-text on this laptop…
+      </p>
+    )
+  }
+  const unreachable = 'unreachable' in voice
+  const title = unreachable ? 'Can’t reach Talaan’s backend' : 'Voice notes aren’t set up on this laptop'
+  const message = unreachable ? 'Start the backend, then check again.' : voice.message
+  const fix = unreachable ? 'cd backend; uv run uvicorn app.main:app' : voice.fix
+
+  async function copy() {
+    if (!fix) return
+    try {
+      await navigator.clipboard.writeText(fix)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setCopied(false) // clipboard blocked: the command is still visible to select
+    }
+  }
+
+  return (
+    <div role="alert" className="mt-4 space-y-2 rounded-lg border border-amber-300 bg-warn-soft p-3 text-warn-text">
+      <p className="flex items-center gap-1.5 font-semibold"><AlertTriangle size={15} className="shrink-0" /> {title}</p>
+      {message && <p className="text-xs">{message}</p>}
+      {fix && (
+        <>
+          <p className="text-xs">Run this in a terminal from the Talaan folder:</p>
+          <div className="flex items-stretch gap-1">
+            <code className="min-w-0 flex-1 overflow-x-auto rounded bg-white px-2 py-1.5 font-mono text-[11px] whitespace-nowrap text-ink">{fix}</code>
+            <button onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded bg-white px-2 text-xs font-semibold text-ink hover:bg-panel" aria-label="Copy command">
+              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </>
+      )}
+      <button onClick={onRecheck} className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-semibold text-ink hover:bg-panel">
+        <RefreshCw size={12} /> Check again
+      </button>
+    </div>
   )
 }
 

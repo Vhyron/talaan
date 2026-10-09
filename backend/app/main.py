@@ -23,7 +23,7 @@ from app.llm.models import EMBED_MODEL
 from app.schemas import (
     CreateDraftAction,
     AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
-    Proposal, SystemTier, TimelineResponse,
+    Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
 
 app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.")
@@ -217,6 +217,12 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
         reason=f"Voice note ({transcript.duration:.0f}s) transcribed on this laptop",
     )
     return engine.handle(folder_id, action, model_tag=transcript.model)
+
+
+@app.get("/system/voice")
+def voice_status() -> VoiceStatus:
+    """Can voice notes be transcribed here? The recorder checks this before recording."""
+    return voice.whisper.status()
 
 
 @app.get("/system/tier")
