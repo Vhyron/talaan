@@ -207,9 +207,30 @@ class Tier(BaseModel):
     fits: bool
 
 
+class ModelOption(BaseModel):
+    """A pinned chat model the user can switch to."""
+
+    tag: str
+    tier: TierId
+    installed: bool
+    fits: bool  # this machine has the memory the tier calls for
+    active: bool
+
+
 class SystemTier(BaseModel):
     ram_gb: int
     gpu: str | None
     free_disk_gb: int
     recommended: TierId
     tiers: list[Tier]
+    ollama_running: bool = False
+    active_chat_model: str | None = None
+    active_source: Literal["env", "user", "auto"] = "auto"  # env var, Setup page choice, or tier detection
+    embed_installed: bool = False
+    models: list[ModelOption] = []
+
+
+class ModelChoice(BaseModel):
+    """`chat_model: null` returns to automatic selection by hardware tier."""
+
+    chat_model: str | None

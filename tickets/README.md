@@ -34,7 +34,7 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [A3](A3-app-db-grants-audit.md) | app.db: grants and audit log | A | P0 | 1.5h | A1 | review |
 | [A4](A4-policy-engine.md) | Policy engine and action execution | A | P0 | 2h | A2, A3 | review |
 | [A5](A5-proposals-approval-flow.md) | Proposals and approval flow | A | P0 | 1.5h | A4 | review |
-| [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | todo |
+| [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | doing |
 | [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | todo |
 | [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | todo |
 | [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | todo |

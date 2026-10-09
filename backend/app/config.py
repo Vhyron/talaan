@@ -7,6 +7,7 @@ FOLDERS_DIR = TALAAN_HOME / "folders"
 APP_DB = TALAAN_HOME / "app.db"
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-CHAT_MODEL = os.environ.get("CHAT_MODEL", "gemma4:e4b")  # pin after the B1 bake-off
-EMBED_MODEL = os.environ.get("EMBED_MODEL", "qwen3-embedding:0.6b")
+# Optional dev override. Normally the chat model is picked by hardware tier or on the Setup page;
+# pinned tags live in app/llm/models.py. The embedding model is fixed there too (never per machine).
+CHAT_MODEL = os.environ.get("CHAT_MODEL") or None
 NUM_CTX = int(os.environ.get("NUM_CTX", "16384"))

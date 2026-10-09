@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS proposals (
     decided_at  TEXT
 );
 CREATE INDEX IF NOT EXISTS proposals_folder ON proposals (folder_id, status);
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS conversations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     folder_id  TEXT NOT NULL,

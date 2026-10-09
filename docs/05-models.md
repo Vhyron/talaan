@@ -43,6 +43,21 @@
 - **Never change the embedding model** without re-indexing every folder.
 - **Disclose every model tag** in the submission.
 
+## Model switching (in the app)
+
+Pinned tags live in one place: `backend/app/llm/models.py` (tier table + bake-off alternates). The app picks the chat model in this order:
+
+1. `CHAT_MODEL` env var (dev override, must be a pinned tag)
+2. The user's choice (`PUT /system/model`), saved in `app.db`
+3. The detected tier's model, if installed
+4. The largest installed pinned model that fits this machine, then any installed pinned model
+
+- `GET /system/tier` reports RAM/GPU, recommended tier, the active model and every pinned option (installed / fits / active).
+- `PUT /system/model {"chat_model": "qwen3.5:4b"}` switches (unloads the old model, loads the new one); `{"chat_model": null}` returns to automatic. Unpinned or not-installed tags are rejected. A model above the machine's tier is allowed but reported as `fits: false`.
+- The **embedding model is not switchable**: same tag on every tier, so indexes stay valid.
+- Every answer logs the exact `model_tag`, so the audit log shows which model produced it.
+- Measured on an 8 GB M2: embeddings at `num_ctx` 8192 evicted the chat model; at 2048 both stay loaded on the GPU.
+
 ## Tier detection (P2)
 
 On first run: read total RAM and GPU presence → map to Light / Standard / Pro → `ollama pull` that tier's models → show which features are available.

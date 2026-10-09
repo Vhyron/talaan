@@ -80,9 +80,8 @@ All optional, set as environment variables before starting the backend (see `bac
 | Variable | Default | Use |
 |---|---|---|
 | `TALAAN_HOME` | `~/Talaan` | Where folders and `app.db` live |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama, or LM Studio's OpenAI-compatible URL |
-| `CHAT_MODEL` | `gemma4:e4b` | Chat model tag |
-| `EMBED_MODEL` | `qwen3-embedding:0.6b` | Embedding model. Changing it means re-indexing every folder |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server. The client uses Ollama's native API (needed for per-request `num_ctx`), so LM Studio is not a drop-in swap |
+| `CHAT_MODEL` | unset (auto by hardware tier) | Optional dev override; must be a pinned tag in `backend/app/llm/models.py`. Normally switch on the Setup page / `PUT /system/model` ([05-models.md](05-models.md#model-switching-in-the-app)) |
 | `NUM_CTX` | `16384` | Context window sent on every request |
 
 ### Running ticket branches side by side
