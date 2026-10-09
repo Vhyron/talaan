@@ -99,7 +99,7 @@ export default function PermissionsPanel() {
           />
         </label>
         <p className="mt-0.5 text-xs text-muted">
-          Off: the home page's chat across Spaces can't see {folder.name}. On: it can read it (read only, never changes files),
+          Off: the home page's chat across Spaces can't see {folder.name.replace(/\.$/, '')}. On: it can read it (read only, never changes files),
           and each question that uses it is logged here.
         </p>
       </div>
