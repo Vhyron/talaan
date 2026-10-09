@@ -1,6 +1,9 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
+import logging
 import tempfile
+import threading
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
@@ -10,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 
+from app import config
 from app import fixtures as fx
 from app import ask as ask_mod
 from app import audit as audit_log
@@ -18,7 +22,7 @@ from app import folders, index
 from app import timeline as case_timeline
 from app import transcribe as voice
 from app.policy import engine, grants, proposals
-from app.llm import selection, trace
+from app.llm import client, selection, trace
 from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
@@ -28,7 +32,27 @@ from app.schemas import (
     Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
 
-app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.")
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Chat model + embedder ready before the first question, and kept loaded while the app runs.
+    threading.Thread(target=client.warm, daemon=True, name="ollama-warm").start()
+    yield
+    client.release()
+
+
+app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.",
+              lifespan=lifespan)
+
+if config.LLM_LIVE_LOG:  # dev/demo: say in the terminal which models Ollama has loaded, as it changes
+    client.watch_models()
+
+    class _QuietPolling(logging.Filter):
+        """Hide the Settings page polling from the access log so the live model output stays readable."""
+
+        def filter(self, record: logging.LogRecord) -> bool:
+            return not any(p in record.getMessage() for p in ("/system/llm-log", "GET /health"))
+
+    logging.getLogger("uvicorn.access").addFilter(_QuietPolling())
 
 app.add_middleware(
     CORSMiddleware,

@@ -87,7 +87,10 @@ All optional, set as environment variables before starting the backend (see `bac
 | `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama server. Use `127.0.0.1`, not `localhost`: on Windows `localhost` tries IPv6 first and adds ~2 s to every model call. The client uses Ollama's native API (needed for per-request `num_ctx`), so LM Studio is not a drop-in swap |
 | `CHAT_MODEL` | unset (auto by hardware tier) | Optional dev override; must be a pinned tag in `backend/app/llm/models.py`. Normally switch on the Settings page / `PUT /system/model` ([05-models.md](05-models.md#model-switching-in-the-app)). The embedding model is fixed (`qwen3-embedding:0.6b`), not configurable |
 | `NUM_CTX` | `16384` | Context window sent on every request |
+| `MODEL_KEEP_ALIVE` | `-1` | How long Ollama keeps the chat model and embedder loaded after each call. `-1` keeps both loaded while the app runs: the app preloads both at startup and hands them back to Ollama's 5m default on shutdown. Any Ollama duration (`30m`) or seconds also works |
 | `LLM_LOG_PROMPTS` | unset | `1` forces "Record prompt and response text" on in the LLM activity log (memory only, never written to disk). Same as the toggle on the Settings page |
+| `LLM_LIVE_LOG` | unset | `1` streams every chat call live to the backend terminal: model, `num_ctx`, think, a status spinner (`loading model + processing prompt` / `processing prompt`) until the first token, then the thinking (dimmed) and answer as they generate, then load / prompt / gen timings and tok/s. Also prints a line whenever Ollama loads, unloads or refreshes a model (from `/api/ps`: GPU/CPU split, context, when it unloads), with a spinner while the Settings page loads one. Terminal only, never the UI or disk. Prints client text, so dev/demo use |
+| `LLM_LIVE_PROMPT` | unset | `1` also prints the full prompt (system + retrieved chunks + question) before each call. Turns on `LLM_LIVE_LOG` |
 | `WHISPER_MODEL` | `small` | faster-whisper size: `base` (Light), `small` (Standard), `large-v3-turbo` (Pro). Download it with the command in section 2 |
 | `WHISPER_LANGUAGES` | `en,tl` | Languages a voice note may be in; Whisper picks the likeliest of these (English, Tagalog, Taglish). One code forces it, e.g. `en` |
 
@@ -111,6 +114,26 @@ Open **http://localhost:5173/settings** (or click the model chip in the top bar)
 - **LLM activity:** every model call (tokens in/out, tok/s, load and total time, errors). Click a row for details. "Record prompt and response text" is off by default; when on, text stays in memory only.
 
 The backend terminal prints the same calls as `[llm]` lines. API: `GET /system/tier`, `PUT /system/model`, `GET /system/llm-log`.
+
+### Watching the model live (terminal)
+
+```powershell
+# Talaan live log: prompt, "processing prompt" status, streamed thinking + answer, timings,
+# model load/unload lines and why a question was refused before the model
+cd backend
+$env:LLM_LIVE_PROMPT="1"; uv run uvicorn app.main:app --reload   # LLM_LIVE_LOG="1" = same without the prompt
+
+# Ollama's own server log (model loads, GPU/memory, request timings), no restart needed
+Get-Content "$env:LOCALAPPDATA\Ollama\server.log" -Wait -Tail 50
+
+# More detail: quit Ollama from the tray icon, then run the server in debug mode
+$env:OLLAMA_DEBUG="1"; ollama serve
+
+# Which models are loaded right now
+ollama ps
+```
+
+Ollama's own log never shows the model's output or thinking; use the Talaan live log for that. Greetings like "hello" are refused before the model (nothing in the folder matches), so they print only an `embed` line and the refusal reason.
 
 ## 5. Test
 
