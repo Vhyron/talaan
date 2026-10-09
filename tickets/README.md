@@ -38,15 +38,15 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | done |
 | [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | done |
 | [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | done |
-| [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | review |
+| [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | done |
 | [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | done |
-| [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | review |
-| [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | review |
-| [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | review |
-| [C4](C4-permission-panel.md) | Permission panel | C | P0 | 1h | C2 | review |
-| [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | review |
-| [C6](C6-audit-log-view.md) | Audit log view and export | C | P0 | 1h | C2 | review |
-| [C7](C7-timeline-view.md) | Timeline view | C | P0 | 1.5h | C2 | review |
+| [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | done |
+| [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | done |
+| [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | done |
+| [C4](C4-permission-panel.md) | Permission panel | C | P0 | 1h | C2 | done |
+| [C5](C5-approval-diff.md) | Approval preview and diff | C | P0 | 1.5h | C2 | done |
+| [C6](C6-audit-log-view.md) | Audit log view and export | C | P0 | 1h | C2 | done |
+| [C7](C7-timeline-view.md) | Timeline view | C | P0 | 1.5h | C2 | done |
 | [D1](D1-transcription-backend.md) | Transcription backend | D | P1 | 2h | A1, A4 | todo |
 | [D2](D2-recorder-ui.md) | Recorder UI | D | P1 | 1.5h | C1, D1 | todo |
 | [D3](D3-demo-seed-reset.md) | Demo seed and reset script | D | P0 | 1h | A2, A3, B3 | todo |

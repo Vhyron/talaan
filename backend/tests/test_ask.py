@@ -61,10 +61,11 @@ def test_action_requests(q, is_action):
 @pytest.fixture
 def model(monkeypatch):
     """Stub the chat model. Set model.reply to what it should return; model.calls records prompts."""
-    state = type("M", (), {"reply": None, "calls": []})()
+    state = type("M", (), {"reply": None, "calls": [], "schemas": []})()
 
     def fake_chat(messages, schema=None, **kw):
         state.calls.append(messages)
+        state.schemas.append(schema)
         return ChatResult(content="", model="fake:1b", seconds=0, data=state.reply)
 
     monkeypatch.setattr(client, "chat", fake_chat)
@@ -130,6 +131,68 @@ def test_invalid_action_is_rejected(model):
     model.reply = {"action": "format_disk"}
     r = ask(CASE, "Delete the interview with Rhea Santos.")
     assert r["outcome"]["status"] == "blocked"
+
+
+def test_change_schema_offers_only_file_changes():
+    # With read/search on offer, gemma4:e4b answered "edit the open items" with a read (Oct 10 fix)
+    actions = set(ask_mod.CHANGE_SCHEMA["discriminator"]["mapping"])
+    assert actions == {"propose_edit", "create_draft", "delete"}
+
+
+OPEN_ITEMS = "2026-10-02_open-items.md"
+
+
+def test_edit_request_proposes_a_minimal_edit(model):
+    old = c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text
+    # What gemma4:e4b did: dropped the banner's "> " and the final newline while making the edit
+    new = old.replace("> SYNTHETIC", "SYNTHETIC").replace("- [ ] Respond", "- [x] Respond").rstrip("\n")
+    model.reply = {"action": "propose_edit", "path": OPEN_ITEMS, "content": new, "reason": "asked"}
+    r = ask(CASE, "Edit the open items to mark the request for copies as done.")
+    assert model.schemas[-1] == ask_mod.CHANGE_SCHEMA
+    assert r["outcome"]["status"] == "pending" and r["outcome"]["action"] == "propose_edit"
+    diff = next(p for p in c.get(f"/folders/{CASE}/proposals").json() if p["id"] == r["proposal_id"])["diff"]
+    changed = [ln for ln in diff.splitlines() if ln[:1] in "+-" and not ln.startswith(("+++", "---"))]
+    assert changed == ["-- [ ] Respond to Atty. Ramos's request for copies (Sep 26 email)",
+                       "+- [x] Respond to Atty. Ramos's request for copies (Sep 26 email)"]
+    assert c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text == old  # nothing written before approval
+
+
+def test_edit_that_changes_nothing_is_not_proposed(model):
+    old = c.get(f"/folders/{CASE}/files/{OPEN_ITEMS}").text
+    model.reply = {"action": "propose_edit", "path": OPEN_ITEMS, "content": old.replace("> ", ""), "reason": ""}
+    r = ask(CASE, "Edit the open items to mark the hearing as held.")
+    assert r["outcome"] is None and r["answer"].startswith("No change needed")
+    assert c.get(f"/folders/{CASE}/proposals").json() == []
+
+
+@pytest.mark.parametrize("old, new, expected", [
+    ("> a\nb\nc\n", "a\nB\nc", "> a\nB\nc\n"),      # quote marker and final newline restored
+    ("a\nb\n", "a\nb\nnew line\n", "a\nb\nnew line\n"),  # added lines kept
+    ("a\n> b\n", "a\n", "a\n"),                     # removed lines stay removed
+    ("x  \ny\n", "x\ny\n", "x  \ny\n"),             # trailing spaces restored
+])
+def test_keep_untouched_lines(old, new, expected):
+    assert ask_mod.keep_untouched_lines(old, new) == expected
+
+
+@pytest.mark.parametrize("folder, q, contradiction", [
+    (CASE, "Is there anything in this case that contradicts the allegation?", True),
+    (CASE, "Does anything not line up with the supervisor's account?", True),
+    (CASE, "What is still open?", False),
+    (CHART, "Why was she referred?", False),
+])
+def test_contradiction_questions_get_the_checklist(model, folder, q, contradiction):
+    model.reply = {"answer": "x [S1]", "refused": False}
+    ask(folder, q)
+    user = model.calls[-1][-1]["content"]
+    assert (ask_mod.CONTRADICTION_REMINDER in user) == contradiction
+    assert (ask_mod.REMINDER in user) != contradiction
+
+
+def test_answers_are_asked_for_in_plain_text(model):
+    model.reply = {"answer": "x [S1]", "refused": False}
+    ask(CASE, "What is still open?")
+    assert "No Markdown" in model.calls[-1][0]["content"]
 
 
 # --- Chat sidebar: open file, summaries, follow-ups, index ------------------
@@ -224,3 +287,16 @@ def test_ask_builds_a_missing_index(monkeypatch):
 def test_index_status_shape():
     r = c.post(f"/folders/{CHART}/index").json()
     assert r["files"] == 6 and r["chunks"] > 0 and r["pending_embeddings"] == 0 and r["errors"] == []
+
+
+def test_checklist_history_and_open_file_together(model):
+    """#26's contradiction checklist and #27's history + open-file focus share one prompt."""
+    model.reply = {"answer": "Sick leave was approved [S1].", "refused": False}
+    history = [{"role": "user", "content": "What is still open?"},
+               {"role": "assistant", "content": "The agency roster [S1]."}]
+    ask_with(CASE, "Is there anything in this case that contradicts the allegation?",
+             path="2026-09-24_hearing-minutes.md", history=history)
+    user = model.calls[-1][-1]["content"]
+    assert "Earlier in this conversation" in user and "What is still open?" in user
+    assert "2026-09-24_hearing-minutes.md open" in user or "open file 2026-09-24_hearing-minutes.md" in user
+    assert ask_mod.CONTRADICTION_REMINDER in user and "Check each document in turn" in user
