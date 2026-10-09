@@ -2,7 +2,6 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, Turn } from '../api/types'
 import { movedPath, onRenamed } from './renamed'
-import { usePersistentFlag } from './usePersistentFlag'
 
 /**
  * The home-page chat (all folders), kept outside the page. The server saves the thread in
@@ -83,12 +82,5 @@ export function useHomeChat() {
   return t
 }
 
-/** Remembers whether the home page's floating chat card is open. */
+/** Remembers whether the home chat is expanded on the home page (vs. minimized to its question box). */
 export const HOME_CHAT_OPEN = 'talaan.homeChat.open'
-
-/** Whether the home chat card is showing, so the page can make room for it on wide screens. */
-export function useHomeChatShown(): boolean {
-  const { messages, busy } = useHomeChat()
-  const [open] = usePersistentFlag(HOME_CHAT_OPEN, false)
-  return open && (messages.length > 0 || busy)
-}
