@@ -14,3 +14,7 @@ NUM_CTX = int(os.environ.get("NUM_CTX", "16384"))
 
 # faster-whisper size: base / small / large-v3-turbo per tier (docs/05-models.md)
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+# Languages a voice note may be in. Whisper picks the likeliest of these; it never
+# guesses outside them (short clips otherwise get "detected" as e.g. Chinese).
+# "en,tl" covers English, Tagalog and Taglish. Use a single code to force one.
+WHISPER_LANGUAGES = [c.strip() for c in os.environ.get("WHISPER_LANGUAGES", "en,tl").split(",") if c.strip()]

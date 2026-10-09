@@ -181,6 +181,8 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
         ]
         try:
             transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, voice.folder_vocabulary(texts))
+        except voice.whisper.TooShort as e:
+            raise HTTPException(422, str(e))
         except Exception as e:  # undecodable audio, missing model, ...
             raise HTTPException(422, f"Could not transcribe this audio: {e}")
 
