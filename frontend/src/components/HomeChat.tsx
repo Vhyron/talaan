@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 're
 import { useNavigate } from 'react-router-dom'
 import { ArrowDown, Clock, Library, MessageSquare, Minimize2, RotateCcw, SendHorizontal, WifiOff } from 'lucide-react'
 import type { Folder, Source } from '../api/types'
+import { api } from '../api/client'
 import { askHome, HOME_CHAT_OPEN, newHomeChat, openHomeChat, useHomeChat } from '../lib/chatSession'
 import ChatHistory from '../panels/ChatHistory'
 import { fileLabel } from '../lib/format'
@@ -88,6 +89,16 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
   const section = useRef<HTMLElement>(null)
   const list = useRef<HTMLDivElement>(null)
   const hasThread = messages.length > 0 || busy
+  const questions = messages.filter((m) => m.role === 'user').length
+  // How many saved chats there are, kept current as you ask (a new chat adds one).
+  const [savedCount, setSavedCount] = useState<number | null>(null)
+  const saved = messages.filter((m) => m.role !== 'error').length
+  useEffect(() => {
+    let live = true
+    api.chats(null).then((l) => live && setSavedCount(l.length)).catch(() => {})
+    return () => { live = false }
+  }, [sessionId, saved])
+  const savedLabel = `Saved chats${savedCount ? ` (${savedCount})` : ''}`
   const expanded = open && (hasThread || history)
 
   const bringIntoView = () => requestAnimationFrame(() => section.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
@@ -161,7 +172,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
               className={`${toolBtn} ${history ? 'bg-white text-ink' : ''}`}
               title="Saved chats across all folders"
             >
-              <Clock size={12} /> Saved chats
+              <Clock size={12} /> {savedLabel}
             </button>
             <button onClick={() => { setOpen(false); setHistory(false) }} className={toolBtn} title="Minimize (Esc)">
               <Minimize2 size={12} /> Minimize
@@ -222,11 +233,11 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
           {hasThread && (
             <button onClick={resume} className="inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-brand-text hover:underline">
               <MessageSquare size={13} />
-              {busy ? `Answering… ${elapsed}s` : `Continue chat · ${messages.length} messages`}
+              {busy ? `Answering… ${elapsed}s` : `Continue chat · ${questions} ${questions === 1 ? 'question' : 'questions'}`}
             </button>
           )}
           <button onClick={showHistory} className="inline-flex items-center gap-1.5 rounded-md px-1 text-xs font-semibold text-muted hover:text-ink hover:underline">
-            <Clock size={13} /> Saved chats
+            <Clock size={13} /> {savedLabel}
           </button>
         </div>
       )}
