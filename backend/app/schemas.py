@@ -9,6 +9,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter
 
+# A Space's old Case/Chart label. Hidden in the UI (SHOW_MODE in the frontend) but kept so it can return.
 Mode = Literal["case", "chart"]
 
 
@@ -16,15 +17,22 @@ Mode = Literal["case", "chart"]
 
 
 class Folder(BaseModel):
+    """A Space: one sealed top-level folder (own index.db, grants, audit). Subfolders inside it
+    are chat scopes, not seals."""
+
     id: str
     name: str
-    mode: Mode
+    mode: Mode | None = None
     created_at: datetime
 
 
 class FolderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    mode: Mode
+    mode: Mode | None = None
+
+
+class FolderRename(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
 
 
 class DirCreate(BaseModel):
@@ -135,6 +143,9 @@ class Turn(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
     path: str | None = None  # the file open in the viewer (folder-relative); re-checked against the folder
+    # The subfolder the chat was started from (Space-relative); None is the whole Space. Ignored when
+    # `path` is set: a question asked with a file open is answered from that file only.
+    scope: str | None = None
     history: list[Turn] = Field(default=[], max_length=8)
     session_id: str | None = None  # continue this saved chat; None starts a new one
 
@@ -183,6 +194,7 @@ class Proposal(BaseModel):
 
 AuditEventType = Literal[
     "question", "answer", "proposed_action", "decision", "executed", "grant_change", "session_renamed", "session_deleted",
+    "space_renamed",
 ]
 
 
@@ -209,6 +221,7 @@ class ChatSessionSummary(BaseModel):
     created_at: datetime
     updated_at: datetime
     message_count: int
+    scope: str | None = None  # the subfolder it was started from; None is the whole Space
 
 
 class ChatMessage(BaseModel):

@@ -81,7 +81,7 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
         {list === null ? (
           <p className="text-muted">Loading…</p>
         ) : list.length === 0 ? (
-          <p className="text-muted">{q.trim() ? 'No saved chats match.' : `No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}</p>
+          <p className="text-muted">{q.trim() ? 'No saved chats match.' : 'No saved chats in this Space yet. Every question you ask is saved here.'}</p>
         ) : (
           <ul className="space-y-2">
             {list.map((s) => (
@@ -116,7 +116,7 @@ export default function ChatHistory({ activeId, onOpen, onDeleted, onRenamed }: 
                     <button onClick={() => onOpen(s.id)} className="min-w-0 flex-1 text-left">
                       <span className="block truncate font-medium">{s.title}</span>
                       <span className="block text-xs text-muted">
-                        {ago(s.updated_at)} · {Math.ceil(s.message_count / 2)} {s.message_count === 2 ? 'question' : 'questions'}
+                        {s.scope ? `${s.scope} · ` : ''}{ago(s.updated_at)} · {Math.ceil(s.message_count / 2)} {s.message_count === 2 ? 'question' : 'questions'}
                         {s.id === activeId ? ' · open now' : ''}
                       </span>
                     </button>

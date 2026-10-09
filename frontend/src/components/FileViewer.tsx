@@ -3,7 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { api } from '../api/client'
 import { fileLabel, isPdf } from '../lib/format'
-import { useFolder } from '../lib/folderContext'
+import { SHOW_MODE, useFolder } from '../lib/folderContext'
 
 export type Highlight = { start: number; end: number } | null
 
@@ -65,7 +65,7 @@ export default function FileViewer({ path, highlight }: { path: string; highligh
         {title}
       </h1>
       <div className="mt-3 flex flex-wrap gap-2">
-        <span className="chip">#{folder.mode}</span>
+        {SHOW_MODE && folder.mode && <span className="chip">#{folder.mode}</span>}
         {date && <span className="chip">{date}</span>}
       </div>
       {path.endsWith('.md') ? (

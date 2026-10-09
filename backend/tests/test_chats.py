@@ -9,8 +9,9 @@ from app.llm.client import ChatResult, OllamaError
 from app.main import app
 
 c = TestClient(app)
-CASE = "Case-2026-014_Dela-Cruz"
-CHART = "Chart_M-Reyes"
+CASE = "Lakbay-Logistics-Inc"
+CHART = "Santos-Family-Clinic"
+SCOPE = {CASE: "Case 2026-014 Dela Cruz", CHART: "Chart M Reyes"}  # chats are started from the case/chart
 
 
 @pytest.fixture
@@ -31,8 +32,9 @@ def model(monkeypatch):
     return state
 
 
-def ask(folder, q, sid=None):
-    r = c.post(f"/folders/{folder}/ask", json={"question": q, "session_id": sid})
+def ask(folder, q, sid=None, scope=...):
+    scope = SCOPE[folder] if scope is ... else scope
+    r = c.post(f"/folders/{folder}/ask", json={"question": q, "session_id": sid, "scope": scope})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -147,3 +149,18 @@ def test_demo_reset_clears_chats(model):
     ask(CASE, "What is still open?")
     clear_state([CASE])
     assert c.get(f"/folders/{CASE}/chats").json() == []
+
+
+def test_chat_summary_carries_its_scope(model):
+    scoped = ask(CASE, "What is still open?")["session_id"]
+    whole = ask(CASE, "What is still open?", scope=None)["session_id"]
+    ask(CASE, "Anything else?", scoped, scope=None)  # the scope is kept from the first turn
+    summaries = {s["id"]: s for s in c.get(f"/folders/{CASE}/chats").json()}
+    assert summaries[scoped]["scope"] == "Case 2026-014 Dela Cruz"
+    assert summaries[whole]["scope"] is None
+
+
+def test_draft_from_a_scoped_chat_lands_in_that_subfolder(model):
+    model.reply = {"action": "create_draft", "path": "follow-up.md", "content": "# Note", "reason": "asked"}
+    r = ask(CASE, "Create a draft note of the open items.")
+    assert r["outcome"]["path"] == "Case 2026-014 Dela Cruz/follow-up.md"

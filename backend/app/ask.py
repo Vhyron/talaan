@@ -4,14 +4,17 @@ Order of events (docs/03): log the question; Read grant; scope check in code (na
 retrieve; model answers from the tagged sources; [S#] markers are mapped back to Source objects.
 A request to change files goes through a separate model call and then policy.engine.handle().
 
-The chat sidebar also sends the file open in the viewer and the last few turns. The open file is
-re-checked against the folder and only focuses or boosts retrieval inside it. History only helps
-follow-up questions; it is never a source and never reaches the action call.
+The folder is a Space. A chat has a scope inside it: the whole Space, a subfolder (plus the Space's
+README.md) when the chat was started from one, or only the open file when one is open. Retrieval, the
+name check and the refusal text all use that scope. History only helps follow-up questions; it is
+never a source and never reaches the action call.
 """
 
 import difflib
 import re
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Annotated
 
 from fastapi import HTTPException
@@ -49,10 +52,10 @@ ACTION_REQUEST = re.compile(
     # "Follow the instructions in the email": still only a proposal, which the engine then judges
     r"(?:follow|carry out|act on) (?:the |its |any )?(?:instructions?|requests?|notes?)|do what)\b", re.I)
 
-# "Summarize this chart", "overview of the whole case": the folder is the case or chart.
+# "Summarize this chart", "overview of the whole case": everything in the chat's scope.
 FOLDER_SUMMARY = re.compile(
     r"\b(?:summar\w*|overview|brief(?:ing)?|recap|rundown)\b.*"
-    r"\b(?:this|the|whole|entire|her|his|their)\s+(?:case|chart|patient|employee|client|folder)\b"
+    r"\b(?:this|the|whole|entire|her|his|their)\s+(?:case|chart|patient|employee|client|folder|space)\b"
     r"|\b(?:summar\w*|overview|recap)\s+(?:of\s+)?everything\b", re.I)
 # "Summarize this note", "what does the open email say": the file open in the viewer.
 FILE_FOCUS = re.compile(
@@ -121,8 +124,33 @@ Pick the action from what the user asked for:
 - Remove a file: `delete` with its exact file name."""
 
 
-def refusal(folder: Folder) -> str:
-    return f"I can only see {folder.name}."
+README = "README.md"
+
+
+@dataclass(frozen=True)
+class Scope:
+    """What one chat can see inside its Space. `only` None is the whole Space."""
+
+    name: str  # in the prompt and the refusal: the Space, subfolder or file name
+    only: tuple[str, ...] | None = None
+    dir: str | None = None
+    file: str | None = None
+
+
+def scope_of(folder: Folder, path: str | None, scope: str | None) -> Scope:
+    """`path` is the checked open file (see open_file). A subfolder scope also sees the Space's
+    README.md, which says what the Space is."""
+    if path:
+        return Scope(PurePosixPath(path).name, (path,), file=path)
+    d = folders.scope_dir(folder.id, scope)
+    if d is None:
+        return Scope(folder.name)
+    readme = (README,) if (folders.folder_root(folder.id) / README).is_file() else ()
+    return Scope(PurePosixPath(d).name, (d, *readme), dir=d)
+
+
+def refusal(scope: Folder | Scope) -> str:
+    return f"I can only see {scope.name.rstrip('.')}."  # "Lakbay Logistics Inc." without a double period
 
 
 def names_in(question: str) -> list[str]:
@@ -141,10 +169,11 @@ def names_in(question: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
-def out_of_scope(folder_id: str, question: str, hits: list[Hit], relevance: bool = True) -> bool:
-    """Names are always checked. `relevance=False` skips the similarity threshold, for summaries
-    of this folder or the open file: they are about the folder by construction."""
-    if any(not index.contains(folder_id, n) for n in names_in(question)):
+def out_of_scope(folder_id: str, question: str, hits: list[Hit], relevance: bool = True,
+                 only: Sequence[str] | None = None) -> bool:
+    """Names are always checked, within the chat's scope. `relevance=False` skips the similarity
+    threshold, for summaries of this folder or the open file: they are about it by construction."""
+    if any(not index.contains(folder_id, n, only) for n in names_in(question)):
         return True
     if not hits:
         return True
@@ -274,6 +303,16 @@ def tidy_edit(folder_id: str, data: object) -> tuple[object, bool]:
     return {**data, "content": content}, content == old
 
 
+def draft_in_scope(data: object, sc: Scope) -> object:
+    """A new draft named without a folder goes into the chat's subfolder (or the open file's),
+    not the Space root. The engine still checks the path and the grants."""
+    home = sc.dir or (str(PurePosixPath(sc.file).parent) if sc.file else ".")
+    if (isinstance(data, dict) and data.get("action") == "create_draft" and isinstance(data.get("path"), str)
+            and "/" not in data["path"] and home != "."):
+        return {**data, "path": f"{home}/{data['path']}"}
+    return data
+
+
 def outcome_text(o: Outcome) -> str:
     what = f"{o.action}{f' on {o.path}' if o.path else ''}"
     if o.status == "pending":
@@ -333,21 +372,23 @@ class AnswerStream:
 
 
 def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = (),
-        session_id: str | None = None, emit: Emit | None = None) -> AskResponse:
+        session_id: str | None = None, emit: Emit | None = None, scope: str | None = None) -> AskResponse:
     """`emit` (the streaming endpoint) gets status lines and the answer text as it generates."""
     status = (lambda text: emit({"type": "status", "text": text})) if emit else (lambda text: None)
     folder = folders.get_folder(folder_id)
     if session_id:
         chats.check(folder_id, session_id)  # 404 for an unknown chat or another folder's
+    path = open_file(folder_id, path)
+    sc = scope_of(folder, path, scope)
     sid = session_id or chats.new_id()
-    audit.log_event(folder_id, "user", "question", reason=question, session_id=sid)
+    audit.log_event(folder_id, "user", "question", path=sc.file or sc.dir, reason=question, session_id=sid)
 
     def reply(resp: AskResponse, tag: str | None = None) -> AskResponse:
         """Every answer, refusal and policy outcome is audited and saved to the chat."""
         resp.session_id = sid
         audit.log_event(folder_id, "model", "answer", reason=resp.answer, model_tag=tag,
                         decision="refused" if resp.refused else None, session_id=sid)
-        chats.save_turn(folder_id, sid, question, resp)
+        chats.save_turn(folder_id, sid, question, resp, scope=sc.dir)
         return resp
 
     if get_grants(folder_id).read == Grant.NEVER:
@@ -357,30 +398,30 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
         index.build_index(folder_id)
 
     is_action = bool(ACTION_REQUEST.search(question))
-    path = open_file(folder_id, path)
-    focus = None if is_action else focus_of(question, path)
+    # With a file open, every question is about that file: it is the whole scope.
+    focus = None if is_action else ("file" if sc.file else focus_of(question, None))
     history = () if is_action else history
     # A follow-up ("what about her meds?") is retrieved together with the previous question.
     prev = next((t.content for t in reversed(history) if t.role == "user"), "")
-    status(f"Searching {folder.name}")
-    hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None)
-    if out_of_scope(folder_id, question, hits, relevance=focus is None):
+    status(f"Searching {sc.name}")
+    hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None, only=sc.only)
+    if out_of_scope(folder_id, question, hits, relevance=focus is None, only=sc.only):
         if config.LLM_LIVE_LOG:  # the terminal otherwise shows only an embed, which looks like nothing ran
-            missing = [n for n in names_in(question) if not index.contains(folder_id, n)]
+            missing = [n for n in names_in(question) if not index.contains(folder_id, n, sc.only)]
             sims = [h.similarity for h in hits if h.similarity is not None]
             why = (f"name not in this folder: {', '.join(missing)}" if missing else
                    "nothing retrieved" if not hits else
                    f"best match {max(sims):.2f} < {MIN_SCORE} and no keyword hit" if sims else "no relevant match")
             client.live_note(f"[ask] {question[:60]!r} refused before the model: {why}")
-        return reply(AskResponse(answer=refusal(folder), refused=True))
+        return reply(AskResponse(answer=refusal(sc), refused=True))
 
     chosen: list[Hit] = []
     if focus == "folder":
-        chosen = pick_context(index.all_chunks(folder_id))  # reading order: the start of each file first
+        chosen = pick_context(index.all_chunks(folder_id, sc.only))  # reading order: the start of each file first
     elif focus == "file" and path:
         chosen = pick_context(index.file_chunks(folder_id, path))
     if not chosen:
-        chosen = pick_context(boost(hits, None if is_action else path))
+        chosen = pick_context(hits)
     docs = context_block(chosen)
     files = len({h.path for h in chosen})
     status(f"Reading {len(chosen)} {'passage' if len(chosen) == 1 else 'passages'} from "
@@ -389,10 +430,11 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     if is_action:
         status("Drafting the change for the policy check")
         r = client.chat(
-            [{"role": "system", "content": ACTION_SYSTEM.format(folder=folder.name)},
+            [{"role": "system", "content": ACTION_SYSTEM.format(folder=sc.name)},
              {"role": "user", "content": f"{docs}\n\nRequest: {question}"}],
             schema=CHANGE_SCHEMA)
         raw, unchanged = tidy_edit(folder_id, r.data) if r.data is not None else (r.content, False)
+        raw = draft_in_scope(raw, sc)
         if unchanged:  # an empty diff would only clutter Approvals
             return reply(AskResponse(answer=f"No change needed: {raw['path']} already reads that way. "
                                             "Nothing was proposed."), r.model)
@@ -411,7 +453,7 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     elif path:
         looking = f"The user has {path} open.\n"
     r = client.chat(
-        [{"role": "system", "content": SYSTEM.format(folder=folder.name)},
+        [{"role": "system", "content": SYSTEM.format(folder=sc.name)},
          {"role": "user", "content": f"{history_block(history)}{docs}\n\n{looking}Question: {question}\n\n{reminder}"}],
         schema=Answer, on_delta=AnswerStream(emit) if emit else None)
     if r.data is None:
@@ -421,6 +463,6 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     except ValueError:
         return reply(AskResponse(answer="The model did not return a usable answer. Please ask again."), r.model)
     if data.refused:
-        return reply(AskResponse(answer=refusal(folder), refused=True), r.model)
+        return reply(AskResponse(answer=refusal(sc), refused=True), r.model)
     answer, sources = map_citations(data.answer, chosen)
     return reply(AskResponse(answer=answer, sources=sources), r.model)

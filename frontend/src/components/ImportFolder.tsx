@@ -4,10 +4,11 @@ import { useNavigate } from 'react-router-dom'
 import { FolderInput, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Mode } from '../api/types'
+import { noun, SHOW_MODE } from '../lib/folderContext'
 import { fromDataTransfer, fromFileList, splitImportable, stripTopFolder, type Upload } from '../lib/upload'
 
 /**
- * Dialog: create a new Case or Chart from a folder on this computer. Its .md/.txt/.pdf
+ * Dialog: create a new Space from a folder on this computer. Its .md/.txt/.pdf
  * files are imported with their subfolders. `initial` is set when a folder was dropped.
  */
 export default function ImportFolder({ initial, onDone, onClose }: {
@@ -59,7 +60,7 @@ export default function ImportFolder({ initial, onDone, onClose }: {
     setBusy(true)
     setError(null)
     try {
-      const folder = await api.createFolder({ name: name.trim(), mode })
+      const folder = await api.createFolder(SHOW_MODE ? { name: name.trim(), mode } : { name: name.trim() })
       await api.importFiles(folder.id, split.accepted, { keepPaths: true })
       onDone()
       navigate(`/folders/${encodeURIComponent(folder.id)}`)
@@ -82,7 +83,7 @@ export default function ImportFolder({ initial, onDone, onClose }: {
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-base font-bold">Import a folder</h2>
-            <p className="mt-0.5 text-xs text-muted">Creates a new Case or Chart. Only .md, .txt and .pdf files are imported; subfolders are kept.</p>
+            <p className="mt-0.5 text-xs text-muted">Creates a new Space. Only .md, .txt and .pdf files are imported; subfolders are kept.</p>
           </div>
           <button type="button" onClick={onClose} disabled={busy} className="grid h-8 w-8 shrink-0 place-items-center rounded-md hover:bg-panel" aria-label="Close import">
             <X size={16} />
@@ -119,7 +120,7 @@ export default function ImportFolder({ initial, onDone, onClose }: {
             </p>
             {split.accepted.length > 0 && (
               <div className="flex flex-wrap items-center gap-3">
-                <div role="radiogroup" aria-label="Folder type" className="flex rounded-full bg-panel p-1">
+                {SHOW_MODE && <div role="radiogroup" aria-label="Folder type" className="flex rounded-full bg-panel p-1">
                   {(['case', 'chart'] as const).map((m) => (
                     <button
                       key={m}
@@ -132,12 +133,12 @@ export default function ImportFolder({ initial, onDone, onClose }: {
                       {m === 'case' ? 'Case' : 'Chart'}
                     </button>
                   ))}
-                </div>
+                </div>}
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   aria-label="Name"
-                  placeholder={mode === 'case' ? 'e.g. Case 2026-021 Santos' : 'e.g. Chart J. Cruz'}
+                  placeholder={!SHOW_MODE ? 'e.g. Lakbay Logistics Inc.' : mode === 'case' ? 'e.g. Case 2026-021 Santos' : 'e.g. Chart J. Cruz'}
                   className="min-w-0 flex-1 basis-48 rounded-full border border-line bg-white px-4 py-2 outline-none focus:border-brand"
                 />
               </div>
@@ -150,7 +151,7 @@ export default function ImportFolder({ initial, onDone, onClose }: {
 
         <div className="flex flex-wrap gap-2">
           <button className="btn-primary" disabled={busy || !split?.accepted.length || !name.trim()}>
-            {busy ? 'Importing…' : `Create ${mode === 'case' ? 'Case' : 'Chart'} and import`}
+            {busy ? 'Importing…' : `Create ${noun(mode)} and import`}
           </button>
           <button type="button" className="btn-ghost" onClick={onClose} disabled={busy}>Cancel</button>
         </div>

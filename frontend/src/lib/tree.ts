@@ -9,20 +9,27 @@ export type TreeCtx = {
   expanded: Set<string>
   toggle: (folderId: string) => void
   expand: (folderId: string) => void
-  collapsedDirs: Set<string> // "folderId/sub/dir"
+  /** Whether a subfolder ("folderId/sub/dir") is open. Open by default until Collapse all. */
+  dirOpen: (key: string) => boolean
   toggleDir: (key: string) => void
+  /** Collapse every Space and subfolder. */
+  collapseAll: () => void
   version: number
   changed: () => void
+  /** Re-fetch the list of Spaces (after a rename). */
+  foldersChanged: () => void
 }
 
 export const TreeContext = createContext<TreeCtx>({
   expanded: new Set(),
   toggle: () => {},
   expand: () => {},
-  collapsedDirs: new Set(),
+  dirOpen: () => true,
   toggleDir: () => {},
+  collapseAll: () => {},
   version: 0,
   changed: () => {},
+  foldersChanged: () => {},
 })
 
 export const useTree = () => useContext(TreeContext)

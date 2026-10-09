@@ -38,6 +38,7 @@ export const api = {
   folders: () => json<Folder[]>('/folders'),
   createFolder: (body: FolderCreate) => send<Folder>('POST', '/folders', body),
   folder: (id: string) => json<Folder>(f(id)),
+  renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
   files: (id: string) => json<FileEntry[]>(`${f(id)}/files`),
   file: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`).then((r) => r.text()),
   /** `path` is the file's name, or its relative path when `keepPaths` (e.g. "Interviews/a.md"). */
@@ -84,7 +85,9 @@ export const api = {
   renameChat: (id: string, sid: string, title: string) =>
     send<ChatSessionSummary>('PATCH', `${f(id)}/chats/${encodeURIComponent(sid)}`, { title }),
   deleteChat: (id: string, sid: string) => req(`${f(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
-  timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
+  /** `scope`: a subfolder of the Space; omitted for the whole Space. */
+  timeline: (id: string, scope?: string) =>
+    send<TimelineResponse>('POST', `${f(id)}/timeline${scope ? `?scope=${encodeURIComponent(scope)}` : ''}`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),
   setGrants: (id: string, grants: Grants) => send<Grants>('PUT', `${f(id)}/grants`, grants),

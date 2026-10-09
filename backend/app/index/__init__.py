@@ -7,6 +7,7 @@ from app.index.store import (
     all_chunks,
     build_index,
     contains,
+    in_scope,
     file_chunks,
     index_version,
     refresh,
@@ -15,6 +16,6 @@ from app.index.store import (
 )
 
 __all__ = [
-    "INDEXED_TYPES", "Chunk", "Hit", "all_chunks", "build_index", "chunk_file", "contains", "extract", "file_chunks",
+    "INDEXED_TYPES", "Chunk", "Hit", "all_chunks", "build_index", "chunk_file", "contains", "extract", "file_chunks", "in_scope",
     "index_version", "refresh", "retrieve", "search_text",
 ]

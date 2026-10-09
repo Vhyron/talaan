@@ -54,13 +54,14 @@ def check(folder_id: str, sid: str) -> None:
         _row(db, folder_id, sid)
 
 
-def save_turn(folder_id: str, sid: str, question: str, resp: AskResponse) -> None:
+def save_turn(folder_id: str, sid: str, question: str, resp: AskResponse, scope: str | None = None) -> None:
+    """`scope` is kept from the chat's first turn: where it was started."""
     now = datetime.now().isoformat()
     with connect() as db:
         db.execute(
-            "INSERT INTO chat_sessions (id, folder_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+            "INSERT INTO chat_sessions (id, folder_id, title, created_at, updated_at, scope) VALUES (?, ?, ?, ?, ?, ?)"
             " ON CONFLICT (id) DO UPDATE SET updated_at = excluded.updated_at",
-            (sid, folder_id, fallback_title(question), now, now),
+            (sid, folder_id, fallback_title(question), now, now, scope),
         )
         db.executemany(
             "INSERT INTO chat_messages (session_id, folder_id, role, content, response, created_at) VALUES (?, ?, ?, ?, ?, ?)",
@@ -71,7 +72,7 @@ def save_turn(folder_id: str, sid: str, question: str, resp: AskResponse) -> Non
 
 def _summary(row) -> ChatSessionSummary:
     return ChatSessionSummary(
-        id=row["id"], title=row["title"], message_count=row["message_count"],
+        id=row["id"], title=row["title"], message_count=row["message_count"], scope=row["scope"],
         created_at=datetime.fromisoformat(row["created_at"]), updated_at=datetime.fromisoformat(row["updated_at"]),
     )
 

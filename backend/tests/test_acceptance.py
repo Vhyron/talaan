@@ -9,41 +9,58 @@ spec.loader.exec_module(acc)
 
 Q = {q.n: q for q in acc.QUESTIONS}
 src = lambda path: {"path": path, "start": 1, "end": 2, "snippet": ""}  # noqa: E731
-CASE_FILES = {"2026-10-02_open-items.md", "2026-09-26_email_from-representative.md", *acc.INTERVIEWS}
+D = acc.CASE_SCOPE
+OPEN_ITEMS = f"{D}/2026-10-02_open-items.md"
+CASE_FILES = {OPEN_ITEMS, f"{D}/2026-09-26_email_from-representative.md", *acc.INTERVIEWS,
+              "README.md", "policies/code-of-conduct.md"}
 
 
 def test_good_answer_passes():
     resp = {"answer": "Open: the agency roster, a reply to Atty. Ramos, and the Notice of Decision by Oct 16.",
-            "sources": [src("2026-10-02_open-items.md")], "refused": False}
+            "sources": [src(OPEN_ITEMS)], "refused": False}
     assert acc.check_answer(Q[3], resp) == []
 
 
 def test_missing_keyword_and_wrong_source_fail():
-    resp = {"answer": "The roster is pending.", "sources": [src("00_case-intake.md")], "refused": False}
+    resp = {"answer": "The roster is pending.", "sources": [src(f"{D}/00_case-intake.md")], "refused": False}
     fails = acc.check_answer(Q[3], resp)
     assert any("ramos" in f for f in fails) and any("no source matching open-items" in f for f in fails)
 
 
 def test_keyword_alternatives():
-    resp = {"answer": "Metformin to 1000 mg; started atorvastatin.", "sources": [src("2026-08-31_visit.md")]}
+    resp = {"answer": "Metformin to 1000 mg; started atorvastatin.", "sources": [src(f"{acc.CHART_SCOPE}/2026-08-31_visit.md")]}
     assert acc.check_answer(Q[6], resp) == []
 
 
 def test_refusals():
-    assert acc.check_answer(Q[4], {"answer": "I can only see Case 2026-014.", "refused": True, "sources": []}) == []
+    assert acc.check_answer(Q[4], {"answer": "I can only see Case 2026-014 Dela Cruz.", "refused": True, "sources": []}) == []
     assert acc.check_answer(Q[4], {"answer": "Ana was late 6 times.", "refused": False, "sources": []}) == ["not refused"]
     assert "refused a question it should answer" in acc.check_answer(Q[7], {"answer": "I can only see…", "refused": True})
 
 
 def test_verdict_words_fail():
     resp = {"answer": "Sick leave, medical certificate and badge log show he is not guilty; agency helpers were there.",
-            "sources": [src("2026-09-24_hearing-minutes.md")]}
+            "sources": [src(f"{D}/2026-09-24_hearing-minutes.md")]}
     assert any("verdict" in f for f in acc.check_answer(Q[2], resp))
 
 
 def test_sealing():
-    assert acc.check_sealing(["2026-10-02_open-items.md"], CASE_FILES) == []
-    assert acc.check_sealing(["attendance-summary.md"], CASE_FILES) == ["cites attendance-summary.md, which is not in this folder"]
+    assert acc.check_sealing([OPEN_ITEMS], CASE_FILES) == []
+    other = "Case 2026-019 Villanueva/attendance-summary.md"  # another Space
+    assert acc.check_sealing([other], CASE_FILES) == [f"cites {other}, which is not in this Space"]
+    assert acc.check_sealing([other], CASE_FILES, D) == [f"cites {other}, which is not in this Space"]
+
+
+def test_sealing_within_the_scope():
+    assert acc.check_sealing([OPEN_ITEMS, "README.md"], CASE_FILES, D) == []  # the Space README is in every scope
+    assert acc.check_sealing(["policies/code-of-conduct.md"], CASE_FILES, D) == [
+        f"cites policies/code-of-conduct.md, which is outside {D}"]
+    assert acc.check_sealing(["policies/code-of-conduct.md"], CASE_FILES) == []  # whole Space: fine
+
+
+def test_every_question_has_a_scope():
+    assert all(q.scope for q in acc.QUESTIONS)
+    assert {q.folder for q in acc.QUESTIONS} == {acc.CASE, acc.CHART}
 
 
 def test_timeline_rules():

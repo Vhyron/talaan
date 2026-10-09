@@ -34,7 +34,9 @@ export default function App() {
 
   // Sidebar tree: several folders can stay expanded while you move between them.
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set())
+  // Subfolders start open; after Collapse all they start closed. `dirFlips` are the ones toggled since.
+  const [dirsOpen, setDirsOpen] = useState(true)
+  const [dirFlips, setDirFlips] = useState<Set<string>>(new Set())
   const [treeVersion, setTreeVersion] = useState(0)
   const flip = (set: Set<string>, key: string) => {
     const next = new Set(set)
@@ -48,11 +50,17 @@ export default function App() {
     expanded,
     toggle: (id) => setExpanded((s) => flip(s, id)),
     expand,
-    collapsedDirs,
-    toggleDir: (key) => setCollapsedDirs((s) => flip(s, key)),
+    dirOpen: (key) => dirsOpen !== dirFlips.has(key),
+    toggleDir: (key) => setDirFlips((s) => flip(s, key)),
+    collapseAll: () => {
+      setExpanded(new Set())
+      setDirFlips(new Set())
+      setDirsOpen(false)
+    },
     version: treeVersion,
     changed,
-  }), [expanded, expand, collapsedDirs, treeVersion, changed])
+    foldersChanged: refresh,
+  }), [expanded, expand, dirsOpen, dirFlips, treeVersion, changed, refresh])
 
   // App-wide "Import folder" dialog: null = closed, [] = open empty, else dropped files.
   const [importing, setImporting] = useState<Upload[] | null>(null)

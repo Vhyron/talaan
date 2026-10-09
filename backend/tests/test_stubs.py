@@ -8,14 +8,14 @@ from app.main import app
 from app.schemas import ActionAdapter
 
 c = TestClient(app)
-F = "Case-2026-014_Dela-Cruz"
+F = "Lakbay-Logistics-Inc"
 
 
 def test_every_route_responds():
     assert c.get("/folders").status_code == 200
     assert c.post("/folders", json={"name": "Case 2026-020", "mode": "case"}).status_code == 201
     assert c.get(f"/folders/{F}/files").status_code == 200
-    assert c.get(f"/folders/{F}/files/2026-10-02_open-items.md").status_code == 200
+    assert c.get(f"/folders/{F}/files/Case%202026-014%20Dela%20Cruz/2026-10-02_open-items.md").status_code == 200
     assert c.post(f"/folders/{F}/import", files={"files": ("a.md", b"# hi")}).status_code == 200
     assert c.post(f"/folders/{F}/index").status_code == 200
     assert c.get(f"/folders/{F}/grants").json()["delete"] == "never"

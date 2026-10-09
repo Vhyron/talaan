@@ -7,8 +7,10 @@ from app.policy.engine import handle
 from app.policy.grants import set_grants
 from app.schemas import Grant, Grants
 
-F = "Case-2026-014_Dela-Cruz"
-SANTOS = "2026-09-13_interview_R-Santos.md"
+F = "Lakbay-Logistics-Inc"
+D = "Case 2026-014 Dela Cruz"
+SANTOS = f"{D}/2026-09-13_interview_R-Santos.md"
+ITEMS = f"{D}/2026-10-02_open-items.md"
 
 
 @pytest.fixture
@@ -31,10 +33,10 @@ def test_delete_blocked_under_default_grants_and_logged(folder):
 
 
 def test_edit_becomes_pending_and_file_untouched(folder):
-    before = (folder / "2026-10-02_open-items.md").read_text(encoding="utf-8")
-    out = handle(F, {"action": "propose_edit", "path": "2026-10-02_open-items.md", "content": "new", "reason": "r"})
+    before = (folder / ITEMS).read_text(encoding="utf-8")
+    out = handle(F, {"action": "propose_edit", "path": ITEMS, "content": "new", "reason": "r"})
     assert out.status == "pending" and out.proposal_id
-    assert (folder / "2026-10-02_open-items.md").read_text(encoding="utf-8") == before
+    assert (folder / ITEMS).read_text(encoding="utf-8") == before
     assert last()[0].decision == "needs_approval"
 
 
@@ -44,7 +46,7 @@ def test_draft_becomes_pending(folder):
     assert not (folder / "draft.md").exists()
 
 
-@pytest.mark.parametrize("path", ["../Case-2026-019_Villanueva/00_case-intake.md", ".talaan/folder.json", "/etc/passwd"])
+@pytest.mark.parametrize("path", ["../Bayani-Retail-Corp/Case 2026-019 Villanueva/00_case-intake.md", ".talaan/folder.json", "/etc/passwd"])
 def test_path_escape_blocked_even_for_reads(path):
     out = handle(F, {"action": "read", "path": path})
     assert out.status == "blocked" and "outside this folder" in out.reason
@@ -62,14 +64,14 @@ def test_invalid_output_rejected_and_logged(raw):
 
 
 def test_read_allowed_by_default():
-    out = handle(F, {"action": "read", "path": "2026-10-02_open-items.md"})
+    out = handle(F, {"action": "read", "path": ITEMS})
     assert out.status == "executed" and "Open Items" in out.result
     assert [e.event for e in last(3)] == ["executed", "decision", "proposed_action"]
 
 
 def test_ungranted_read_denied():
     set_grants(F, Grants(read=Grant.NEVER))
-    out = handle(F, {"action": "read", "path": "2026-10-02_open-items.md"})
+    out = handle(F, {"action": "read", "path": ITEMS})
     assert out.status == "blocked" and "Read is set to Never" in out.reason
     assert handle(F, {"action": "search", "query": "agency"}).status == "blocked"
 
@@ -82,8 +84,8 @@ def test_search_stays_in_folder():
 
 def test_allowed_delete_and_edit_execute(folder):
     set_grants(F, Grants(suggest_edits=Grant.ALLOW, delete=Grant.ALLOW))
-    assert handle(F, {"action": "propose_edit", "path": "2026-10-02_open-items.md", "content": "x"}).status == "executed"
-    assert (folder / "2026-10-02_open-items.md").read_text(encoding="utf-8") == "x"
+    assert handle(F, {"action": "propose_edit", "path": ITEMS, "content": "x"}).status == "executed"
+    assert (folder / ITEMS).read_text(encoding="utf-8") == "x"
     assert handle(F, {"action": "delete", "path": SANTOS}).status == "executed"
     assert not (folder / SANTOS).exists()
 

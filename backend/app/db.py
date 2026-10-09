@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS chat_sessions (
     folder_id    TEXT NOT NULL,
     title        TEXT NOT NULL,
     title_source TEXT NOT NULL DEFAULT 'question',  -- question | model | user
+    scope        TEXT,  -- subfolder the chat was started from; NULL is the whole Space
     created_at   TEXT NOT NULL,
     updated_at   TEXT NOT NULL
 );
@@ -75,6 +76,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     cols = {r["name"] for r in conn.execute("PRAGMA table_info(audit)")}
     if "session_id" not in cols:
         conn.execute("ALTER TABLE audit ADD COLUMN session_id TEXT")
+    if "scope" not in {r["name"] for r in conn.execute("PRAGMA table_info(chat_sessions)")}:
+        conn.execute("ALTER TABLE chat_sessions ADD COLUMN scope TEXT")
 
 
 @contextmanager
