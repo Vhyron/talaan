@@ -110,16 +110,15 @@ All four must pass before opening a PR. The acceptance questions Q1–Q9 in [dem
 
 ## 6. Reset before a demo or rehearsal
 
-Rehearsals approve drafts, change grants and fill the audit log. Reset to the pristine demo state:
+Rehearsals approve drafts, change grants and fill the audit log. One command gets back to the demo state (from `backend/`):
 
 ```powershell
-# Stop the backend first (Ctrl+C), then:
-Remove-Item -Recurse -Force "$HOME\Talaan"
-New-Item -ItemType Directory -Force "$HOME\Talaan\folders" | Out-Null
-Copy-Item -Recurse demo-data\hr\*, demo-data\clinic\* "$HOME\Talaan\folders\"
+uv run scripts/seed_demo.py --reset
 ```
 
-This deletes `app.db` too: grants go back to defaults, the audit log and pending proposals are cleared. Indexes are rebuilt on the next index call. D3 replaces this with a reset script.
+It restores the four demo folders from `demo-data/` (removing files added during rehearsal), resets their grants to the defaults, clears their proposals, audit log and chat history, rebuilds their indexes and warms the Ollama models so the first answer isn't slow. Other folders and their history are left alone. Add `--no-warm` to skip the model warm-up.
+
+For a completely clean `TALAAN_HOME` (e.g. a new laptop): `uv run scripts/seed_demo.py --fresh --yes`. It refuses to wipe a folder that contains anything other than `folders/` and `app.db`, in case `TALAAN_HOME` points somewhere wrong.
 
 **Never edit the files in `demo-data/`** to "fix" the demo. `2026-09-26_email_from-representative.md` contains a deliberate prompt injection; it is a test fixture.
 
@@ -129,7 +128,7 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 
 - [ ] `git pull` on the branch being demoed; `uv sync` and `npm ci` if dependencies changed
 - [ ] Models pulled and listed in `ollama list` (exact pinned tags)
-- [ ] Demo data reset (section 6)
+- [ ] `uv run scripts/seed_demo.py --reset` (section 6)
 - [ ] Backend and frontend running; `http://localhost:8000/health` shows the pinned model tags
 - [ ] Ask one question per folder so the models are loaded and warm (`ollama ps`)
 - [ ] **Turn Wi-Fi off**, refresh the app, run the full 5-minute script from [06-demo-and-pitch.md](06-demo-and-pitch.md)
