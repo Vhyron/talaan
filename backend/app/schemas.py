@@ -217,6 +217,16 @@ class ModelOption(BaseModel):
     active: bool
 
 
+class VoiceStatus(BaseModel):
+    """Whether voice notes can be transcribed on this laptop right now."""
+
+    ready: bool
+    model: str  # faster-whisper size, e.g. "small"
+    problem: Literal["library", "model"] | None = None
+    message: str | None = None  # plain-language explanation for the user
+    fix: str | None = None  # command that fixes it
+
+
 class SystemTier(BaseModel):
     ram_gb: int
     gpu: str | None

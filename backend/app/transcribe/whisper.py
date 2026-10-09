@@ -57,6 +57,42 @@ def choose_language(probs: list[tuple[str, float]], allowed: list[str]) -> str:
     return max(ranked)[1] if ranked else allowed[0]
 
 
+DOWNLOAD_COMMAND = "cd backend; uv run python -m app.transcribe.whisper --download"
+# Approximate download sizes of the CTranslate2 Whisper models.
+MODEL_SIZE = {"tiny": "75 MB", "base": "145 MB", "small": "465 MB", "medium": "1.5 GB", "large-v3-turbo": "1.6 GB", "large-v3": "3 GB"}
+
+
+def status() -> "VoiceStatus":
+    """Whether voice notes can be transcribed here, without loading the model.
+
+    Checks the library imports and the model files are in the local cache
+    (faster-whisper's own lookup, offline only). Fast enough to call on every
+    dialog open.
+    """
+    from app.schemas import VoiceStatus
+
+    model = config.WHISPER_MODEL
+    try:
+        from faster_whisper.utils import download_model
+    except ImportError:
+        return VoiceStatus(
+            ready=False, model=model, problem="library",
+            message="The speech-to-text library (faster-whisper) isn't installed.",
+            fix="cd backend; uv sync",
+        )
+    try:
+        download_model(model, local_files_only=True)
+    except Exception:
+        return VoiceStatus(
+            ready=False, model=model, problem="model",
+            message=f"The speech model ('{model}'{', about ' + MODEL_SIZE[model] if model in MODEL_SIZE else ''}) "
+                    "hasn't been downloaded to this laptop yet. "
+                    "Download it once while online; after that voice notes work offline.",
+            fix=DOWNLOAD_COMMAND,
+        )
+    return VoiceStatus(ready=True, model=model)
+
+
 def _load(local_only: bool = True):
     """Load from the local cache only. Without this, faster-whisper contacts
     Hugging Face on every load to check for updates, even when cached."""
@@ -67,8 +103,7 @@ def _load(local_only: bool = True):
     except Exception as e:
         if local_only:
             raise ModelNotDownloaded(
-                f"Speech model '{config.WHISPER_MODEL}' isn't downloaded. "
-                "Run: uv run python -m app.transcribe.whisper --download"
+                f"Speech model '{config.WHISPER_MODEL}' isn't downloaded. Run: {DOWNLOAD_COMMAND}"
             ) from e
         raise
 

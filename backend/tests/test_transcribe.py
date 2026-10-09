@@ -142,3 +142,42 @@ def test_too_short_maps_to_friendly_422(monkeypatch):
     monkeypatch.setattr(whisper, "transcribe_file", short)
     r = post()
     assert r.status_code == 422 and r.json()["detail"].startswith("The recording is too short")
+
+
+# --- Readiness check (shown by the recorder before recording) ----------------------
+
+
+def test_voice_status_ready(monkeypatch):
+    import faster_whisper.utils
+    monkeypatch.setattr(faster_whisper.utils, "download_model", lambda *a, **k: "/cache/small")
+    r = c.get("/system/voice").json()
+    assert r == {"ready": True, "model": "small", "problem": None, "message": None, "fix": None}
+
+
+def test_voice_status_model_missing_never_downloads(monkeypatch):
+    import faster_whisper.utils
+    seen = {}
+
+    def not_cached(size, **kw):
+        seen.update(kw)
+        raise OSError("not in cache")
+
+    monkeypatch.setattr(faster_whisper.utils, "download_model", not_cached)
+    r = c.get("/system/voice").json()
+    assert r["ready"] is False and r["problem"] == "model"
+    assert "--download" in r["fix"] and "465 MB" in r["message"]
+    assert seen["local_files_only"] is True  # the check itself never goes online
+
+
+def test_voice_status_library_missing(monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def no_faster_whisper(name, *a, **k):
+        if name.startswith("faster_whisper"):
+            raise ImportError(name)
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", no_faster_whisper)
+    r = whisper.status()
+    assert r.ready is False and r.problem == "library" and r.fix == "cd backend; uv sync"

@@ -125,3 +125,12 @@ export type LlmCall = {
 export type AppSettings = { log_prompts: boolean }
 
 export type Health = { status: string; chat_model: string; embed_model: string }
+
+/** Can voice notes be transcribed on this laptop? (GET /system/voice) */
+export type VoiceStatus = {
+  ready: boolean
+  model: string
+  problem: 'library' | 'model' | null
+  message: string | null
+  fix: string | null
+}
