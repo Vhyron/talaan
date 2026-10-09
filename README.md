@@ -12,40 +12,63 @@ Built for the AppBuildersPH Hackathon 2026 (Local AI theme).
 
 | Tool | Version | Install |
 |---|---|---|
-| Python | 3.11+ | [python.org](https://www.python.org/downloads/) |
-| uv | latest | `pip install uv` ([docs](https://docs.astral.sh/uv/)) |
+| uv | latest | [docs.astral.sh/uv](https://docs.astral.sh/uv/) (installs Python 3.11+ itself if needed) |
 | Node.js | 20+ | [nodejs.org](https://nodejs.org/) |
 | Ollama | latest | [ollama.com](https://ollama.com/) |
 
-A 16 GB RAM laptop runs the default models comfortably. About 15 GB of free disk space is needed for models and dependencies.
+The setup script checks for these and offers to install any that are missing (winget on Windows, Homebrew on macOS). Windows 10/11 or macOS; 8 GB RAM minimum, 16 GB+ recommended; about 15 GB of free disk for models and dependencies.
 
-## Run it
-
-Commands are for PowerShell; on macOS/Linux replace `;` with `&&`. Steps 1–3 need internet once; after that everything works offline.
+## Set up (one command)
 
 ```powershell
 git clone https://github.com/Vhyron/talaan.git
 cd talaan
-
-# 1. Local models (one-time download): embeddings + the chat model for your RAM
-ollama pull qwen3-embedding:0.6b
-ollama pull qwen3.5:2b      # 8 GB RAM (Budget)
-ollama pull gemma4:e4b      # 19 GB+ RAM (High, e.g. 24/32 GB); skip on 8–16 GB
-
-# 2. Backend (Python): install, cache the speech model, load the demo folders
-cd backend
-uv sync
-uv run python -m app.transcribe.whisper --download
-uv run scripts/seed_demo.py --fresh --yes
-uv run uvicorn app.main:app            # http://localhost:8000/docs
-
-# 3. Frontend (in a second terminal, from the repo root)
-cd frontend
-npm ci
-npm run dev                            # open http://localhost:5173
 ```
 
-`seed_demo.py` copies four synthetic folders from `demo-data/` into `~/Talaan/folders` (set `TALAAN_HOME` to use another location). Run `uv run scripts/seed_demo.py --reset` at any time to return them to their original state.
+| OS | Run |
+|---|---|
+| Windows | double-click **`setup.bat`**, or `.\setup.bat` in a terminal |
+| macOS | double-click **`setup.command`** in Finder, or `./setup.sh` in Terminal |
+| Linux | `./setup.sh` |
+
+It does everything in six steps and is safe to run again:
+
+1. Checks uv, Node.js and Ollama (offers to install missing ones) and starts Ollama.
+2. Backend: creates `backend/.venv` with the locked Python packages (`uv sync`).
+3. Frontend: installs the locked npm packages (`npm ci`).
+4. **Models:** shows this laptop's RAM, GPU and free disk, recommends a chat model, and asks which to download (see [Choosing a model](#choosing-a-model)). Always downloads the embedding model.
+5. Speech-to-text model for voice notes (faster-whisper `small`, ~464 MB).
+6. Loads four synthetic demo folders into `~/Talaan/folders` (set `TALAAN_HOME` to use another location).
+
+Options: `-Yes` / `--yes` takes the recommended model without asking, `-Model qwen3.5:4b` / `--model qwen3.5:4b` picks one, `-All` / `--all` downloads all three, `-SkipDemo` / `--skip-demo` skips the demo folders. Internet is needed only for this setup; after it, Talaan runs with Wi-Fi off.
+
+## Run it
+
+Two terminals, from the repo root:
+
+```powershell
+cd backend;  uv run uvicorn app.main:app      # API on http://localhost:8000/docs
+cd frontend; npm run dev                      # open http://localhost:5173
+```
+
+(macOS/Linux: `&&` in place of `;`.) Ollama must be running: it starts with the Ollama app. Reset the demo folders any time with `cd backend; uv run scripts/seed_demo.py --reset`.
+
+## Choosing a model
+
+Talaan offers three local chat models. All three passed our bake-off on the nine ground-truth questions in [demo-data/README.md](demo-data/README.md); pick by the laptop's RAM.
+
+| Model | Class | Download | Needs RAM* | Bake-off | Pick it when |
+|---|---|---|---|---|---|
+| `qwen3.5:2b` | Budget | 2.7 GB | 13 GB | 21/27 | 8–12 GB laptops, or you want the fastest answers. Good at search and short answers with sources; misses contradictions. |
+| `qwen3.5:4b` | Mid | 3.3 GB | 14 GB | 24/27 | 16 GB laptops. Most accurate in our tests (finds every contradiction), slower per answer. |
+| `gemma4:e4b` | High | 6.6 GB | 19 GB | 23/27 | 24 GB+ laptops. Strong all-round and best at case timelines. |
+
+\*RAM is budgeted generously: the chat model at a 16k-token context **plus** the embedding model (~2.5 GB) **plus** 6 GB for the OS, the browser running the app, the backend and speech-to-text, all at once. GPU memory makes answers faster but isn't counted as extra room. Below 13 GB, `qwen3.5:2b` still runs, marked "may be slow".
+
+- **Automatic (default):** runs the model for this laptop's class if downloaded, otherwise the largest downloaded one that fits, otherwise any downloaded one of the three. Other Ollama models on the machine are never used.
+- **Switch any time** on the **Settings** page (gear icon). Downloaded models are listed there with their RAM needs; switching never needs re-indexing because every model uses the same embedding model.
+- **Download another later:** `cd backend; uv run python -m scripts.setup_models`.
+- Thinking mode is off on every call: it was too slow on laptop hardware.
 
 ### Try it
 

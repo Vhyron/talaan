@@ -18,7 +18,9 @@ Hardware: the app detects RAM/GPU and picks the chat model automatically (Budget
 
 ## 2. One-time setup
 
-From the repo root:
+**Quickest:** run `setup.bat` (Windows), `setup.command` / `./setup.sh` (macOS) or `./setup.sh` (Linux) from the repo root. It checks the tools (offering winget / Homebrew installs), runs every step below, and asks which chat model to download, recommending one for the laptop's RAM (`backend/scripts/setup_models.py`). Flags: `-Yes`/`--yes`, `-Model <tag>`/`--model <tag>`, `-All`/`--all`, `-SkipDemo`/`--skip-demo`.
+
+The same steps by hand, from the repo root:
 
 ```powershell
 git clone https://github.com/Vhyron/talaan.git
