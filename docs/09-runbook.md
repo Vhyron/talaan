@@ -146,6 +146,8 @@ uv run scripts/acceptance.py            # backend on http://127.0.0.1:8000
 uv run scripts/acceptance.py --only 4,5,9 --base http://127.0.0.1:8011
 ```
 
+**Browser check (Playwright).** `e2e/verify-fixes.mjs` drives the real UI through an edit request (propose → diff → approve) and Q2, asserts the results and saves annotated screenshots to `docs/verification/`. Run it after acceptance, since it edits a demo file; then reseed. Steps are in [10-verification.md](10-verification.md#re-run).
+
 It prints PASS/FAIL per question with the reason and real seconds per answer, and exits non-zero on any failure. It is the sign-off for milestone M2: everything must pass before rehearsals. Until B4/B5 merge, only Q3, Q4 and Q9 pass (the routes still return sample answers). Timings may be quoted in the pitch, so only quote numbers from a real run on the demo laptop.
 
 ## 6. Reset before a demo or rehearsal

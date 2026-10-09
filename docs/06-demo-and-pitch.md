@@ -56,6 +56,8 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 
 **Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2), `numpy` (embedding similarity, B3)
 
+**Dev and test tools (not shipped in the app):** `playwright` 1.64.0 for browser checks of the UI (`e2e/`, docs/10)
+
 **AI development tools:** Claude Code (Anthropic) used by track B for coding and docs. Not part of the product: the app makes no cloud AI calls.
 
 ### Draft answer: why local?

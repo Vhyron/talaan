@@ -29,6 +29,14 @@ Q3, Q6, Q7 and Q8 answer correctly with the right sources; Q4 and Q9 refuse.
 - `tests/test_ask.py`: name extraction, citation mapping, action detection, refusal without a model call, Read = Never, audit events, blocked delete and invalid action (model stubbed).
 - **Acceptance** (`scripts/acceptance.py`, gemma4:e4b, 2 runs): Q3–Q9 pass both runs. Q1 is still the timeline fixture (B5). Q2 gets a partial answer (misses the medical certificate, the face not being identifiable and the agency helper): **B5's dedicated contradiction prompt should cover it.** Q5: the model proposed no action, so the blocked delete still depends on B6. Answers took 6–30 s, and up to ~100 s while another backend was using the same GPU.
 
+## Fixes (2026-10-10)
+
+Found in the dev verification; full write-up with annotated before/after screenshots in [docs/10-verification.md](../docs/10-verification.md).
+- **Edit requests now propose edits.** With the full Action schema, gemma4:e4b answered "edit the open items…" with `read` (4/4). A change request now gets `CHANGE_SCHEMA` (`propose_edit` | `create_draft` | `delete` only), and `ACTION_SYSTEM` says which action fits which request. `keep_untouched_lines` puts back lines the model changed by accident (dropped `> `, the final newline), so the diff shows only the requested change. A no-op edit answers "No change needed" instead of creating an empty proposal. Measured 9/9 edits → `propose_edit` with a 2-line diff; delete, follow-instructions and draft probes unchanged (12/12).
+- **Q2 covers every point.** Contradiction questions get `CONTRADICTION_REMINDER` after the question. Q2 now passes 15 of 16 runs; acceptance is **9/9**.
+- **Plain text.** `SYSTEM` forbids Markdown, which the Ask panel showed as raw `**` and `*`.
+- Tests in `tests/test_ask.py`. Playwright check: `e2e/verify-fixes.mjs`.
+
 ## Handoff notes (2026-10-09, after B3)
 
 **Start from `dev` with B3 merged (PR #18).** B4 needs `app/index` (`retrieve`, `contains`). Read the B3 ticket's Outcome first.
