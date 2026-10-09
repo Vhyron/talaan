@@ -6,7 +6,8 @@
 //   node verify-fixes.mjs --phase after    # on the fixed code: exits 1 if any check fails
 //
 // Env: TALAAN_UI (default http://localhost:5180), TALAAN_API (default http://127.0.0.1:8010).
-// Run against freshly seeded demo data (uv run python scripts/seed_demo.py --reset): it edits
+// Run against freshly seeded demo data (uv run python scripts/seed_demo.py --reset). Q2 runs first,
+// on the unmodified files as in the demo; then the edit check, which edits
 // 2026-10-02_open-items.md in Case 2026-014.
 import { chromium } from 'playwright'
 import { mkdirSync } from 'node:fs'
@@ -84,7 +85,23 @@ async function ask(q) {
 const lastAnswer = () => vis(page.locator('div.rounded-xl.bg-white.px-3.py-2').last())
 const openCase = async () => { await page.goto(`${UI}/folders/${CASE}`); await page.waitForLoadState('networkidle') }
 
-// 1 · An edit request becomes a propose_edit that waits for approval, and approving it writes the file
+// 1 · Q2 on the unmodified demo data (as in the demo): every contradicting point, cited, no verdict
+await openCase()
+const q2 = await ask(Q2)
+const found = Q2_POINTS.map(([label, re]) => [label, re.test(q2.answer)])
+const missing = found.filter(([, ok]) => !ok).map(([l]) => l)
+const decides = /\b(is guilty|is innocent|did not (steal|take)|cleared)\b/i.test(q2.answer)
+const markdown = /\*\*|^\s*[*-] /m.test(q2.answer)
+record('q2-coverage', !missing.length && !decides && q2.sources.length > 0,
+  `${found.length - missing.length}/${found.length} points${missing.length ? `, missing: ${missing.join(', ')}` : ''}; ${q2.sources.length} sources; decides: ${decides}`)
+record('q2-plain-text', !markdown, markdown ? 'answer contains raw Markdown (** or * bullets)' : 'no raw Markdown')
+await shot('q2', [
+  { locator: lastAnswer(), ok: !missing.length,
+    text: found.map(([l, ok]) => `${ok ? '✓' : '✗'} ${l}`).join('\n') + (markdown ? '\n✗ raw Markdown (** / *) shown to the user' : '\n✓ plain sentences, no raw Markdown') },
+], 'Q2 "Is there anything in this case that contradicts the allegation?"')
+
+
+// 2 · An edit request becomes a propose_edit that waits for approval, and approving it writes the file
 await openCase()
 const edit = await ask(EDIT_Q)
 const o = edit.outcome ?? {}
@@ -125,27 +142,12 @@ if (isEdit) {
   await page.waitForTimeout(600)
   await shot('edit-approved', [
     { locator: vis(page.locator('article li').filter({ hasText: 'Respond to Atty. Ramos' })), ok: written, text: 'File on disk now has the item checked' },
-    { locator: vis(page.locator('tbody tr').filter({ hasText: /executed/ }).filter({ hasText: /propose edit/ })), ok: executed, text: 'Audit: proposed → needs approval → approved → executed' },
+    { locator: vis(page.locator('li[data-audit-row]').filter({ hasText: /Executed edit/ })), ok: executed, text: 'Audit: proposed → needs approval → approved → executed' },
   ], 'after approving the edit')
 } else {
   record('edit-diff', false, 'skipped: no edit was proposed')
   record('edit-approved', false, 'skipped: no edit was proposed')
 }
-
-// 2 · Q2 lists every contradicting point, each with a source, and does not decide
-await openCase()
-const q2 = await ask(Q2)
-const found = Q2_POINTS.map(([label, re]) => [label, re.test(q2.answer)])
-const missing = found.filter(([, ok]) => !ok).map(([l]) => l)
-const decides = /\b(is guilty|is innocent|did not (steal|take)|cleared)\b/i.test(q2.answer)
-const markdown = /\*\*|^\s*[*-] /m.test(q2.answer)
-record('q2-coverage', !missing.length && !decides && q2.sources.length > 0,
-  `${found.length - missing.length}/${found.length} points${missing.length ? `, missing: ${missing.join(', ')}` : ''}; ${q2.sources.length} sources; decides: ${decides}`)
-record('q2-plain-text', !markdown, markdown ? 'answer contains raw Markdown (** or * bullets)' : 'no raw Markdown')
-await shot('q2', [
-  { locator: lastAnswer(), ok: !missing.length,
-    text: found.map(([l, ok]) => `${ok ? '✓' : '✗'} ${l}`).join('\n') + (markdown ? '\n✗ raw Markdown (** / *) shown to the user' : '\n✓ plain sentences, no raw Markdown') },
-], 'Q2 "Is there anything in this case that contradicts the allegation?"')
 
 await browser.close()
 const failed = results.filter((r) => !r.ok)

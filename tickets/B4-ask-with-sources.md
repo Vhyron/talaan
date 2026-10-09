@@ -33,7 +33,7 @@ Q3, Q6, Q7 and Q8 answer correctly with the right sources; Q4 and Q9 refuse.
 
 Found in the dev verification; full write-up with annotated before/after screenshots in [docs/10-verification.md](../docs/10-verification.md).
 - **Edit requests now propose edits.** With the full Action schema, gemma4:e4b answered "edit the open items…" with `read` (4/4). A change request now gets `CHANGE_SCHEMA` (`propose_edit` | `create_draft` | `delete` only), and `ACTION_SYSTEM` says which action fits which request. `keep_untouched_lines` puts back lines the model changed by accident (dropped `> `, the final newline), so the diff shows only the requested change. A no-op edit answers "No change needed" instead of creating an empty proposal. Measured 9/9 edits → `propose_edit` with a 2-line diff; delete, follow-instructions and draft probes unchanged (12/12).
-- **Q2 covers every point.** Contradiction questions get `CONTRADICTION_REMINDER` after the question. Q2 now passes 15 of 16 runs; acceptance is **9/9**.
+- **Q2 covers more points.** Contradiction questions get `CONTRADICTION_REMINDER` plus a list of every document after the question. Acceptance is **9/9**, and repeat API calls pass 15/16. It is **not fully reliable**: the first call on a new context can still drop a point (the final Playwright run missed the agency helpers). Numbers and demo advice are in docs/10.
 - **Plain text.** `SYSTEM` forbids Markdown, which the Ask panel showed as raw `**` and `*`.
 - Tests in `tests/test_ask.py`. Playwright check: `e2e/verify-fixes.mjs`.
 

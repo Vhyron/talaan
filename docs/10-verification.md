@@ -48,24 +48,37 @@ Three bugs came out of this, all in Ask (`backend/app/ask.py`).
 
 **Before.** "Is there anything in this case that contradicts the allegation?" listed the sick leave and badge log, but not the medical certificate or the two unnamed agency helpers. Acceptance Q2 failed, as noted in B4.
 
-**Fix.** A question about contradictions (`CONTRADICTION_QUESTION`: contradict, inconsistent, conflict, discrepancy, "line up", against, weaken, undermine) gets a checklist after the question (`CONTRADICTION_REMINDER`). It asks for one cited sentence per point: leave records (filed and approved?), medical certificates, badge or access logs, anything that makes the identification uncertain, and other people present. It also says not to decide who is right. B4 had found that, for this model, reminders after the question work and a rule in the system prompt alone doesn't. With the system-prompt rule alone, the identification and agency-helper points were still missing in 5/5 runs.
+**Fix.** A question about contradictions (`CONTRADICTION_QUESTION`: contradict, inconsistent, conflict, discrepancy, "line up", against, weaken, undermine) gets a checklist after the question (`CONTRADICTION_REMINDER`). It asks for one cited sentence per point: leave records (filed and approved?), medical certificates, badge or access logs, anything that makes the identification uncertain, and other people present. It also says not to decide who is right. The checklist ends by naming every document in the context (`[S1] 2026-09-11_medical-certificate.md; …`). Without that list, the model often skipped the medical certificate and took the sick leave from the employee's own explanation. B4 had found that, for this model, reminders after the question work and a rule in the system prompt alone doesn't. With the system-prompt rule alone, the identification and agency-helper points were still missing in 5/5 runs.
 
-**After.** All five points, each cited, with no verdict.
+**After.** Usually all five points, each cited, with no verdict. **This is not fully reliable yet**, see the numbers below.
 
-![Before: Q2 misses the medical certificate and agency helpers, and shows raw Markdown](verification/before-q2.png)
-![After: Q2 covers all five points in plain sentences](verification/after-q2.png)
+![Before: Q2 gets 3 of 5 points and shows raw Markdown](verification/before-q2.png)
+![After (final Playwright run): 4 of 5 points, plain sentences](verification/after-q2.png)
 
-**Measured:** 15 of 16 Q2 runs with the final prompt passed (API runs, acceptance runs and Playwright runs). The one miss came right after a test edit had changed the open-items file and it was re-indexed. Temperature is 0, so the answer only changes when the folder's text changes.
+The "after" image is from the final Playwright run on the merged code, and it is one of the misses: the agency helpers are left out. It is left as recorded.
+
+**Measured with the final prompt** (`gemma4:e4b`, temperature 0):
+
+| Run | Result |
+|---|---|
+| API, fresh demo data, 8 calls in a row | 8/8 all five points |
+| API, after the test edit to open-items, 8 calls | 7/8 (first call missed the agency helpers) |
+| `acceptance.py`, fresh data | 1/1 pass |
+| Playwright `verify-fixes.mjs`, fresh data, Q2 is the first call | 0/1 (missed the agency helpers) |
+
+The misses are mostly the first call on a new context; repeat calls on the same context give the same answer. Before the fix, Q2 failed every acceptance run (B4: 2/2). **For the demo:** ask Q2 once during the pre-demo run so the answer on stage is the cached one, or show the timeline flags (B5), which cover the same points. If a run misses a point, say so; don't fake it.
 
 ## Bug 3 · Raw Markdown in answers
 
 **Before.** The model wrote `**CCTV Observation:**` and `*` bullets, and the Ask panel showed them as literal characters (see the before Q2 image).
 
-**Fix.** `SYSTEM` now asks for plain sentences: no bold, headings or lists. Checked in the same Q2 runs: no Markdown in any answer after the fix.
+**Fix.** `SYSTEM` now asks for plain sentences: no bold, headings or lists. Checked in the same Q2 runs: no Markdown in any answer after the fix (the Playwright check `q2-plain-text` passes).
 
 ## Acceptance after the fixes
 
-`scripts/acceptance.py` on fresh demo data: **9/9 passed** (Q1 91 s cold timeline, Q2 26 s, the rest 0.6–12.5 s). The Playwright C1–C7 suite still passes on the new code.
+`scripts/acceptance.py` on fresh demo data: **9/9 passed** (Q1 92 s cold timeline, Q2 24 s, the rest 0.7–18 s), after merging `dev` with #24 (folders-ux). The Playwright C1–C7 suite still passes on the merged UI. Its selectors were updated for #24's new import buttons and audit list; the app behaviour is unchanged. Backend: 220 passed, 2 skipped, 1 xfail. Frontend `tsc`/lint/build clean.
+
+Playwright `verify-fixes.mjs --phase after`, final run: edit checks 3/3 and plain text pass, Q2 coverage fails (see above), so the script exits 1.
 
 Run acceptance on **unmodified** demo data. After the Playwright fix check approves its edit (the Ramos item is checked off), "What is still open?" correctly drops Ramos, but in that state the model also left out the Oct 16 decision date. Reseed between runs.
 
@@ -76,7 +89,7 @@ cd backend; uv run python scripts/seed_demo.py --reset
 cd backend; uv run uvicorn app.main:app --port 8010          # with TALAAN_HOME pointing at the seeded data
 cd frontend; $env:API_TARGET="http://127.0.0.1:8010"; npx vite --port 5180
 cd e2e; npm ci; npx playwright install chromium
-cd e2e; node verify-fixes.mjs --phase after                  # exits 1 on any failed check
+cd e2e; node verify-fixes.mjs --phase after                  # Q2 first, then the edit; exits 1 on any failed check
 ```
 
 `--phase before` runs the same steps against old code without failing, and writes the `before-*.png` images. The script edits `2026-10-02_open-items.md`, so reseed afterwards. Tests for the fixes are in `backend/tests/test_ask.py` (change schema, minimal diff, no-op edit, drift repair, contradiction checklist, plain text).

@@ -249,7 +249,12 @@ def ask(folder_id: str, question: str) -> AskResponse:
         outcome = engine.handle(folder_id, raw, model_tag=r.model)
         return reply(AskResponse(answer=outcome_text(outcome), outcome=outcome, proposal_id=outcome.proposal_id), r.model)
 
-    reminder = CONTRADICTION_REMINDER if CONTRADICTION_QUESTION.search(question) else REMINDER
+    reminder = REMINDER
+    if CONTRADICTION_QUESTION.search(question):
+        # Naming every document stops the model skipping one (it dropped the medical certificate
+        # whenever it summarised the leave from the employee's own explanation instead).
+        listed = "; ".join(f"[S{i}] {h.path}" for i, h in enumerate(chosen, 1))
+        reminder = f"{CONTRADICTION_REMINDER} Check each document in turn: {listed}."
     r = client.chat(
         [{"role": "system", "content": SYSTEM.format(folder=folder.name)},
          {"role": "user", "content": f"{docs}\n\nQuestion: {question}\n\n{reminder}"}],
