@@ -15,10 +15,10 @@ export default function FoldersPage({ folders, error, onCreated }: {
   return (
     <div className="flex min-h-0 flex-1">
       <Sidebar folders={folders} error={error} />
-      <div className="min-w-0 flex-1 overflow-y-auto px-10 py-8">
+      <div className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="mr-auto">
-            <h1 className="text-3xl font-extrabold tracking-tight">Your folders</h1>
+          <div className="mr-auto w-full sm:w-auto">
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your folders</h1>
             <p className="mt-1 text-muted">Each folder is sealed. The AI only sees the one you open.</p>
           </div>
           <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
@@ -78,7 +78,7 @@ function NewFolder({ mode, onDone, onCancel }: { mode: Mode; onDone: () => void;
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={mode === 'case' ? 'e.g. Case 2026-021 Santos' : 'e.g. Chart J. Cruz'}
-        className="min-w-64 flex-1 rounded-full border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
+        className="w-full min-w-0 flex-1 rounded-full sm:w-auto sm:min-w-64 border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
       />
       <button className="btn-primary" disabled={!name.trim()}>Create {noun}</button>
       <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>

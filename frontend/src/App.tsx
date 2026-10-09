@@ -1,14 +1,17 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Route, Routes } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Route, Routes, useLocation } from 'react-router-dom'
 import { api } from './api/client'
 import type { Folder } from './api/types'
 import TopBar from './components/TopBar'
 import FoldersPage from './pages/FoldersPage'
 import FolderPage from './pages/FolderPage'
+import { NavContext } from './lib/nav'
 
 export default function App() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [navOpen, setNavOpen] = useState(false)
+  const location = useLocation()
 
   const refresh = useCallback(() => {
     api.folders()
@@ -18,13 +21,20 @@ export default function App() {
 
   useEffect(refresh, [refresh])
 
+  // Close the drawer whenever the route changes.
+  useEffect(() => setNavOpen(false), [location.pathname])
+
+  const nav = useMemo(() => ({ open: navOpen, setOpen: setNavOpen }), [navOpen])
+
   return (
-    <div className="flex h-screen flex-col">
-      <TopBar />
-      <Routes>
-        <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={refresh} />} />
-        <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
-      </Routes>
-    </div>
+    <NavContext.Provider value={nav}>
+      <div className="flex h-dvh flex-col">
+        <TopBar />
+        <Routes>
+          <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={refresh} />} />
+          <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
+        </Routes>
+      </div>
+    </NavContext.Provider>
   )
 }
