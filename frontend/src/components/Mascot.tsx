@@ -22,6 +22,16 @@ const IMAGES = {
   sealed: '/talaan_3.png', // curled into a ball, keyhole in the middle
 } as const
 
+// Poses on the sheet touch their cell edges (a raised hand reaches into the next cell), so
+// each is shown slightly zoomed in, trimming a margin around the cell.
+const ZOOM = 1.16
+
+/** background-position (%) that centres cell `i` of `n`, zoomed by ZOOM. */
+function pos(i: number, n: number): number {
+  // Offset of the cell's zoomed centre: -(i·Z + (Z-1)/2)·W, against p·(W - n·Z·W).
+  return n === 1 ? 50 : ((i * ZOOM + (ZOOM - 1) / 2) / (n * ZOOM - 1)) * 100
+}
+
 export type MascotPose = keyof typeof SHEET | keyof typeof IMAGES
 
 export default function Mascot({ pose, className = 'h-24 w-24' }: { pose: MascotPose; className?: string }) {
@@ -33,8 +43,8 @@ export default function Mascot({ pose, className = 'h-24 w-24' }: { pose: Mascot
         className={`shrink-0 bg-no-repeat mix-blend-multiply ${className}`}
         style={{
           backgroundImage: 'url(/talaan_2.png)',
-          backgroundSize: '300% 200%',
-          backgroundPosition: `${col * 50}% ${row * 100}%`,
+          backgroundSize: `${300 * ZOOM}% ${200 * ZOOM}%`,
+          backgroundPosition: `${pos(col, 3)}% ${pos(row, 2)}%`,
         }}
       />
     )
