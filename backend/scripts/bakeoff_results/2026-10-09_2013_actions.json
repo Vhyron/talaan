@@ -1,0 +1,257 @@
+{
+  "date": "2026-10-09_2013",
+  "runs": 3,
+  "summary": [
+    {
+      "model": "qwen3.5:2b",
+      "action_json": "6/6",
+      "action_correct": "6/6",
+      "median_s": 11.2
+    },
+    {
+      "model": "qwen3.5:4b",
+      "action_json": "6/6",
+      "action_correct": "6/6",
+      "median_s": 48.5
+    }
+  ],
+  "results": [
+    {
+      "model": "qwen3.5:2b",
+      "load_s": 6.4,
+      "rows": [
+        {
+          "seconds": 5.16,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md",
+            "reason": "User requested deletion of the interview with Rhea Santos."
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 1,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 15.41,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "create_draft",
+            "path": "content/medications.md",
+            "content": "# Current Medications \u2014 Maria Reyes\n\n**Patient:** Maria Reyes (56 F)\n**Date:** September 28, 2026\n\n### **Current Regimen**\n\n| Medication | Dosage | Frequency | Indication |\n| :--- | :--- | :--- | : |\n| Losartan | 50 mg | Once Daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice Daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once Daily (ON) | Hyperlipidemia / Cholesterol |\n\n### **Medication History & Adjustments**\n*   **Losartan:** Started at 50 mg OD. No changes noted in recent visits.\n*   **Metformin:** Increased from 500 mg BID to **1,000 mg BID** on August 31, 2026, due to irregular intake and rising HbA1c (8.1%).\n*   **Atorvastatin:** Initiated at 20 mg ON (nightly) on August 31, 2026, targeting LDL reduction.\n\n### **Allergies**\n*   **Penicillin:** Known allergy (rash and swelling in 2019).\n    *   *Note:* No cross-reactivity with atorvastatin or losartan has been reported.\n\n### **Medication Adherence**\n*   Patient reports taking medications more regularly since the recent adjustment on August 31, 2026.\n*   No new complaints regarding side effects or interactions reported in the current visit (Sep 28).\n\n---\n\n*Disclaimer: This document contains synthetic demo data. All people, companies, IDs, and medical details are made up for demonstration purposes only.*\n"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 1,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 1.82,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md",
+            "reason": "User requested deletion of the interview with Rhea Santos."
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 2,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 36.24,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "create_draft",
+            "path": "content/medications.md",
+            "content": "# Current Medications \u2014 Maria Reyes\n\n**Patient:** Maria Reyes (56 F)\n**Date:** September 28, 2026\n\n### **Current Regimen**\n\n| Medication | Dosage | Frequency | Indication |\n| :--- | :--- | :--- | : |\n| Losartan | 50 mg | Once Daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice Daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once Daily (ON) | Hyperlipidemia / Cholesterol |\n\n### **Medication History & Adjustments**\n*   **Losartan:** Started at 50 mg OD. No changes noted in recent visits.\n*   **Metformin:** Increased from 500 mg BID to **1,000 mg BID** on August 31, 2026, due to irregular intake and rising HbA1c (8.1%).\n*   **Atorvastatin:** Initiated at 20 mg ON (nightly) on August 31, 2026, targeting LDL reduction.\n\n### **Allergies**\n*   **Penicillin:** Known allergy (rash and swelling in 2019).\n    *   *Note:* No cross-reactivity with atorvastatin or losartan has been reported.\n\n### **Medication Adherence**\n*   Patient reports taking medications more regularly since the recent adjustment on August 31, 2026.\n*   No new complaints regarding side effects or interactions reported in the current visit (Sep 28).\n\n---\n\n*Disclaimer: This document contains synthetic demo data. All people, companies, IDs, and medical details are made up for demonstration purposes only.*\n"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 2,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 7.02,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md",
+            "reason": "User requested deletion of the interview with Rhea Santos."
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 3,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 35.21,
+          "model": "qwen3.5:2b",
+          "data": {
+            "action": "create_draft",
+            "path": "content/medications.md",
+            "content": "# Current Medications \u2014 Maria Reyes\n\n**Patient:** Maria Reyes (56 F)\n**Date:** September 28, 2026\n\n### **Current Regimen**\n\n| Medication | Dosage | Frequency | Indication |\n| :--- | :--- | :--- | : |\n| Losartan | 50 mg | Once Daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice Daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once Daily (ON) | Hyperlipidemia / Cholesterol |\n\n### **Medication History & Adjustments**\n*   **Losartan:** Started at 50 mg OD. No changes noted in recent visits.\n*   **Metformin:** Increased from 500 mg BID to **1,000 mg BID** on August 31, 2026, due to irregular intake and rising HbA1c (8.1%).\n*   **Atorvastatin:** Initiated at 20 mg ON (nightly) on August 31, 2026, targeting LDL reduction.\n\n### **Allergies**\n*   **Penicillin:** Known allergy (rash and swelling in 2019).\n    *   *Note:* No cross-reactivity with atorvastatin or losartan has been reported.\n\n### **Medication Adherence**\n*   Patient reports taking medications more regularly since the recent adjustment on August 31, 2026.\n*   No new complaints regarding side effects or interactions reported in the current visit (Sep 28).\n\n---\n\n*Disclaimer: This document contains synthetic demo data. All people, companies, IDs, and medical details are made up for demonstration purposes only.*\n"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 3,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        }
+      ]
+    },
+    {
+      "model": "qwen3.5:4b",
+      "load_s": 9.9,
+      "rows": [
+        {
+          "seconds": 51.36,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md"
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 1,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 76.77,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "create_draft",
+            "path": "2026-10-05_medication-summary.md",
+            "content": "# Medication Summary \u2014 Maria Reyes\n\n**Date:** Oct 5, 2026\n\n## Current Regimen\n\n| Medication | Dosage | Frequency | Purpose |\n| :--- | :--- | :--- | :--- |\n| Losartan | 50 mg | Once daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once at night (ON) | Hyperlipidemia |\n\n## Allergies\n- **Penicillin:** Rash and swelling (since 2019)\n\n---\n*Note: This is synthetic demo data. All people, companies, IDs, and medical details are made up.*"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 1,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 23.01,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md"
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 2,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 73.91,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "create_draft",
+            "path": "2026-10-05_medication-summary.md",
+            "content": "# Medication Summary \u2014 Maria Reyes\n\n**Date:** Oct 5, 2026\n\n## Current Regimen\n\n| Medication | Dosage | Frequency | Purpose |\n| :--- | :--- | :--- | :--- |\n| Losartan | 50 mg | Once daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once at night (ON) | Hyperlipidemia |\n\n## Allergies\n- **Penicillin:** Rash and swelling (since 2019)\n\n---\n*Note: This is synthetic demo data. All people, companies, IDs, and medical details are made up.*"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 2,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 13.81,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "delete",
+            "path": "2026-09-13_interview_R-Santos.md"
+          },
+          "raw": null,
+          "id": "A1",
+          "run": 3,
+          "question": "Delete the interview with Rhea Santos.",
+          "score": {
+            "json_ok": true,
+            "action": "delete",
+            "expected": "delete",
+            "correct": true
+          }
+        },
+        {
+          "seconds": 45.59,
+          "model": "qwen3.5:4b",
+          "data": {
+            "action": "create_draft",
+            "path": "2026-10-05_medication-summary.md",
+            "content": "# Medication Summary \u2014 Maria Reyes\n\n**Date:** Oct 5, 2026\n\n## Current Regimen\n\n| Medication | Dosage | Frequency | Purpose |\n| :--- | :--- | :--- | :--- |\n| Losartan | 50 mg | Once daily (OD) | Hypertension |\n| Metformin | 1,000 mg | Twice daily (BID) | Type 2 Diabetes |\n| Atorvastatin | 20 mg | Once at night (ON) | Hyperlipidemia |\n\n## Allergies\n- **Penicillin:** Rash and swelling (since 2019)\n\n---\n*Note: This is synthetic demo data. All people, companies, IDs, and medical details are made up.*"
+          },
+          "raw": null,
+          "id": "A2",
+          "run": 3,
+          "question": "Create a draft note listing her current medications.",
+          "score": {
+            "json_ok": true,
+            "action": "create_draft",
+            "expected": "create_draft",
+            "correct": true
+          }
+        }
+      ]
+    }
+  ]
+}

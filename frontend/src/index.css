@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Noto Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-ink: #13210f;
+  --color-muted: #5b6458;
+  --color-line: #e3e7e1;
+  --color-panel: #eef1ee;
+  --color-brand: #3d6b2a;
+  --color-brand-dark: #2f5520;
+  --color-brand-soft: #e8f1e1;
+  --color-brand-text: #3d6b2a;
+  --color-warn-soft: #fbf0cf;
+  --color-warn-text: #7a5a0c;
+  --color-bar: #16240f;
+}
+
+body { @apply bg-white text-ink font-sans antialiased; }
+.eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-muted; }
+.chip { @apply inline-flex items-center rounded-full border border-line px-2.5 py-0.5 text-xs; }
+.btn-primary { @apply rounded-full bg-brand px-5 py-2.5 font-semibold text-white hover:bg-brand-dark disabled:opacity-50; }
+.btn-ghost { @apply rounded-full border border-line bg-white px-5 py-2.5 font-semibold hover:bg-panel; }
+
+/* Rendered case files */
+.prose-talaan { @apply leading-7; }
+.prose-talaan h2 { @apply mt-6 mb-2 text-xl font-bold; }
+.prose-talaan h3 { @apply mt-5 mb-2 font-bold; }
+.prose-talaan p { @apply my-3; }
+.prose-talaan ul { @apply my-3 list-disc pl-6; }
+.prose-talaan ol { @apply my-3 list-decimal pl-6; }
+.prose-talaan li:has(> input[type="checkbox"]) { @apply list-none -ml-6; }
+.prose-talaan input[type="checkbox"] { @apply mr-2 accent-brand; }
+.prose-talaan blockquote { @apply my-3 rounded-lg bg-warn-soft px-3 py-1.5 text-xs text-warn-text; }
+.prose-talaan table { @apply my-4 w-full text-sm; }
+.prose-talaan th, .prose-talaan td { @apply border border-line px-2 py-1 text-left; }
+.prose-talaan code { @apply rounded bg-panel px-1 font-mono text-[13px]; }
+
+/* Lines cited by a source chip */
+.source-hit { @apply -mx-2 rounded bg-warn-soft px-2 outline-2 outline-amber-300; }
+
+/* Indeterminate progress bar (timeline build) */
+@keyframes timeline-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
+/* New chat messages ease in */
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .chat-in { animation: chat-in 180ms ease-out; }
+}

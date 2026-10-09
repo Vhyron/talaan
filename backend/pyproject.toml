@@ -1,0 +1,31 @@
+[project]
+name = "talaan-backend"
+version = "0.1.0"
+description = "Talaan backend: local AI for sensitive client files"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "av>=15,<19",
+    "fastapi>=0.143.0",
+    "faster-whisper>=1.1.1",
+    "httpx>=0.28.1",
+    "numpy>=2.4.6",
+    "psutil>=7.2.2",
+    "pydantic>=2.14.0",
+    "pymupdf>=1.28.2",
+    "python-multipart>=0.0.32",
+    "uvicorn[standard]>=0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.4.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+markers = ["live: needs Ollama with the pinned embedding model (skipped otherwise)"]

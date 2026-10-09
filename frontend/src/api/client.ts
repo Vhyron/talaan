@@ -1,0 +1,134 @@
+import type {
+  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, TrashItem, Turn,
+  Proposal, SystemTier, TimelineResponse, VoiceStatus,
+} from './types'
+
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function req(path: string, init?: RequestInit): Promise<Response> {
+  const r = await fetch(`/api${path}`, init)
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => null))?.detail
+    throw new ApiError(r.status, typeof detail === 'string' ? detail : `HTTP ${r.status}`)
+  }
+  return r
+}
+
+const json = <T>(path: string, init?: RequestInit) => req(path, init).then((r) => r.json() as Promise<T>)
+const send = <T>(method: string, path: string, body?: unknown) =>
+  json<T>(path, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+
+const f = (id: string) => `/folders/${encodeURIComponent(id)}`
+const chatBase = (id: string | null) => (id ? f(id) : '')
+const filePath = (path: string) => path.split('/').map(encodeURIComponent).join('/')
+
+export const api = {
+  health: () => json<Health>('/health'),
+
+  folders: () => json<Folder[]>('/folders'),
+  createFolder: (body: FolderCreate) => send<Folder>('POST', '/folders', body),
+  folder: (id: string) => json<Folder>(f(id)),
+  files: (id: string) => json<FileEntry[]>(`${f(id)}/files`),
+  file: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`).then((r) => r.text()),
+  /** `path` is the file's name, or its relative path when `keepPaths` (e.g. "Interviews/a.md"). */
+  importFiles: (id: string, uploads: { file: File; path: string }[], opts: { dest?: string; keepPaths?: boolean } = {}) => {
+    const form = new FormData()
+    uploads.forEach(({ file, path }) => form.append('files', file, path))
+    form.append('dest', opts.dest ?? '')
+    form.append('keep_paths', String(Boolean(opts.keepPaths)))
+    return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
+  },
+  deleteFile: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`, { method: 'DELETE' }),
+  dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
+  /** Change a folder's display name; its id (and grants, audit, chat) stays. */
+  renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
+  /** Rename a file or subfolder in place; `name` is the new last segment. */
+  renamePath: (id: string, path: string, name: string) => send<{ path: string }>('POST', `${f(id)}/rename`, { path, name }),
+  /** Trash (user only): move a folder, file or subfolder there; restore or delete for good. */
+  trashFolder: (id: string) => send<TrashItem>('DELETE', f(id)),
+  trashPath: (id: string, path: string) => send<TrashItem>('POST', `${f(id)}/trash`, { path }),
+  trash: () => json<TrashItem[]>('/trash'),
+  restore: (tid: string) => send<TrashItem>('POST', `/trash/${encodeURIComponent(tid)}/restore`),
+  purge: (tid: string) => req(`/trash/${encodeURIComponent(tid)}`, { method: 'DELETE' }).then(() => undefined),
+  createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
+
+  reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
+  /** Home-page chat across every folder the AI may read (read-only). */
+  /** Home chat across all folders. `session_id` continues the saved thread; null starts a new one. */
+  askAll: (question: string, history: Turn[] = [], session_id: string | null = null) =>
+    send<AskResponse>('POST', '/ask', { question, history, session_id }),
+  /** The saved home chat thread, if any. */
+  homeChat: () => json<ChatSession | null>('/chat'),
+  ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
+    send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
+  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */
+  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void) => {
+    const r = await req(`${f(id)}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, ...opts }),
+    })
+    const reader = r.body!.pipeThrough(new TextDecoderStream()).getReader()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += value
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim()) continue
+        const e = JSON.parse(line) as AskEvent
+        if (e.type === 'done') return e.response
+        if (e.type === 'error') throw new ApiError(503, e.message)
+        onEvent(e)
+      }
+    }
+    throw new ApiError(502, 'The answer stopped before it finished. Please ask again.')
+  },
+  /** Saved chats: a folder's, or the home chat's (all folders) when `id` is null. */
+  chats: (id: string | null, q = '') => json<ChatSessionSummary[]>(`${chatBase(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+  chat: (id: string | null, sid: string) => json<ChatSession>(`${chatBase(id)}/chats/${encodeURIComponent(sid)}`),
+  renameChat: (id: string | null, sid: string, title: string) =>
+    send<ChatSessionSummary>('PATCH', `${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { title }),
+  deleteChat: (id: string | null, sid: string) => req(`${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
+  /** `scope`: a subfolder of the Space; omitted for the whole Space. */
+  timeline: (id: string, scope?: string) =>
+    send<TimelineResponse>('POST', `${f(id)}/timeline${scope ? `?scope=${encodeURIComponent(scope)}` : ''}`),
+
+  grants: (id: string) => json<Grants>(`${f(id)}/grants`),
+  setGrants: (id: string, grants: Grants) => send<Grants>('PUT', `${f(id)}/grants`, grants),
+
+  proposals: (id: string) => json<Proposal[]>(`${f(id)}/proposals`),
+  approve: (pid: string) => send<Outcome>('POST', `/proposals/${encodeURIComponent(pid)}/approve`),
+  reject: (pid: string) => send<unknown>('POST', `/proposals/${encodeURIComponent(pid)}/reject`),
+
+  audit: (id: string) => json<AuditEvent[]>(`${f(id)}/audit`),
+  auditExportUrl: (id: string, format: 'json' | 'csv') => `/api${f(id)}/audit/export?format=${format}`,
+
+  transcribe: (id: string, audio: Blob, filename = 'recording.webm') => {
+    const form = new FormData()
+    form.append('audio', audio, filename)
+    return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
+  },
+
+  voiceStatus: () => json<VoiceStatus>('/system/voice'),
+  downloadVoiceModel: () => send<VoiceStatus>('POST', '/system/voice/download'),
+  systemTier: () => json<SystemTier>('/system/tier'),
+  chooseModel: (chat_model: string | null) => send<SystemTier>('PUT', '/system/model', { chat_model }),
+  llmLog: (after = 0) => json<LlmCall[]>(`/system/llm-log?after=${after}`),
+  clearLlmLog: () => req('/system/llm-log', { method: 'DELETE' }),
+  settings: () => json<AppSettings>('/system/settings'),
+  setSettings: (body: AppSettings) => send<AppSettings>('PUT', '/system/settings', body),
+}

@@ -1,0 +1,116 @@
+import { useState, type FormEvent } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { FolderInput, Lock, Plus } from 'lucide-react'
+import { api } from '../api/client'
+import type { Folder, Mode } from '../api/types'
+import Sidebar from '../components/Sidebar'
+import HomeChat from '../components/HomeChat'
+import Mascot from '../components/Mascot'
+import { DropZone } from '../components/ImportDrop'
+import { useImportDialog } from '../lib/importDialog'
+import { noun, SHOW_MODE } from '../lib/folderContext'
+
+export default function FoldersPage({ folders, error, onCreated }: {
+  folders: Folder[]
+  error: string | null
+  onCreated: () => void
+}) {
+  // null = closed; 'space' = a plain Space (SHOW_MODE off)
+  const [creating, setCreating] = useState<Mode | 'space' | null>(null)
+  const importDialog = useImportDialog()
+
+  return (
+    <div className="flex min-h-0 flex-1">
+      <Sidebar folders={folders} error={error} />
+      <DropZone onFiles={(u) => { setCreating(null); importDialog.open(u) }}>
+      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
+        {/* The all-folders chat grows in place from here; the folders sit below it. */}
+        <HomeChat folders={folders} />
+
+        <section id="folders" className="mt-8 scroll-mt-6 sm:scroll-mt-8" aria-label="Your folders">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="mr-auto flex w-full items-center gap-3 sm:w-auto">
+            <Mascot pose="folder" className="hidden h-20 w-20 sm:block" />
+            <div>
+            <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your Spaces</h1>
+            <p className="mt-1 text-muted">Each Space is sealed: its chat only sees that Space.</p>
+            </div>
+          </div>
+          {SHOW_MODE ? (
+            <>
+              <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('case')}>
+                <Plus size={16} /> New Case
+              </button>
+              <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('chart')}>
+                <Plus size={16} /> New Chart
+              </button>
+            </>
+          ) : (
+            <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => setCreating('space')}>
+              <Plus size={16} /> New Space
+            </button>
+          )}
+          <button className="btn-ghost inline-flex items-center gap-1.5" onClick={() => { setCreating(null); importDialog.open() }}>
+            <FolderInput size={16} /> Import folder
+          </button>
+        </div>
+
+        {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
+
+        <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+          {folders.map((f) => (
+            <li key={f.id}>
+              <Link
+                to={`/folders/${encodeURIComponent(f.id)}`}
+                className="block rounded-xl border border-line p-4 hover:border-brand hover:bg-brand-soft/40"
+              >
+                {SHOW_MODE && f.mode && <span className="mb-2 inline-block rounded bg-panel px-1.5 py-0.5 text-[11px] font-semibold uppercase">{f.mode}</span>}
+                <p className="font-bold">{f.name}</p>
+                <p className="mt-1 inline-flex items-center gap-1 text-xs text-muted">
+                  <Lock size={11} /> Opened {new Date(f.created_at).toLocaleDateString()}
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        </section>
+      </main>
+      </DropZone>
+    </div>
+  )
+}
+
+function NewFolder({ mode, onDone, onCancel }: { mode: Mode | 'space'; onDone: () => void; onCancel: () => void }) {
+  const label = noun(mode === 'space' ? null : mode)
+  const [name, setName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    try {
+      const folder = await api.createFolder(mode === 'space' ? { name: name.trim() } : { name: name.trim(), mode })
+      onDone()
+      navigate(`/folders/${encodeURIComponent(folder.id)}`)
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-5 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel p-4">
+      <label className="text-sm font-semibold" htmlFor="folder-name">New {label}</label>
+      <input
+        id="folder-name"
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder={mode === 'case' ? 'e.g. Case 2026-021 Santos' : mode === 'chart' ? 'e.g. Chart J. Cruz' : 'e.g. Lakbay Logistics Inc.'}
+        className="w-full min-w-0 flex-1 rounded-full sm:w-auto sm:min-w-64 border border-line bg-white px-4 py-2 text-sm outline-none focus:border-brand"
+      />
+      <button className="btn-primary" disabled={!name.trim()}>Create {label}</button>
+      <button type="button" className="btn-ghost" onClick={onCancel}>Cancel</button>
+      {error && <p className="w-full text-sm text-red-700">{error}</p>}
+    </form>
+  )
+}
