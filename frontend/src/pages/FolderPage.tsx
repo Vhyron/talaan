@@ -9,6 +9,7 @@ import FileViewer, { type Highlight } from '../components/FileViewer'
 import RightPanel, { type PanelTab } from '../components/RightPanel'
 import { DropZone, ImportButton, useImport } from '../components/ImportDrop'
 import AskPanel from '../panels/AskPanel'
+import PermissionsPanel from '../panels/PermissionsPanel'
 import { FolderContext, noun, useFolder, type FolderCtx } from '../lib/folderContext'
 
 function Placeholder({ label }: { label: string }) {
@@ -152,7 +153,7 @@ function FolderLayout({ folders, error, tabs, highlight, panel, onPanel, onSelec
         panels={{
           ask: <AskPanel onShowApprovals={() => onPanel('approvals')} />,
           timeline: <Placeholder label="Timeline" />,
-          permissions: <Placeholder label="Permissions" />,
+          permissions: <PermissionsPanel />,
           approvals: <Placeholder label="Approvals" />,
           audit: <Placeholder label="Audit log" />,
         }}
