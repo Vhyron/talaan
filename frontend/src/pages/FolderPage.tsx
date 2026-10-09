@@ -43,7 +43,10 @@ type Tabs = { paths: string[]; active: number; dir: string }
 // Open tabs per folder for this session, so switching between folders keeps them.
 const tabsByFolder = new Map<string, Tabs>()
 
-const renameTabs = (t: Tabs, from: string, to: string): Tabs => ({ ...t, paths: t.paths.map((p) => movedPath(p, from, to)) })
+// Tabs and the open subfolder overview follow a rename.
+const renameTabs = (t: Tabs, from: string, to: string): Tabs => ({
+  ...t, paths: t.paths.map((p) => movedPath(p, from, to)), dir: t.dir && movedPath(t.dir, from, to),
+})
 
 // Remembered tabs of folders not on screen follow renames too.
 onRenamed(({ folderId, from, to }) => {
@@ -55,7 +58,10 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   const tree = useTree()
   const location = useLocation()
   const [files, setFiles] = useState<FileEntry[]>([])
+  const loaded = useRef(false) // the file list has arrived at least once (an empty Space is [] too)
   const [tabs, setTabs] = useState<Tabs>(() => tabsByFolder.get(folder.id) ?? { paths: [], active: -1, dir: '' })
+  const tabsRef = useRef(tabs)
+  tabsRef.current = tabs
   const [highlight, setHighlight] = useState<Highlight>(null)
   // Which folder tool is open in the floating card (or pinned column), if any.
   const [tool, setTool] = useState<PanelTab | null>(null)
@@ -66,7 +72,17 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
   // Any change to files or subfolders (import, approval, new subfolder) bumps
   // tree.version; this view and every open sidebar tree refetch from that.
   useEffect(() => {
-    api.files(folder.id).then(setFiles).catch(() => setFiles([]))
+    api.files(folder.id).then((fs) => { loaded.current = true; setFiles(fs) }).catch(() => setFiles([]))
+    // The open subfolder was moved to Trash (or is otherwise gone): show the Space's overview instead,
+    // so the chat isn't left scoped to a folder that no longer exists. Checked against a fresh list
+    // only, so a rename (the view already follows it) never trips it.
+    api.dirs(folder.id).then((ds) => {
+      const dir = tabsRef.current.dir
+      if (dir && !ds.includes(dir)) {
+        setNotice(`${dir} was removed. Showing the whole Space.`)
+        setTabs((t) => (t.dir === dir ? { ...t, dir: '' } : t))
+      }
+    }).catch(() => {})
   }, [folder.id, tree.version])
   const refreshFiles = tree.changed
 
@@ -84,7 +100,7 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
 
   // Drop tabs for files that no longer exist; open the first file if nothing is open.
   useEffect(() => {
-    if (!files.length) return
+    if (!loaded.current) return
     const exists = new Set(files.map((f) => f.path))
     const gone = tabs.paths.filter((p) => !exists.has(p))
     if (gone.length) setNotice(`${gone[0]} was renamed or removed. Ask again to get current sources.`)

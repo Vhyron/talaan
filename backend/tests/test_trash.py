@@ -71,6 +71,10 @@ def test_trashed_folder_is_not_read_by_the_home_chat(talaan_home, monkeypatch):
     seen = []
     monkeypatch.setattr(client, "chat", lambda messages, **kw: seen.append(messages[1]["content"]) or
                         ChatResult(content="", model="fake", seconds=0, data={"answer": "x", "refused": False}))
+    from app.policy.grants import set_grants
+    from app.schemas import Grants
+    for fid in (CASE, CHART):
+        set_grants(fid, Grants(home_chat=True))  # included in the home chat, then trashed
     c.delete(f"/folders/{CHART}")
     c.post("/ask", json={"question": "penicillin allergy"})
     assert "Santos Family Clinic" not in seen[0].split("Question:")[0] and "enicillin" not in seen[0].split("Question:")[0]

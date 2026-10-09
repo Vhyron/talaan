@@ -9,7 +9,15 @@ from app.main import app
 
 c = TestClient(app)
 F = "Lakbay-Logistics-Inc"
-DEFAULTS = {"read": "allow", "suggest_edits": "needs_approval", "create_drafts": "needs_approval", "delete": "never"}
+DEFAULTS = {"read": "allow", "suggest_edits": "needs_approval", "create_drafts": "needs_approval", "delete": "never",
+            "home_chat": False}
+
+
+def test_home_chat_toggle_is_logged():
+    assert c.put(f"/folders/{F}/grants", json={**DEFAULTS, "home_chat": True}).json()["home_chat"] is True
+    assert c.get(f"/folders/{F}/grants").json()["home_chat"] is True
+    [ev] = [e for e in c.get(f"/folders/{F}/audit").json() if e["action"] == "home_chat"]
+    assert (ev["actor"], ev["event"], ev["decision"]) == ("user", "grant_change", "on")
 
 
 def test_default_grants():

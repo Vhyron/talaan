@@ -17,7 +17,8 @@ export type Action =
   | { action: 'delete'; path: string; reason: string }
 
 export type Grant = 'allow' | 'needs_approval' | 'never'
-export type Grants = { read: Grant; suggest_edits: Grant; create_drafts: Grant; delete: Grant }
+export type Grants = { read: Grant; suggest_edits: Grant; create_drafts: Grant; delete: Grant; home_chat: boolean }
+export type GrantKey = Exclude<keyof Grants, 'home_chat'>
 
 export type Outcome = {
   status: 'executed' | 'pending' | 'blocked'

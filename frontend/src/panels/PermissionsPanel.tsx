@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Lock } from 'lucide-react'
+import { Library, Lock } from 'lucide-react'
 import { api } from '../api/client'
-import type { Grant, Grants } from '../api/types'
+import type { Grant, GrantKey, Grants } from '../api/types'
 import { useFolder } from '../lib/folderContext'
 
-const ROWS: { key: keyof Grants; label: string; help: string }[] = [
+const ROWS: { key: GrantKey; label: string; help: string }[] = [
   { key: 'read', label: 'Read', help: 'Search and read files in this folder to answer questions.' },
   { key: 'suggest_edits', label: 'Suggest edits', help: 'Propose changes to a file, shown to you as a diff.' },
   { key: 'create_drafts', label: 'Create drafts', help: 'Write new files, such as transcripts or notice outlines.' },
@@ -27,7 +27,7 @@ export default function PermissionsPanel() {
     api.grants(folder.id).then(setGrants).catch((e) => setError(e.message))
   }, [folder.id])
 
-  async function change(key: keyof Grants, value: Grant) {
+  async function change<K extends keyof Grants>(key: K, value: Grants[K]) {
     if (!grants || grants[key] === value) return
     setSaving(key)
     setError(null)
@@ -79,6 +79,24 @@ export default function PermissionsPanel() {
           )
         })}
       </ul>
+
+      <div className="mt-4 rounded-xl bg-white p-3">
+        <label className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 font-semibold"><Library size={14} /> Include in home chat</span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={grants?.home_chat ?? false}
+            disabled={!grants || saving === 'home_chat'}
+            onChange={(e) => change('home_chat', e.target.checked)}
+            className="h-4 w-4 accent-brand"
+          />
+        </label>
+        <p className="mt-0.5 text-xs text-muted">
+          Off: the home page's chat across Spaces can't see {folder.name}. On: it can read it (read only, never changes files),
+          and each question that uses it is logged here.
+        </p>
+      </div>
       <p className="mt-4 text-xs text-muted">There is no “allow everything” option. Every change is recorded in the audit log.</p>
     </div>
   )

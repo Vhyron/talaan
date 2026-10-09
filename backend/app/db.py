@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS grants (
     read          TEXT NOT NULL,
     suggest_edits TEXT NOT NULL,
     create_drafts TEXT NOT NULL,
-    "delete"      TEXT NOT NULL
+    "delete"      TEXT NOT NULL,
+    home_chat     INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS audit (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,6 +96,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         conn.execute("ALTER TABLE audit ADD COLUMN session_id TEXT")
     if "scope" not in {r["name"] for r in conn.execute("PRAGMA table_info(chat_sessions)")}:
         conn.execute("ALTER TABLE chat_sessions ADD COLUMN scope TEXT")
+    if "home_chat" not in {r["name"] for r in conn.execute("PRAGMA table_info(grants)")}:
+        conn.execute("ALTER TABLE grants ADD COLUMN home_chat INTEGER NOT NULL DEFAULT 0")
 
 
 @contextmanager

@@ -3,7 +3,8 @@
 Unlike the folder chat (ask.py), this reads across client folders by design. It stays
 local (same Ollama models) and is deliberately limited:
 - read-only: no action call, so nothing in any file can trigger an edit, draft or delete;
-- each folder's Read grant still applies: a folder set to Never is not searched;
+- only Spaces the user included in the home chat (Grants.home_chat, off by default) are
+  searched, and each one's Read grant still applies: a Space set to Never is not searched;
 - every passage is tagged with its folder, and the model must say which client each fact
   belongs to;
 - the question and answer are written to the audit log of every folder whose files were used.
@@ -26,6 +27,8 @@ PER_FOLDER = 6  # best chunks taken from each folder before merging
 MAX_CHUNKS = 8  # the prompt spans many folders: keep it small enough for a CPU laptop
 GLOBAL_CHARS = 10_000
 NOT_FOUND = "I couldn't find that in any folder on this laptop."
+NO_SPACES = ("No Space is included in the home chat yet. Open a Space's Permissions and turn on "
+             "\"Include in home chat\" to let this chat read it.")
 
 SYSTEM = """You are Talaan, answering questions across ALL the client folders on this laptop.
 Below is a catalogue of the folders and their files, then passages from documents, each tagged [S1],
@@ -43,8 +46,9 @@ Rules:
 
 
 def readable_folders() -> list[Folder]:
-    """Every folder whose Read grant allows the AI to look at it."""
-    return [f for f in folders.list_folders() if get_grants(f.id).read != Grant.NEVER]
+    """Every Space the user included in the home chat whose Read grant allows the AI to look at it."""
+    return [f for f in folders.list_folders()
+            if (g := get_grants(f.id)).home_chat and g.read != Grant.NEVER]
 
 
 def catalogue(fs: list[Folder]) -> str:
@@ -113,7 +117,7 @@ def map_citations(answer: str, chosen: list[tuple[Folder, Hit]]) -> tuple[str, l
 def ask_all(question: str, history: Sequence[Turn] = ()) -> AskResponse:
     fs = readable_folders()
     if not fs:
-        return AskResponse(answer="There are no folders the AI is allowed to read.", refused=True)
+        return AskResponse(answer=NO_SPACES, refused=True)
 
     prev = next((t.content for t in reversed(history) if t.role == "user"), "")
     found = gather(fs, f"{prev}\n{question}" if prev else question)
