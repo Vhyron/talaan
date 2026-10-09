@@ -80,7 +80,7 @@ All optional, set as environment variables before starting the backend (see `bac
 | Variable | Default | Use |
 |---|---|---|
 | `TALAAN_HOME` | `~/Talaan` | Where folders and `app.db` live |
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama, or LM Studio's OpenAI-compatible URL |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434` | Ollama, or LM Studio's OpenAI-compatible URL. Use `127.0.0.1`, not `localhost`: on Windows `localhost` tries IPv6 first and adds ~2 s to every model call |
 | `CHAT_MODEL` | `gemma4:e4b` | Chat model tag |
 | `EMBED_MODEL` | `qwen3-embedding:0.6b` | Embedding model. Changing it means re-indexing every folder |
 | `NUM_CTX` | `16384` | Context window sent on every request |
@@ -106,7 +106,20 @@ cd backend; uv run pytest
 cd frontend; npx tsc -b; npm run lint; npm run build
 ```
 
-All four must pass before opening a PR. The acceptance questions Q1–Q9 in [demo-data/README.md](../demo-data/README.md) are the end-to-end check once the AI tickets (B4, B5) are merged; D4 automates them.
+All four must pass before opening a PR.
+
+### Acceptance test (D4)
+
+The nine ground-truth questions in [demo-data/README.md](../demo-data/README.md), plus the sealing and prompt-injection rules, against the running backend:
+
+```powershell
+cd backend
+uv run scripts/seed_demo.py --reset     # always start from the demo state
+uv run scripts/acceptance.py            # backend on http://127.0.0.1:8000
+uv run scripts/acceptance.py --only 4,5,9 --base http://127.0.0.1:8011
+```
+
+It prints PASS/FAIL per question with the reason and real seconds per answer, and exits non-zero on any failure. It is the sign-off for milestone M2: everything must pass before rehearsals. Until B4/B5 merge, only Q3, Q4 and Q9 pass (the routes still return sample answers). Timings may be quoted in the pitch, so only quote numbers from a real run on the demo laptop.
 
 ## 6. Reset before a demo or rehearsal
 
@@ -133,6 +146,7 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 - [ ] Backend and frontend running; `http://localhost:8000/health` shows the pinned model tags
 - [ ] Ask one question per folder so the models are loaded and warm (`ollama ps`)
 - [ ] **Turn Wi-Fi off**, refresh the app, run the full 5-minute script from [06-demo-and-pitch.md](06-demo-and-pitch.md)
+- [ ] `uv run scripts/acceptance.py` passes 9/9 with Wi-Fi off
 - [ ] Check Audit → Blocked only shows the injection attempt; then reset again
 - [ ] Backup demo video on the laptop and on a USB stick
 
