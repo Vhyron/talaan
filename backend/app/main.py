@@ -219,11 +219,9 @@ def build_index(folder_id: str) -> IndexStatus:
 @app.post("/ask")
 def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
     """Home-page chat: answers from every folder the AI may read. Read-only; audited per folder.
-    Saved as one thread: `session_id` continues it, none starts a new one (replacing the old)."""
+    Saved like folder chats: `session_id` continues one, none starts a new one."""
     if body.session_id:
         chats.check(chats.ALL, body.session_id)
-    else:
-        chats.clear_home()
     # The question is saved first, so a reload while the model is still answering shows it
     # (the page then waits for the answer). If answering fails, the question is taken back.
     sid = body.session_id or chats.new_id()
@@ -238,9 +236,31 @@ def ask_all_folders(body: GlobalAskRequest) -> AskResponse:
     return res
 
 
+@app.get("/chats")
+def list_home_chats(q: str | None = None) -> list[ChatSessionSummary]:
+    """Saved home-page chats (all folders), newest first; `q` searches titles and messages."""
+    return chats.list_sessions(chats.ALL, q)
+
+
+@app.get("/chats/{sid}")
+def get_home_chat(sid: str) -> ChatSession:
+    return chats.get_session(chats.ALL, sid)
+
+
+@app.patch("/chats/{sid}")
+def rename_home_chat(sid: str, body: ChatRename) -> ChatSessionSummary:
+    return chats.rename(chats.ALL, sid, body.title)
+
+
+@app.delete("/chats/{sid}", status_code=204)
+def delete_home_chat(sid: str) -> None:
+    """Removes the saved chat only. Each folder it read keeps the questions in its audit log."""
+    chats.delete(chats.ALL, sid)
+
+
 @app.get("/chat")
 def home_chat() -> ChatSession | None:
-    """The home-page chat thread, saved so it survives navigation and restarts."""
+    """The most recent home-page chat, opened when the home page loads."""
     latest = chats.list_sessions(chats.ALL)
     return chats.get_session(chats.ALL, latest[0].id) if latest else None
 

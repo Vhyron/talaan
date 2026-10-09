@@ -61,11 +61,11 @@ function awaitAnswer(s: ChatSession) {
     return
   }
   set({ busy: true, since: askedAt })
-  const poll = () => api.homeChat()
+  const poll = () => api.chat(null, s.id)
     .then((now) => {
-      const done = now && now.id === s.id && now.messages[now.messages.length - 1]?.role === 'assistant'
+      if (thread.sessionId !== s.id) return // another chat was opened meanwhile
+      const done = now.messages[now.messages.length - 1]?.role === 'assistant'
       if (done) set({ busy: false, messages: fromSaved(now) })
-      else if (now?.id !== s.id) set({ busy: false }) // replaced meanwhile (a new chat elsewhere)
       else if (Date.now() - askedAt > GIVE_UP_MS) set((t) => ({ busy: false, messages: [...t.messages, { role: 'error', text: 'No answer arrived. Please ask again.' }] }))
       else setTimeout(poll, POLL_MS)
     })
@@ -100,9 +100,17 @@ export async function askHome(question: string) {
   }
 }
 
-/** Start a new home chat; the next question replaces the saved thread (audit logs keep it all). */
+/** Start a new home chat; the earlier ones stay in Saved chats. */
 export function newHomeChat() {
   if (!thread.busy) set({ sessionId: null, messages: [] })
+}
+
+/** Open a saved home chat from the history. */
+export async function openHomeChat(sid: string) {
+  if (thread.busy) return
+  const s = await api.chat(null, sid)
+  set({ sessionId: s.id, messages: fromSaved(s) })
+  if (s.messages.length && s.messages[s.messages.length - 1].role === 'user') awaitAnswer(s)
 }
 
 export function useHomeChat() {

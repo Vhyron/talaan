@@ -117,11 +117,23 @@ def test_home_thread_is_saved_and_continued(model):
     assert thread["id"] == sid and [m["content"] for m in thread["messages"] if m["role"] == "user"] == ["first", "second"]
 
 
-def test_new_home_thread_replaces_the_old_one_but_audit_stays(model):
+def test_home_chats_are_kept_as_history(model):
     model.reply = {"answer": "Penicillin [S1].", "refused": False}
     old = ask("penicillin allergy")["session_id"]
     new = ask("badge entry")["session_id"]
-    assert new != old and c.get("/chat").json()["id"] == new
+    assert new != old and c.get("/chat").json()["id"] == new  # the newest opens on load
+    listed = c.get("/chats").json()
+    assert [s["id"] for s in listed] == [new, old] and listed[1]["title"] == "penicillin allergy"
+    assert c.get(f"/chats/{old}").json()["messages"][0]["content"] == "penicillin allergy"
+    assert [s["id"] for s in c.get("/chats", params={"q": "badge"}).json()] == [new]
+
+
+def test_home_chat_rename_and_delete_keep_the_audit(model):
+    model.reply = {"answer": "Penicillin [S1].", "refused": False}
+    sid = ask("penicillin allergy")["session_id"]
+    assert c.patch(f"/chats/{sid}", json={"title": "Allergies"}).json()["title"] == "Allergies"
+    assert c.delete(f"/chats/{sid}").status_code == 204
+    assert c.get("/chats").json() == [] and c.get(f"/chats/{sid}").status_code == 404
     assert any(e["reason"] == "Home chat (all folders): penicillin allergy" for e in c.get(f"/folders/{CHART}/audit").json())
 
 

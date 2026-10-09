@@ -30,6 +30,7 @@ const send = <T>(method: string, path: string, body?: unknown) =>
   })
 
 const f = (id: string) => `/folders/${encodeURIComponent(id)}`
+const chatBase = (id: string | null) => (id ? f(id) : '')
 const filePath = (path: string) => path.split('/').map(encodeURIComponent).join('/')
 
 export const api = {
@@ -96,11 +97,12 @@ export const api = {
     }
     throw new ApiError(502, 'The answer stopped before it finished. Please ask again.')
   },
-  chats: (id: string, q = '') => json<ChatSessionSummary[]>(`${f(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
-  chat: (id: string, sid: string) => json<ChatSession>(`${f(id)}/chats/${encodeURIComponent(sid)}`),
-  renameChat: (id: string, sid: string, title: string) =>
-    send<ChatSessionSummary>('PATCH', `${f(id)}/chats/${encodeURIComponent(sid)}`, { title }),
-  deleteChat: (id: string, sid: string) => req(`${f(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
+  /** Saved chats: a folder's, or the home chat's (all folders) when `id` is null. */
+  chats: (id: string | null, q = '') => json<ChatSessionSummary[]>(`${chatBase(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
+  chat: (id: string | null, sid: string) => json<ChatSession>(`${chatBase(id)}/chats/${encodeURIComponent(sid)}`),
+  renameChat: (id: string | null, sid: string, title: string) =>
+    send<ChatSessionSummary>('PATCH', `${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { title }),
+  deleteChat: (id: string | null, sid: string) => req(`${chatBase(id)}/chats/${encodeURIComponent(sid)}`, { method: 'DELETE' }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),

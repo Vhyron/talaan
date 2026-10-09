@@ -208,6 +208,8 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
 
       {view === 'history' ? (
         <ChatHistory
+          folderId={folder.id}
+          emptyText={`No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}
           activeId={sessionId}
           onOpen={resume}
           onDeleted={(sid) => {

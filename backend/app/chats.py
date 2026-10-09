@@ -181,10 +181,3 @@ def auto_title(folder_id: str, sid: str, question: str) -> None:
         db.execute("UPDATE chat_sessions SET title = ?, title_source = 'model'"
                    " WHERE id = ? AND folder_id = ? AND title_source = 'question'", (title, sid, folder_id))
 
-
-def clear_home() -> None:
-    """The home chat keeps one thread: starting a new one replaces it. The audit log of every
-    folder it read keeps the questions and answers."""
-    with connect() as db:
-        db.execute("DELETE FROM chat_messages WHERE folder_id = ?", (ALL,))
-        db.execute("DELETE FROM chat_sessions WHERE folder_id = ?", (ALL,))
