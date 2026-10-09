@@ -116,9 +116,11 @@ function FolderView({ folder, folders, error }: { folder: Folder; folders: Folde
     setHighlight(null)
   }
 
+  // The file in the active tab (none on the overview): the Ask chat focuses on it.
+  const currentPath = tabs.active >= 0 ? tabs.paths[tabs.active] : undefined
   const ctx: FolderCtx = useMemo(
-    () => ({ folder, files, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
-    [folder, files, openSource, refreshFiles, version],
+    () => ({ folder, files, currentPath, openSource, refreshFiles, version, bump: () => setVersion((v) => v + 1) }),
+    [folder, files, currentPath, openSource, refreshFiles, version],
   )
 
   return (

@@ -1,12 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ban, ClipboardCheck, Lock, SendHorizontal } from 'lucide-react'
+import { Ban, ClipboardCheck, Eye, Lock, SendHorizontal } from 'lucide-react'
 import { api } from '../api/client'
-import type { AskResponse, Source } from '../api/types'
+import type { AskResponse, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
 import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
+import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
 
 type Msg = { role: 'user'; text: string } | { role: 'assistant'; res: AskResponse } | { role: 'error'; text: string }
+
+/** Turns sent back with the next question, so follow-ups ("what about her meds?") make sense. */
+const HISTORY_TURNS = 4
+
+function historyOf(messages: Msg[]): Turn[] {
+  const turns: Turn[] = []
+  for (const m of messages) {
+    if (m.role === 'user') turns.push({ role: 'user', content: m.text })
+    else if (m.role === 'assistant' && !m.res.refused && !m.res.outcome) turns.push({ role: 'assistant', content: m.res.answer })
+  }
+  return turns.slice(-HISTORY_TURNS)
+}
+
+const basename = (path: string) => path.split('/').pop() ?? path
 
 /** Turn "… [S1] … [S2]" into text with inline source chips. */
 function withChips(answer: string, sources: Source[]): ReactNode[] {
@@ -18,7 +33,8 @@ function withChips(answer: string, sources: Source[]): ReactNode[] {
 }
 
 export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
-  const { folder, bump } = useFolder()
+  const { folder, currentPath, bump } = useFolder()
+  const index = useIndexStatus()
   const [messages, setMessages] = useState<Msg[]>([])
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
@@ -31,12 +47,13 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
 
   async function send() {
     const q = question.trim()
-    if (!q || busy) return
+    if (!q || busy || index.state === 'indexing') return
+    const history = historyOf(messages)
     setQuestion('')
     setMessages((m) => [...m, { role: 'user', text: q }])
     setBusy(true)
     try {
-      const res = await api.ask(folder.id, q)
+      const res = await api.ask(folder.id, q, { path: currentPath, history })
       setMessages((m) => [...m, { role: 'assistant', res }])
       if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
     } catch (e) {
@@ -48,17 +65,21 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-4 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-1 px-4 pt-4">
         <h2 className="font-bold">Ask this {folder.mode}</h2>
-        <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs">
-          <Lock size={11} /> Only sees {folder.name}
+        <span className="inline-flex min-w-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-xs">
+          <Lock size={11} className="shrink-0" /> <span className="truncate">Only sees {folder.name}</span>
         </span>
+      </div>
+      <div className="px-4 pt-1">
+        <IndexPill index={index} onRetry={index.retry} />
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-sm">
         {!messages.length && (
           <p className="text-muted">
-            Answers come only from files in this {folder.mode}, with sources you can click.
+            Answers come only from files in this {folder.mode}, with sources you can click. Ask about the
+            whole {folder.mode} ("Summarize this {folder.mode}") or the open file ("Summarize this note").
           </p>
         )}
         {messages.map((m, i) => {
@@ -79,6 +100,11 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
       </div>
 
       <div className="p-4 pt-0">
+        {currentPath && (
+          <p className="mb-1 flex min-w-0 items-center gap-1 text-xs text-muted" title={currentPath}>
+            <Eye size={12} className="shrink-0" /> <span className="truncate">Looking at {basename(currentPath)}</span>
+          </p>
+        )}
         <div className="flex items-end gap-2 rounded-xl border border-line bg-white p-2 focus-within:border-brand">
           <textarea
             value={question}
@@ -87,14 +113,41 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             rows={2}
             aria-label={`Ask about this ${folder.mode}`}
             className="flex-1 resize-none bg-transparent outline-none"
-            placeholder={folder.mode === 'case' ? 'e.g. What is still open?' : 'e.g. Any allergies before I prescribe?'}
+            placeholder={folder.mode === 'case' ? 'e.g. Summarize this case · What is still open?' : 'e.g. Summarize this chart · Any allergies?'}
           />
-          <button onClick={send} disabled={busy || !question.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+          <button onClick={send} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
             <SendHorizontal size={16} />
           </button>
         </div>
       </div>
     </div>
+  )
+}
+
+function IndexPill({ index, onRetry }: { index: IndexState; onRetry: () => void }) {
+  const base = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs'
+  if (index.state === 'indexing') {
+    return <span className={`${base} bg-white text-muted`}>Indexing this folder…</span>
+  }
+  if (index.state === 'error') {
+    return (
+      <button onClick={onRetry} className={`${base} bg-warn-soft text-warn-text`} title={index.message}>
+        Index failed: retry
+      </button>
+    )
+  }
+  const { files, pending_embeddings } = index.status
+  if (pending_embeddings > 0) {
+    return (
+      <button onClick={onRetry} className={`${base} bg-warn-soft text-warn-text`} title={index.status.errors.join('\n')}>
+        Keyword search only (Ollama offline): retry
+      </button>
+    )
+  }
+  return (
+    <span className={`${base} bg-brand-soft text-brand-text`}>
+      Indexed · {files} {files === 1 ? 'file' : 'files'}
+    </span>
   )
 }
 

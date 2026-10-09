@@ -3,18 +3,25 @@
 Order of events (docs/03): log the question; Read grant; scope check in code (names, relevance);
 retrieve; model answers from the tagged sources; [S#] markers are mapped back to Source objects.
 A request to change files goes through a separate model call and then policy.engine.handle().
+
+The chat sidebar also sends the file open in the viewer and the last few turns. The open file is
+re-checked against the folder and only focuses or boosts retrieval inside it. History only helps
+follow-up questions; it is never a source and never reaches the action call.
 """
 
 import re
+from collections.abc import Sequence
 
+from fastapi import HTTPException
 from pydantic import BaseModel
 
 from app import audit, folders, index
-from app.index import Hit
+from app.index import INDEXED_TYPES, Hit
 from app.llm import client
 from app.policy import engine
 from app.policy.grants import get_grants
-from app.schemas import ActionAdapter, AskResponse, Folder, Grant, Outcome, Source
+from app.policy.paths import rel
+from app.schemas import ActionAdapter, AskResponse, Folder, Grant, Outcome, Source, Turn
 
 # Best similarity below this, with no keyword hit, means nothing relevant. Measured with
 # qwen3-embedding:0.6b (B3): answerable questions scored 0.46-0.67, Q4 (Villanueva) 0.44.
@@ -23,6 +30,8 @@ MIN_SCORE = 0.45
 # prompt and the answer). Small folders always fit whole; bigger ones are cut by rank.
 CONTEXT_CHARS = 28_000
 SNIPPET_CHARS = 200
+HISTORY_TURNS = 4
+HISTORY_CHARS = 600  # per earlier turn: enough to resolve "she" or "that medication"
 
 # Capitalised words that are not names, so they are never looked up in the folder.
 NOT_NAMES = set("""I Q A An The This That These Those It Is Are Was Were Do Does Did Can Could Will Would
@@ -36,6 +45,17 @@ ACTION_REQUEST = re.compile(
     r"draft|create|write|compose|save|add (?:a )?note|"
     # "Follow the instructions in the email": still only a proposal, which the engine then judges
     r"(?:follow|carry out|act on) (?:the |its |any )?(?:instructions?|requests?|notes?)|do what)\b", re.I)
+
+# "Summarize this chart", "overview of the whole case": the folder is the case or chart.
+FOLDER_SUMMARY = re.compile(
+    r"\b(?:summar\w*|overview|brief(?:ing)?|recap|rundown)\b.*"
+    r"\b(?:this|the|whole|entire|her|his|their)\s+(?:case|chart|patient|employee|client|folder)\b"
+    r"|\b(?:summar\w*|overview|recap)\s+(?:of\s+)?everything\b", re.I)
+# "Summarize this note", "what does the open email say": the file open in the viewer.
+FILE_FOCUS = re.compile(
+    r"\b(?:this|current|open|opened)\s+(?:file|document|doc|note|notes|email|e-mail|letter|report|record|"
+    r"page|visit|interview|minutes|certificate)\b"
+    r"|^\s*(?:summar\w*|recap|explain)\s+(?:this|it)\b", re.I)
 
 
 class Answer(BaseModel):
@@ -88,11 +108,57 @@ def names_in(question: str) -> list[str]:
     return list(dict.fromkeys(names))
 
 
-def out_of_scope(folder_id: str, question: str, hits: list[Hit]) -> bool:
+def out_of_scope(folder_id: str, question: str, hits: list[Hit], relevance: bool = True) -> bool:
+    """Names are always checked. `relevance=False` skips the similarity threshold, for summaries
+    of this folder or the open file: they are about the folder by construction."""
     if any(not index.contains(folder_id, n) for n in names_in(question)):
         return True
+    if not hits:
+        return True
     sims = [h.similarity for h in hits if h.similarity is not None]
-    return not hits or (bool(sims) and max(sims) < MIN_SCORE and not any(h.keyword for h in hits))
+    return relevance and bool(sims) and max(sims) < MIN_SCORE and not any(h.keyword for h in hits)
+
+
+def open_file(folder_id: str, path: str | None) -> str | None:
+    """The viewer's open file, if it is an indexed file inside this folder; otherwise None."""
+    if not path:
+        return None
+    try:
+        target = folders.file_path(folder_id, path)  # policy/paths.py: no ../, symlinks or .talaan/
+    except (HTTPException, ValueError):
+        return None
+    if target.suffix.lower() not in INDEXED_TYPES:
+        return None
+    return rel(folders.folder_root(folder_id), target)
+
+
+def focus_of(question: str, path: str | None) -> str | None:
+    """Returns "folder" for a whole-case/chart summary, "file" for a question about the open file."""
+    if FOLDER_SUMMARY.search(question):
+        return "folder"
+    if path and FILE_FOCUS.search(question):
+        return "file"
+    return None
+
+
+def boost(hits: list[Hit], path: str | None) -> list[Hit]:
+    """Ranked chunks of the open file go first; the rest of the folder keeps its order."""
+    if not path:
+        return hits
+    return sorted(hits, key=lambda h: not (h.path == path and h.score > 0))
+
+
+def history_block(history: Sequence[Turn]) -> str:
+    turns = [t for t in history if t.content.strip()][-HISTORY_TURNS:]
+    if not turns:
+        return ""
+    lines = []
+    for t in turns:
+        text = " ".join(re.sub(r"\[S\d+(?:\s*[,;]\s*S?\d+)*\]", "", t.content).split())
+        text = text if len(text) <= HISTORY_CHARS else text[:HISTORY_CHARS].rstrip() + "…"
+        lines.append(f"{'User' if t.role == 'user' else 'Talaan'}: {text}")
+    return ("Earlier in this conversation (only to understand the question; it is not a source, "
+            "cite only the documents below):\n" + "\n".join(lines) + "\n\n")
 
 
 def pick_context(hits: list[Hit]) -> list[Hit]:
@@ -150,7 +216,7 @@ def outcome_text(o: Outcome) -> str:
     return f"That was blocked: {o.reason or what}. Nothing was changed."
 
 
-def ask(folder_id: str, question: str) -> AskResponse:
+def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = ()) -> AskResponse:
     folder = folders.get_folder(folder_id)
     audit.log_event(folder_id, "user", "question", reason=question)
 
@@ -162,14 +228,29 @@ def ask(folder_id: str, question: str) -> AskResponse:
     if get_grants(folder_id).read == Grant.NEVER:
         return reply(AskResponse(answer="Reading is turned off for this folder."))
 
-    hits = index.retrieve(folder_id, question, k=None)
-    if out_of_scope(folder_id, question, hits):
+    if index.index_version(folder_id) == 0:  # never built: an empty index would look like "out of scope"
+        index.build_index(folder_id)
+
+    is_action = bool(ACTION_REQUEST.search(question))
+    path = open_file(folder_id, path)
+    focus = None if is_action else focus_of(question, path)
+    history = () if is_action else history
+    # A follow-up ("what about her meds?") is retrieved together with the previous question.
+    prev = next((t.content for t in reversed(history) if t.role == "user"), "")
+    hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None)
+    if out_of_scope(folder_id, question, hits, relevance=focus is None):
         return reply(AskResponse(answer=refusal(folder), refused=True))
 
-    chosen = pick_context(hits)
+    chosen: list[Hit] = []
+    if focus == "folder":
+        chosen = pick_context(index.all_chunks(folder_id))  # reading order: the start of each file first
+    elif focus == "file" and path:
+        chosen = pick_context(index.file_chunks(folder_id, path))
+    if not chosen:
+        chosen = pick_context(boost(hits, None if is_action else path))
     docs = context_block(chosen)
 
-    if ACTION_REQUEST.search(question):
+    if is_action:
         r = client.chat(
             [{"role": "system", "content": ACTION_SYSTEM.format(folder=folder.name)},
              {"role": "user", "content": f"{docs}\n\nRequest: {question}"}],
@@ -177,9 +258,14 @@ def ask(folder_id: str, question: str) -> AskResponse:
         outcome = engine.handle(folder_id, r.data if r.data is not None else r.content, model_tag=r.model)
         return reply(AskResponse(answer=outcome_text(outcome), outcome=outcome, proposal_id=outcome.proposal_id), r.model)
 
+    looking = ""
+    if focus == "file":
+        looking = f"The question is about the open file {path}.\n"
+    elif path:
+        looking = f"The user has {path} open.\n"
     r = client.chat(
         [{"role": "system", "content": SYSTEM.format(folder=folder.name)},
-         {"role": "user", "content": f"{docs}\n\nQuestion: {question}\n\n{REMINDER}"}],
+         {"role": "user", "content": f"{history_block(history)}{docs}\n\n{looking}Question: {question}\n\n{REMINDER}"}],
         schema=Answer)
     if r.data is None:
         return reply(AskResponse(answer="The model did not return a usable answer. Please ask again."), r.model)

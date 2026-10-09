@@ -52,23 +52,26 @@ export default function FloatingTools({ open, onOpen, pinned, onPin, panels }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onOpen])
 
-  const card = tool && (
+  // The card is always mounted (hidden when nothing is open) so the Ask conversation
+  // survives switching tools and closing the card; the other tools load when shown.
+  const shown = tool ?? TOOLS[0]
+  const card = (
     <section
       role="dialog"
-      aria-label={tool.title}
-      className={
+      aria-label={shown.title}
+      className={`${tool ? '' : 'hidden '}` + (
         docked
           ? // Pinned: a column beside the document, the old panel's widths; bottom padding
             // keeps the panel's own controls clear of the dock in the corner.
             'flex min-h-0 w-96 shrink-0 flex-col border-l border-line bg-panel pb-16 xl:w-[28rem]'
           : // Floating: a card at the right edge, above the dock (md+); a bottom sheet on phones.
             'fixed inset-x-0 bottom-0 z-30 flex h-[78dvh] flex-col overflow-hidden rounded-t-2xl border border-line bg-panel pb-16 shadow-2xl ' +
-            'md:inset-x-auto md:top-[8.5rem] md:right-3 md:bottom-[4.5rem] md:h-auto md:w-80 md:rounded-2xl md:pb-0 lg:w-96 xl:w-[28rem]'
+            'md:inset-x-auto md:top-[8.5rem] md:right-3 md:bottom-[4.5rem] md:h-auto md:w-80 md:rounded-2xl md:pb-0 lg:w-96 xl:w-[28rem]')
       }
     >
       <header className="flex h-9 shrink-0 items-center gap-1.5 border-b border-line bg-white pr-1 pl-3">
-        <tool.icon size={13} className="text-brand-text" />
-        <span className="mr-auto text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">{tool.label === 'Access' ? 'Permissions' : tool.label}</span>
+        <shown.icon size={13} className="text-brand-text" />
+        <span className="mr-auto text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">{shown.label === 'Access' ? 'Permissions' : shown.label}</span>
         <button
           onClick={() => onPin(!pinned)}
           className="hidden h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink lg:grid"
@@ -77,11 +80,12 @@ export default function FloatingTools({ open, onOpen, pinned, onPin, panels }: {
         >
           {pinned ? <PinOff size={15} /> : <Pin size={15} />}
         </button>
-        <button onClick={() => onOpen(null)} className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink" aria-label={`Close ${tool.title}`}>
+        <button onClick={() => onOpen(null)} className="grid h-7 w-7 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink" aria-label={`Close ${shown.title}`}>
           <X size={16} />
         </button>
       </header>
-      <div className="min-h-0 flex-1">{panels[tool.id]}</div>
+      <div className={`min-h-0 flex-1 ${open === 'ask' ? '' : 'hidden'}`}>{panels.ask}</div>
+      {open && open !== 'ask' && <div className="min-h-0 flex-1">{panels[open]}</div>}
     </section>
   )
 
