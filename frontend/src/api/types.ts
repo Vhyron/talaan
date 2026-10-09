@@ -31,7 +31,22 @@ export type Outcome = {
 /** start/end are 1-based line numbers in the file. */
 export type Source = { path: string; start: number; end: number; snippet: string }
 
-export type AskRequest = { question: string }
+/** An earlier chat turn, sent so follow-ups make sense. Context only, never a source. */
+export type Turn = { role: 'user' | 'assistant'; content: string }
+/** `path` is the file open in the viewer; the backend re-checks it against the folder. */
+export type AskRequest = { question: string; path?: string; history?: Turn[] }
+
+/** Result of building or refreshing a folder's index. */
+export type IndexStatus = {
+  files: number
+  chunks: number
+  changed: number
+  removed: number
+  /** > 0: Ollama was unreachable, search is keyword-only until the next build */
+  pending_embeddings: number
+  version: number
+  errors: string[]
+}
 /** `answer` references sources as [S1], [S2]… in `sources` order. */
 export type AskResponse = {
   answer: string
@@ -125,3 +140,12 @@ export type LlmCall = {
 export type AppSettings = { log_prompts: boolean }
 
 export type Health = { status: string; chat_model: string; embed_model: string }
+
+/** Can voice notes be transcribed on this laptop? (GET /system/voice) */
+export type VoiceStatus = {
+  ready: boolean
+  model: string
+  problem: 'library' | 'model' | null
+  message: string | null
+  fix: string | null
+}

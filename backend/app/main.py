@@ -22,8 +22,9 @@ from app.llm.client import OllamaError
 from app.llm.models import EMBED_MODEL
 from app.schemas import (
     CreateDraftAction,
-    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, LlmCall, ModelChoice, Outcome,
-    Proposal, SystemTier, TimelineResponse,
+    AppSettings, AskRequest, AskResponse, AuditEvent, DirCreate, FileEntry, Folder, FolderCreate, Grants, IndexStatus, LlmCall, ModelChoice,
+    Outcome,
+    Proposal, SystemTier, TimelineResponse, VoiceStatus,
 )
 
 app = FastAPI(title="Talaan", description="Local AI for sensitive client files. Nothing leaves this laptop.")
@@ -109,16 +110,16 @@ async def import_files(
 
 
 @app.post("/folders/{folder_id}/index")
-def build_index(folder_id: str) -> dict:
+def build_index(folder_id: str) -> IndexStatus:
     """Build or refresh the folder's index (incremental). If Ollama is down, keyword search is
     still indexed and `pending_embeddings` says how many chunks the next build will embed."""
     _folder(folder_id)
-    return index.build_index(folder_id)
+    return IndexStatus(**index.build_index(folder_id))
 
 
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest) -> AskResponse:
-    return ask_mod.ask(folder_id, body.question)
+    return ask_mod.ask(folder_id, body.question, body.path, body.history)
 
 
 @app.post("/folders/{folder_id}/timeline")
@@ -217,6 +218,12 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
         reason=f"Voice note ({transcript.duration:.0f}s) transcribed on this laptop",
     )
     return engine.handle(folder_id, action, model_tag=transcript.model)
+
+
+@app.get("/system/voice")
+def voice_status() -> VoiceStatus:
+    """Can voice notes be transcribed here? The recorder checks this before recording."""
+    return voice.whisper.status()
 
 
 @app.get("/system/tier")

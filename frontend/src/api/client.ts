@@ -1,6 +1,6 @@
 import type {
-  AppSettings, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, LlmCall, Outcome,
-  Proposal, SystemTier, TimelineResponse,
+  AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
 export class ApiError extends Error {
@@ -51,8 +51,9 @@ export const api = {
   dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
-  reindex: (id: string) => send<{ chunks: number; files: number }>('POST', `${f(id)}/index`),
-  ask: (id: string, question: string) => send<AskResponse>('POST', `${f(id)}/ask`, { question }),
+  reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
+  ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
+    send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),
@@ -71,6 +72,7 @@ export const api = {
     return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
   },
 
+  voiceStatus: () => json<VoiceStatus>('/system/voice'),
   systemTier: () => json<SystemTier>('/system/tier'),
   chooseModel: (chat_model: string | null) => send<SystemTier>('PUT', '/system/model', { chat_model }),
   llmLog: (after = 0) => json<LlmCall[]>(`/system/llm-log?after=${after}`),

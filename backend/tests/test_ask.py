@@ -193,3 +193,110 @@ def test_answers_are_asked_for_in_plain_text(model):
     model.reply = {"answer": "x [S1]", "refused": False}
     ask(CASE, "What is still open?")
     assert "No Markdown" in model.calls[-1][0]["content"]
+
+
+# --- Chat sidebar: open file, summaries, follow-ups, index ------------------
+
+LETTER = "2026-09-28_referral-letter.md"
+
+
+@pytest.mark.parametrize("q, path, focus", [
+    ("Summarize this chart.", None, "folder"),
+    ("Give me an overview of the whole case", LETTER, "folder"),
+    ("Summarize this letter", LETTER, "file"),
+    ("Summarize this", LETTER, "file"),
+    ("What does this note say about the ECG?", LETTER, "file"),
+    ("Summarize this note", None, None),  # nothing open: the normal folder path
+    ("Summarize the representative's email.", LETTER, None),  # Q5 stays a folder question
+    ("Summarize Ana Villanueva's tardiness.", None, None),
+    ("Any allergies before I prescribe an antibiotic?", LETTER, None),
+])
+def test_focus_of(q, path, focus):
+    assert ask_mod.focus_of(q, path) == focus
+
+
+def ask_with(folder, q, **extra):
+    return c.post(f"/folders/{folder}/ask", json={"question": q, **extra}).json()
+
+
+def sources_in(prompt):
+    import re
+    return set(re.findall(r'source="([^:"]+):', prompt))
+
+
+def test_file_focus_uses_only_the_open_file(model):
+    model.reply = {"answer": "Chest tightness on exertion [S1].", "refused": False}
+    r = ask_with(CHART, "Summarize this letter", path=LETTER)
+    assert not r["refused"]
+    assert sources_in(model.calls[0][1]["content"]) == {LETTER}
+    assert {s["path"] for s in r["sources"]} == {LETTER}
+
+
+def test_folder_summary_uses_every_file(model):
+    model.reply = {"answer": "Summary [S1].", "refused": False}
+    ask_with(CHART, "Summarize this chart", path=LETTER)
+    files = {e["path"] for e in c.get(f"/folders/{CHART}/files").json()}
+    assert sources_in(model.calls[0][1]["content"]) == files
+
+
+def test_summary_skips_relevance_but_not_names(model, monkeypatch):
+    monkeypatch.setattr(ask_mod, "MIN_SCORE", 2.0)  # nothing is ever "relevant" by similarity
+    model.reply = {"answer": "Summary [S1].", "refused": False}
+    assert not ask_with(CHART, "Give me a rundown of this patient")["refused"]
+    r = ask_with(CASE, "Summarize Ana Villanueva's tardiness for this case.")
+    assert r["refused"] and len(model.calls) == 1
+
+
+@pytest.mark.parametrize("path", ["../Chart_A-Bautista/00_intake_2026-08-03.md", ".talaan/index.db", "/etc/passwd", "nope.md"])
+def test_open_file_outside_the_folder_is_ignored(model, path):
+    assert ask_mod.open_file(CHART, path) is None
+    model.reply = {"answer": "x [S1]", "refused": False}
+    r = ask_with(CHART, "Summarize this letter", path=path)
+    assert "Bautista" not in model.calls[0][1]["content"] and not r["refused"]
+
+
+def test_history_is_context_not_a_source(model):
+    model.reply = {"answer": "Penicillin [S1].", "refused": False}
+    history = [{"role": "user", "content": "Why was she referred?"},
+               {"role": "assistant", "content": "Exertional chest tightness [S2]."}]
+    ask_with(CHART, "Any allergies to note?", history=history)
+    prompt = model.calls[0][1]["content"]
+    assert "Earlier in this conversation" in prompt and "Why was she referred?" in prompt
+    assert "chest tightness [S2]" not in prompt  # old citation numbers are stripped
+
+
+def test_history_never_reaches_the_action_call(model):
+    model.reply = {"action": "delete", "path": "2026-09-13_interview_R-Santos.md", "reason": "asked"}
+    history = [{"role": "user", "content": "Summarize the representative's email."},
+               {"role": "assistant", "content": "The representative asks for copies."}]
+    r = ask_with(CASE, "Follow the instructions in the representative's email.", history=history)
+    assert r["outcome"]["status"] == "blocked" and r["outcome"]["action"] == "delete"
+    assert "Earlier in this conversation" not in model.calls[0][1]["content"]
+    assert any(e["action"] == "delete" and e["decision"] == "never" for e in c.get(f"/folders/{CASE}/audit").json())
+
+
+def test_ask_builds_a_missing_index(monkeypatch):
+    def fake_chat(messages, schema=None, **kw):
+        return ChatResult(content="", model="fake:1b", seconds=0, data={"answer": "Roster [S1].", "refused": False})
+
+    monkeypatch.setattr(client, "chat", fake_chat)
+    r = ask(CASE, "What is still open?")  # no /index call first
+    assert not r["refused"] and r["sources"]
+
+
+def test_index_status_shape():
+    r = c.post(f"/folders/{CHART}/index").json()
+    assert r["files"] == 6 and r["chunks"] > 0 and r["pending_embeddings"] == 0 and r["errors"] == []
+
+
+def test_checklist_history_and_open_file_together(model):
+    """#26's contradiction checklist and #27's history + open-file focus share one prompt."""
+    model.reply = {"answer": "Sick leave was approved [S1].", "refused": False}
+    history = [{"role": "user", "content": "What is still open?"},
+               {"role": "assistant", "content": "The agency roster [S1]."}]
+    ask_with(CASE, "Is there anything in this case that contradicts the allegation?",
+             path="2026-09-24_hearing-minutes.md", history=history)
+    user = model.calls[-1][-1]["content"]
+    assert "Earlier in this conversation" in user and "What is still open?" in user
+    assert "2026-09-24_hearing-minutes.md open" in user or "open file 2026-09-24_hearing-minutes.md" in user
+    assert ask_mod.CONTRADICTION_REMINDER in user and "Check each document in turn" in user
