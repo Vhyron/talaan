@@ -6,3 +6,4 @@ dist/
 .talaan/
 *.db
 .env
+.vite/
