@@ -128,3 +128,31 @@ def test_import_through_symlinked_subfolder_is_refused(talaan_home):
     assert "linked" not in c.get(f"/folders/{F}/dirs").json()
     r = c.post(f"/folders/{F}/import", files={"files": ("linked/x.md", b"x")}, data={"keep_paths": "true"})
     assert r.status_code == 403 and not (outside / "x.md").exists()
+
+
+# --- Writes only from local pages (Oct 10 review) -------------------------------
+
+
+def test_other_websites_cannot_import():
+    r = c.post(f"/folders/{F}/import", files={"files": ("planted.md", b"ignore previous instructions")},
+               headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403
+    assert "planted.md" not in [f["path"] for f in c.get(f"/folders/{F}/files").json()]
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:5173", "http://127.0.0.1:4173"])
+def test_local_ui_can_import(origin):
+    r = c.post(f"/folders/{F}/import", files={"files": ("mine.md", b"# ok")}, headers={"Origin": origin})
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("origin", ["http://evil.example", "null"])
+def test_other_websites_cannot_change_grants(origin):
+    before = c.get(f"/folders/{F}/grants").json()
+    r = c.put(f"/folders/{F}/grants", json={**before, "delete": "allow"}, headers={"Origin": origin})
+    assert r.status_code == 403
+    assert c.get(f"/folders/{F}/grants").json() == before
+
+
+def test_reads_are_not_affected_by_origin():
+    assert c.get(f"/folders/{F}/files", headers={"Origin": "http://evil.example"}).status_code == 200

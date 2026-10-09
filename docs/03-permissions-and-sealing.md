@@ -44,6 +44,8 @@ Allowed `action` values: `search`, `read`, `propose_edit`, `create_draft`, `dele
 4. **The model receives only retrieved chunks from the open folder**, tagged with file name and position for citations.
 5. **Approvals are made by the user in the UI**, never by the model. Approving re-checks the grant and the path, and refuses if the file changed since the proposal was made.
 6. **After any write, the folder is re-indexed.** An executed edit, draft, transcript or import triggers a refresh of that folder's index, so the next question can cite the new content.
+7. **Edits and drafts only write `.md` and `.txt` files.** An edit or draft aimed at a PDF or any other type is blocked, so a text edit can never overwrite a binary file.
+8. **Only the app's own pages can change things.** The API refuses any write (import, approve, grant change, ask) that a browser sends from another website, so a page open in the same browser can't plant a file in a folder or approve a proposal.
 
 ## Flow
 
