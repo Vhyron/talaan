@@ -82,6 +82,46 @@ export type Tier = {
   whisper_model: string
   fits: boolean
 }
-export type SystemTier = { ram_gb: number; gpu: string | null; free_disk_gb: number; recommended: TierId; tiers: Tier[] }
+/** A pinned chat model the user can switch to. `fits`: this machine has the memory its tier calls for. */
+export type ModelOption = { tag: string; tier: TierId; installed: boolean; fits: boolean; active: boolean }
+export type SystemTier = {
+  ram_gb: number
+  gpu: string | null
+  free_disk_gb: number
+  recommended: TierId
+  tiers: Tier[]
+  ollama_running: boolean
+  active_chat_model: string | null
+  /** env var, Settings page choice, or hardware tier detection */
+  active_source: 'env' | 'user' | 'auto'
+  embed_installed: boolean
+  models: ModelOption[]
+}
+/** `chat_model: null` returns to automatic selection by hardware tier. */
+export type ModelChoice = { chat_model: string | null }
+
+export type LlmCallKind = 'chat' | 'embed' | 'load' | 'unload'
+/** One model call. prompt/response only when "Record prompts" is on (memory only). */
+export type LlmCall = {
+  id: number
+  timestamp: string
+  kind: LlmCallKind
+  model: string
+  ok: boolean
+  error: string | null
+  warning: string | null
+  num_ctx: number | null
+  think: boolean | null
+  inputs: number | null
+  prompt_tokens: number | null
+  output_tokens: number | null
+  tokens_per_s: number | null
+  load_s: number | null
+  total_s: number
+  json_valid: boolean | null
+  prompt: string | null
+  response: string | null
+}
+export type AppSettings = { log_prompts: boolean }
 
 export type Health = { status: string; chat_model: string; embed_model: string }

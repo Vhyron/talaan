@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Cpu, Menu, WifiOff } from 'lucide-react'
+import { Cpu, Menu, Settings, WifiOff } from 'lucide-react'
 import { api } from '../api/client'
 import { useNav } from '../lib/nav'
 
-export default function TopBar() {
+export default function TopBar({ modelVersion = 0 }: { modelVersion?: number }) {
   const [model, setModel] = useState<string | null>(null)
   const nav = useNav()
 
   useEffect(() => {
     api.health().then((h) => setModel(h.chat_model)).catch(() => setModel(null))
-  }, [])
+  }, [modelVersion])
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-white px-3 sm:gap-4 sm:px-5">
@@ -27,12 +27,16 @@ export default function TopBar() {
         <span className="hidden truncate text-xs text-muted sm:inline">Sealed client files</span>
       </Link>
       <div className="ml-auto flex min-w-0 items-center gap-2">
-        <span
-          className="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1 font-mono text-xs text-muted md:inline-flex"
-          title="Local model"
+        <Link
+          to="/settings"
+          className="hidden items-center gap-1.5 rounded-full border border-line px-3 py-1 font-mono text-xs text-muted hover:border-brand hover:text-ink md:inline-flex"
+          title="Local model · model and LLM activity settings"
         >
           <Cpu size={13} /> {model ?? 'model offline'}
-        </span>
+        </Link>
+        <Link to="/settings" aria-label="Settings" title="Settings" className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-muted hover:bg-panel hover:text-ink">
+          <Settings size={18} />
+        </Link>
         <span
           className="inline-flex items-center gap-2 rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold whitespace-nowrap text-brand-text"
           title="Offline · nothing leaves this laptop"

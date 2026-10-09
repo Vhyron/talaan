@@ -15,20 +15,21 @@ Talaan: a local-AI notes app for sensitive client files (HR investigation cases,
 
 - Backend: Python + FastAPI, Pydantic, managed with **uv**
 - Frontend: React + Vite + Tailwind
-- Model runtime: **Ollama** via its OpenAI-compatible API, with a configurable base URL
+- Model runtime: **Ollama** via its native API (`/api/chat`, `/api/embed`; needed for per-request `num_ctx`, `think` and JSON schema), with a configurable base URL
 - Storage: plain Markdown/PDF files on disk, one SQLite `index.db` per folder (FTS + embeddings as blobs, similarity with numpy), plus one `app.db` for grants, audit log and conversations
 - PDF: PyMuPDF · Transcription: faster-whisper
-- Models: see [docs/05-models.md](docs/05-models.md). Default chat `gemma4:e4b`, embeddings `qwen3-embedding:0.6b` on every tier, until B1 pins the final tags
+- Models: see [docs/05-models.md](docs/05-models.md). Chat model picked per hardware tier (Light `qwen3.5:2b`, Standard `gemma4:e4b`, Pro `gemma4:26b`) and switchable on the Settings page; pinned tags only in `backend/app/llm/models.py`. Embeddings `qwen3-embedding:0.6b` on every tier. All model calls go through `backend/app/llm/client.py`
 
 ## Commands
 
 Full runbook (setup, demo data, reset, troubleshooting): [docs/09-runbook.md](docs/09-runbook.md).
 
 ```bash
-ollama pull gemma4:e4b && ollama pull qwen3-embedding:0.6b
+ollama pull qwen3-embedding:0.6b && ollama pull qwen3.5:2b   # + gemma4:e4b on 16 GB+
 cd backend && uv sync && uv run uvicorn app.main:app --reload   # API + /docs
 cd frontend && npm ci && npm run dev
 cd backend && uv run pytest                                     # tests
+cd backend && uv run python -m scripts.bakeoff --runs 3         # model bake-off (Q1-Q9)
 cd frontend && npx tsc -b && npm run lint && npm run build      # checks
 ```
 

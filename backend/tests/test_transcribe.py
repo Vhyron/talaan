@@ -3,6 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app import config
 from app.main import app
 from app.policy.grants import set_grants
 from app.schemas import Grant, Grants
@@ -20,7 +21,9 @@ def fake_whisper(monkeypatch):
 
     def fake(path, hotwords=None):
         calls.append((path, hotwords))
-        assert path.exists() and "folders" not in path.parts  # staged outside client folders
+        # Staged outside client folders. Compare against FOLDERS_DIR, not the word "folders":
+        # macOS temp dirs live under /var/folders/.
+        assert path.exists() and config.FOLDERS_DIR.resolve() not in path.resolve().parents
         return Transcript(text=SPEECH, segments=[Segment(0.0, 4.2, SPEECH)], duration=31.4, language="en", model="faster-whisper:small")
 
     monkeypatch.setattr(whisper, "transcribe_file", fake)
