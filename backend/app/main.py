@@ -1,6 +1,8 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
+import json
 import logging
+import queue
 import tempfile
 import threading
 from contextlib import asynccontextmanager
@@ -12,7 +14,7 @@ from urllib.parse import urlsplit
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
 from app import config
 from app import fixtures as fx
@@ -252,6 +254,41 @@ def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse
     if body.session_id is None and res.session_id and not res.refused:
         tasks.add_task(chats.auto_title, folder_id, res.session_id, body.question)
     return res
+
+
+@app.post("/folders/{folder_id}/ask/stream")
+def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
+    """Same as /ask, as NDJSON lines while it works: `status` and `answer` (live text, display only),
+    then `done` with the final AskResponse, or `error`."""
+    _folder(folder_id)
+    events: queue.Queue[dict | None] = queue.Queue()
+
+    def work() -> None:
+        try:
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put)
+            events.put({"type": "done", "response": res.model_dump(mode="json")})
+        except OllamaError as e:
+            events.put({"type": "error", "message": str(e)})
+        except Exception:
+            logging.getLogger("talaan").exception("ask/stream failed")
+            events.put({"type": "error", "message": "Something went wrong answering this question. Please ask again."})
+        else:
+            events.put(None)  # the answer is complete: close the stream before titling the chat
+            if body.session_id is None and res.session_id and not res.refused:  # same as /ask
+                try:
+                    chats.auto_title(folder_id, res.session_id, body.question)
+                except Exception:
+                    logging.getLogger("talaan").exception("chat title failed")
+            return
+        events.put(None)
+
+    threading.Thread(target=work, daemon=True, name="ask-stream").start()
+
+    def lines():
+        while (event := events.get()) is not None:
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 @app.post("/folders/{folder_id}/timeline")

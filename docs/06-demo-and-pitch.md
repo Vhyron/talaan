@@ -50,8 +50,8 @@ Wi-Fi off from the start. Show the Wi-Fi icon once.
 ### Disclosure list (running; add as you go)
 
 **Models** (all run locally through Ollama 0.34.2, pinned 2026-10-09):
-- Chat, tier-selected: `qwen3.5:2b` (Light, tested), `gemma4:e4b` (Standard, tested), `gemma4:26b` (Pro); selectable alternates `qwen3.5:4b`, `qwen3.5:9b`
-- Embeddings: `qwen3-embedding:0.6b` on every tier
+- Chat, picked by hardware (all three bake-off tested): `qwen3.5:2b` (Budget), `qwen3.5:4b` (Mid), `gemma4:e4b` (High)
+- Embeddings: `qwen3-embedding:0.6b` with every chat model
 - Speech-to-text: faster-whisper `small` (Light/Standard), `large-v3-turbo` (Pro); D1 confirms
 
 **Libraries added by track B:** `httpx` (Ollama client), `psutil` (hardware tier detection), `pymupdf` (PDF text extraction, B2), `numpy` (embedding similarity, B3)

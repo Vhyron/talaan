@@ -1,5 +1,7 @@
 """B4: scope check, citation mapping and the ask flow, with the model stubbed out."""
 
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -312,3 +314,33 @@ def test_checklist_history_and_open_file_together(model):
     assert "Earlier in this conversation" in user and "What is still open?" in user
     assert "2026-09-24_hearing-minutes.md open" in user or "open file 2026-09-24_hearing-minutes.md" in user
     assert ask_mod.CONTRADICTION_REMINDER in user and "Check each document in turn" in user
+
+
+def test_answer_stream_decodes_partial_json():
+    got = []
+    feed = ask_mod.AnswerStream(got.append)
+    # JSON escapes split across chunks, exactly as the model streams them
+    for piece in [r'{"ans', r'wer": "Line \"one', '\\', r'"\nnext \u00', r'e9', r'" , "refused": false}']:
+        feed("content", piece)
+    feed("thinking", "ignored")
+    assert "".join(e["text"] for e in got) == 'Line "one"\nnext é'
+    assert {e["type"] for e in got} == {"answer"}
+
+
+def test_ask_stream_sends_status_live_text_then_final(model, monkeypatch):
+    def fake_chat(messages, schema=None, think=False, on_delta=None, **kw):
+        model.calls.append(think)
+        if on_delta is None:  # the chat title call after the first answer
+            return ChatResult(content="", model="fake:1b", seconds=0, data={"title": "Open items"})
+        for piece in ['{"answer": "The roster ', 'is open [S1].", "refused": false}']:
+            on_delta("content", piece)
+        return ChatResult(content="", model="fake:1b", seconds=0,
+                          data={"answer": "The roster is open [S1].", "refused": False})
+
+    monkeypatch.setattr(client, "chat", fake_chat)
+    r = c.post(f"/folders/{CASE}/ask/stream", json={"question": "What is still open?"})
+    events = [json.loads(line) for line in r.text.splitlines()]
+    kinds = [e["type"] for e in events]
+    assert kinds[0] == "status" and kinds[-1] == "done" and "answer" in kinds
+    assert "".join(e["text"] for e in events if e["type"] == "answer") == "The roster is open [S1]."
+    assert events[-1]["response"]["sources"] and model.calls[-1] is False  # thinking is never used

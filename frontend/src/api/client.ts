@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, TrashItem, Turn,
+  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, TrashItem, Turn,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -71,6 +71,31 @@ export const api = {
   homeChat: () => json<ChatSession | null>('/chat'),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
+  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */
+  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void) => {
+    const r = await req(`${f(id)}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, ...opts }),
+    })
+    const reader = r.body!.pipeThrough(new TextDecoderStream()).getReader()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += value
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim()) continue
+        const e = JSON.parse(line) as AskEvent
+        if (e.type === 'done') return e.response
+        if (e.type === 'error') throw new ApiError(503, e.message)
+        onEvent(e)
+      }
+    }
+    throw new ApiError(502, 'The answer stopped before it finished. Please ask again.')
+  },
   chats: (id: string, q = '') => json<ChatSessionSummary[]>(`${f(id)}/chats${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ''}`),
   chat: (id: string, sid: string) => json<ChatSession>(`${f(id)}/chats/${encodeURIComponent(sid)}`),
   renameChat: (id: string, sid: string, title: string) =>

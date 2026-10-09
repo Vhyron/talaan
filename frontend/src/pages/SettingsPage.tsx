@@ -5,7 +5,8 @@ import { api } from '../api/client'
 import type { AppSettings, LlmCall, ModelOption, SystemTier } from '../api/types'
 import { useElapsed } from '../lib/useElapsed'
 
-const TIER_NAME = { light: 'Light', standard: 'Standard', pro: 'Pro' } as const
+/** Hardware class each model is sized for (not a plan: everything runs locally and free). */
+const TIER_NAME = { light: 'Budget', standard: 'Mid', pro: 'High' } as const
 const POLL_MS = 2000
 
 export default function SettingsPage({ onModelChanged }: { onModelChanged: () => void }) {
@@ -73,9 +74,6 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
           <Stat icon={<MemoryStick size={14} />} label={`${tier.ram_gb} GB RAM`} />
           <Stat icon={<Cpu size={14} />} label={tier.gpu ?? 'No GPU detected'} />
           <Stat icon={<HardDrive size={14} />} label={`${tier.free_disk_gb} GB free`} />
-          <span className="chip border-brand bg-brand-soft font-semibold text-brand-text">
-            {recommended.name} tier
-          </span>
         </div>
         {!tier.ollama_running && (
           <ErrorLine text="Ollama is not running. Open the Ollama app or run `ollama serve`." />
@@ -87,7 +85,7 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
 
       <Section
         title="Chat model"
-        help={`Embeddings always use ${recommended.embed_model} on every tier, so switching the chat model never needs re-indexing.`}
+        help={`Embeddings always use ${recommended.embed_model} for every model, so switching the chat model never needs re-indexing.`}
       >
         {tier.active_source === 'env' && (
           <p className="mb-3 rounded-lg bg-warn-soft px-3 py-2 text-sm text-warn-text">
@@ -96,8 +94,8 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
         )}
         <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
           <ModelRow
-            title={`Automatic (${recommended.chat_model})`}
-            detail={`Best model for this device's ${recommended.name} tier`}
+            title={`Automatic (${tier.auto_chat_model ?? recommended.chat_model})`}
+            detail="Best installed model below that fits in this device's RAM alongside the embedding model, OS and browser"
             active={tier.active_source === 'auto'}
             busy={switching === 'auto'}
             disabled={switching !== null || tier.active_source === 'env'}
@@ -107,7 +105,7 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
             <ModelRow
               key={m.tag}
               title={m.tag}
-              detail={modelDetail(m)}
+              detail={modelDetail(m, tier.tiers.find((t) => t.id === m.tier)?.min_ram_gb)}
               tierLabel={TIER_NAME[m.tier]}
               warn={m.installed && !m.fits}
               active={tier.active_source !== 'auto' && m.active}
@@ -127,10 +125,12 @@ function ModelSection({ onModelChanged }: { onModelChanged: () => void }) {
   )
 }
 
-function modelDetail(m: ModelOption): string {
-  if (!m.installed) return `Not installed · ollama pull ${m.tag}`
-  if (!m.fits) return 'Installed · larger than this device\'s tier, may be slow'
-  return 'Installed'
+/** `needGb`: RAM for this model + the embedding model + the OS, browser and backend, all at once. */
+function modelDetail(m: ModelOption, needGb?: number): string {
+  const need = needGb ? ` · needs ${needGb} GB RAM with everything running` : ''
+  if (!m.installed) return `Not installed · ollama pull ${m.tag}${need}`
+  if (!m.fits) return `Installed${need}, may be slow here`
+  return `Installed${need}`
 }
 
 function ModelRow({ title, detail, tierLabel, warn, active, busy, disabled, onUse }: {
@@ -179,8 +179,15 @@ function ActivitySection() {
       .then((fresh) => {
         setError(null)
         if (!fresh.length) return
-        lastId.current = fresh[fresh.length - 1].id
-        setCalls((prev) => [...fresh.reverse(), ...prev].slice(0, 200))
+        lastId.current = Math.max(lastId.current, ...fresh.map((c) => c.id))
+        // Merge by id: two polls can overlap (first load) and must not show a call twice. Newest first.
+        setCalls((prev) => {
+          const byId = new Map(prev.map((c) => [c.id, c]))
+          for (const c of fresh) byId.set(c.id, c)
+          return [...byId.values()]
+            .sort((a, b) => b.timestamp.localeCompare(a.timestamp) || b.id - a.id)
+            .slice(0, 200)
+        })
       })
       .catch((e) => setError(e.message))
   }, [])

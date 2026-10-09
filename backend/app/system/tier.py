@@ -21,12 +21,12 @@ class Hardware:
 
     @property
     def model_mem_gb(self) -> int:
-        """Memory a model can use, on the RAM scale the tier table uses.
+        """Memory the models are budgeted against: system RAM only (unified memory on Apple Silicon).
 
-        Discrete VRAM counts double: docs/05 puts an 8–10 GB GPU next to 16 GB RAM (Standard)
-        and a 16–24 GB GPU next to 32 GB unified (Pro).
+        A discrete GPU makes answers faster but doesn't count as extra room: on a small GPU the model
+        spills into RAM anyway (gemma4:e4b on a 4 GB card), so counting it would overcommit the laptop.
         """
-        return max(self.ram_gb, self.vram_gb * 2)
+        return self.ram_gb
 
 
 def _nvidia() -> tuple[str, int] | None:
