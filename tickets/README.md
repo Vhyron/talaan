@@ -34,12 +34,12 @@ Fill in names, then update the **Status** column as you go: `todo` · `doing` ·
 | [A3](A3-app-db-grants-audit.md) | app.db: grants and audit log | A | P0 | 1.5h | A1 | done |
 | [A4](A4-policy-engine.md) | Policy engine and action execution | A | P0 | 2h | A2, A3 | done |
 | [A5](A5-proposals-approval-flow.md) | Proposals and approval flow | A | P0 | 1.5h | A4 | done |
-| [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | review |
-| [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | todo |
-| [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | todo |
-| [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | review |
+| [B1](B1-ollama-client-bake-off.md) | Ollama client and model bake-off | B | P0 | 2h | — | done |
+| [B2](B2-extraction-and-chunking.md) | Text extraction and chunking | B | P0 | 1h | A1 | done |
+| [B3](B3-per-folder-index.md) | Per-folder index and retrieval | B | P0 | 2h | B1, B2 | done |
+| [B4](B4-ask-with-sources.md) | Ask with sources and scope refusal | B | P0 | 2.5h | B3, A4 | done |
 | [B5](B5-case-timeline.md) | Case timeline with contradictions | B | P0 | 2h | B3 | review |
-| [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | review |
+| [B6](B6-prompt-injection.md) | Prompt-injection demo hardening | B | P1 | 1h | B4, A4 | done |
 | [C1](C1-frontend-scaffold.md) | Frontend scaffold and API client | C | P0 | 1h | A1 (stubs) | review |
 | [C2](C2-folders-and-file-viewer.md) | Folders page, folder view, file viewer | C | P0 | 2h | C1 | review |
 | [C3](C3-ask-panel.md) | Ask panel with clickable sources | C | P0 | 2h | C2 | review |
