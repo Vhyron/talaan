@@ -94,7 +94,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
   return (
     <>
     {nav.open && (
-      <div className="fixed inset-0 z-30 bg-ink/30 lg:hidden" onClick={() => nav.setOpen(false)} aria-hidden="true" />
+      <div className="fixed inset-0 z-[45] bg-ink/30 lg:hidden" onClick={() => nav.setOpen(false)} aria-hidden="true" />
     )}
     {collapsed && (
       <aside className="hidden w-11 shrink-0 flex-col items-center gap-1 border-r border-line bg-panel/50 py-2 lg:flex" aria-label="Folders (collapsed)">
@@ -117,7 +117,7 @@ export default function Sidebar({ folders, error, activeId, currentPath, onOpenF
       </aside>
     )}
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-72 max-w-[85vw] flex-col border-r border-line bg-white text-sm shadow-xl transition-transform lg:static lg:z-auto lg:w-[var(--sidebar-w)] lg:translate-x-0 lg:bg-panel/50 lg:shadow-none ${
+      className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-line bg-white text-sm shadow-xl transition-transform lg:static lg:z-auto lg:w-[var(--sidebar-w)] lg:translate-x-0 lg:bg-panel/50 lg:shadow-none ${
         nav.open ? 'translate-x-0' : '-translate-x-full'
       } ${collapsed ? 'lg:hidden' : ''} lg:relative`}
       style={{ '--sidebar-w': `${width}px` } as CSSProperties}
