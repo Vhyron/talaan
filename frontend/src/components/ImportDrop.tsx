@@ -1,31 +1,9 @@
-import { useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { Upload } from 'lucide-react'
-import { ACCEPT } from '../lib/useImport'
+import { useState, type DragEvent, type ReactNode } from 'react'
+import { Upload as UploadIcon } from 'lucide-react'
+import { fromDataTransfer, type Upload } from '../lib/upload'
 
-export function ImportButton({ onFiles, busy }: { onFiles: (f: FileList) => void; busy: boolean }) {
-  const input = useRef<HTMLInputElement>(null)
-  return (
-    <>
-      <button
-        onClick={() => input.current?.click()}
-        disabled={busy}
-        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel disabled:opacity-50"
-      >
-        <Upload size={15} /> {busy ? 'Importing…' : 'Import files'}
-      </button>
-      <input
-        ref={input}
-        type="file"
-        multiple
-        accept={ACCEPT.join(',')}
-        className="hidden"
-        onChange={(e) => { if (e.target.files) onFiles(e.target.files); e.target.value = '' }}
-      />
-    </>
-  )
-}
-
-export function DropZone({ onFiles, children, className = '' }: { onFiles: (f: FileList) => void; children: ReactNode; className?: string }) {
+/** Drop files or whole folders; folders keep their subfolders. */
+export function DropZone({ onFiles, children, className = '' }: { onFiles: (uploads: Upload[]) => void; children: ReactNode; className?: string }) {
   const [over, setOver] = useState(false)
   const has = (e: DragEvent) => e.dataTransfer.types.includes('Files')
   return (
@@ -33,12 +11,19 @@ export function DropZone({ onFiles, children, className = '' }: { onFiles: (f: F
       className={`relative min-h-0 min-w-0 flex-1 flex-col ${className || 'flex'}`}
       onDragOver={(e) => { if (has(e)) { e.preventDefault(); setOver(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(false) }}
-      onDrop={(e) => { if (has(e)) { e.preventDefault(); setOver(false); onFiles(e.dataTransfer.files) } }}
+      onDrop={async (e) => {
+        if (!has(e)) return
+        e.preventDefault()
+        setOver(false)
+        onFiles(await fromDataTransfer(e.dataTransfer))
+      }}
     >
       {children}
       {over && (
         <div className="pointer-events-none absolute inset-3 grid place-items-center rounded-xl border-2 border-dashed border-brand bg-brand-soft/80 text-brand-text">
-          <p className="flex items-center gap-2 font-semibold"><Upload size={18} /> Drop .md, .txt or .pdf to add to this folder</p>
+          <p className="flex items-center gap-2 px-4 text-center font-semibold">
+            <UploadIcon size={18} className="shrink-0" /> Drop .md, .txt or .pdf files, or a whole folder
+          </p>
         </div>
       )}
     </div>

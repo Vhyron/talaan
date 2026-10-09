@@ -1,35 +1,45 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { useFolder } from './folderContext'
+import { useTree } from './tree'
+import { splitImportable, type Upload } from './upload'
 
-export const ACCEPT = ['.md', '.txt', '.pdf']
-const ok = (f: File) => ACCEPT.some((ext) => f.name.toLowerCase().endsWith(ext))
-
-/** Import files into the open folder, then re-index it. */
+/** Import into the open folder (optionally a subfolder). The backend re-indexes on import. */
 export function useImport() {
   const { folder, refreshFiles, bump } = useFolder()
+  const tree = useTree()
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
+  const [isError, setIsError] = useState(false)
 
-  async function importFiles(list: FileList | File[]) {
-    const files = Array.from(list)
-    const accepted = files.filter(ok)
-    const skipped = files.length - accepted.length
-    if (!accepted.length) return setMessage('Only .md, .txt and .pdf files can be imported.')
+  // Successes clear themselves; errors stay until dismissed or the next import.
+  useEffect(() => {
+    if (!message || isError) return
+    const t = setTimeout(() => setMessage(null), 5000)
+    return () => clearTimeout(t)
+  }, [message, isError])
+
+  const say = (text: string, error = false) => { setMessage(text); setIsError(error) }
+
+  /** `keepPaths`: recreate dropped folders' subfolders (used for drag-and-drop). */
+  async function importUploads(uploads: Upload[], opts: { dest?: string; keepPaths?: boolean } = {}) {
+    const { accepted, skipped } = splitImportable(uploads)
+    if (!accepted.length) return say('Only .md, .txt and .pdf files can be imported.', true)
     setBusy(true)
     setMessage(null)
     try {
-      const saved = await api.importFiles(folder.id, accepted)
-      await api.reindex(folder.id).catch(() => undefined) // index may not exist yet (B3)
+      const saved = await api.importFiles(folder.id, accepted, opts)
       refreshFiles()
+      tree.changed()
       bump()
-      setMessage(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${skipped ? `, skipped ${skipped}` : ''}.`)
+      const where = opts.dest ? ` into ${opts.dest}` : ''
+      say(`Imported ${saved.length} file${saved.length === 1 ? '' : 's'}${where}${skipped.length ? `, skipped ${skipped.length}` : ''}.`)
     } catch (e) {
-      setMessage((e as Error).message)
+      say((e as Error).message, true)
     } finally {
       setBusy(false)
     }
   }
 
-  return { importFiles, busy, message, clear: () => setMessage(null) }
+  return { importUploads, busy, message, isError, clear: () => setMessage(null) }
 }

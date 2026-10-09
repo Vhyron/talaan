@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, ChevronDown, ChevronRight, Cpu, HardDrive, Loader2, MemoryStick, Trash2 } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronRight, Cpu, HardDrive, Loader2, MemoryStick, Trash2 } from 'lucide-react'
 import { api } from '../api/client'
 import type { AppSettings, LlmCall, ModelOption, SystemTier } from '../api/types'
 import { useElapsed } from '../lib/useElapsed'
@@ -11,12 +12,29 @@ export default function SettingsPage({ onModelChanged }: { onModelChanged: () =>
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
       <div className="mx-auto max-w-4xl">
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Settings</h1>
+        <BackLink />
+        <h1 className="mt-2 text-2xl font-extrabold tracking-tight sm:text-3xl">Settings</h1>
         <p className="mt-1 text-muted">Models run on this laptop through Ollama. Nothing is sent online.</p>
         <ModelSection onModelChanged={onModelChanged} />
         <ActivitySection />
       </div>
     </div>
+  )
+}
+
+/** Back to where Settings was opened from; home if it was opened directly. */
+function BackLink() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  // React Router's first history entry has key "default": nothing in-app to go back to.
+  const canGoBack = location.key !== 'default'
+  return (
+    <button
+      onClick={() => (canGoBack ? navigate(-1) : navigate('/'))}
+      className="inline-flex items-center gap-1 text-sm font-semibold text-brand-text hover:underline"
+    >
+      <ArrowLeft size={14} /> Back
+    </button>
   )
 }
 
