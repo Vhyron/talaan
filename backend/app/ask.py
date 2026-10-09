@@ -51,6 +51,16 @@ ACTION_REQUEST = re.compile(
     r"draft|create|write|compose|save|add (?:a )?note|"
     # "Follow the instructions in the email": still only a proposal, which the engine then judges
     r"(?:follow|carry out|act on) (?:the |its |any )?(?:instructions?|requests?|notes?)|do what)\b", re.I)
+# A question about the documents is never a change request, whatever verb it uses: "What did the
+# employee write in her email?" and "Did HR create an incident report?" matched ACTION_REQUEST.
+# "Can you…", "Could you…" and "Please…" are requests, so they are not listed; "Do what…" is a command.
+QUESTION_START = re.compile(
+    r"""^[\s"'“‘]*(?:what|who|whom|whose|when|where|why|how|which|did|does|do(?!\s+(?:what|as)\b)|"""
+    r"was|were|is|are|has|have|had|should|shall|may|might|must)\b", re.I)
+
+
+def is_action_request(question: str) -> bool:
+    return not QUESTION_START.search(question) and bool(ACTION_REQUEST.search(question))
 
 # "Summarize this chart", "overview of the whole case": everything in the chat's scope.
 FOLDER_SUMMARY = re.compile(
@@ -397,7 +407,7 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     if index.index_version(folder_id) == 0:  # never built: an empty index would look like "out of scope"
         index.build_index(folder_id)
 
-    is_action = bool(ACTION_REQUEST.search(question))
+    is_action = is_action_request(question)
     # With a file open, every question is about that file: it is the whole scope.
     focus = None if is_action else ("file" if sc.file else focus_of(question, None))
     history = () if is_action else history

@@ -5,6 +5,7 @@ import type { Folder } from './api/types'
 import TopBar from './components/TopBar'
 import FoldersPage from './pages/FoldersPage'
 import FolderPage from './pages/FolderPage'
+import TrashPage from './pages/TrashPage'
 import SettingsPage from './pages/SettingsPage'
 import { NavContext } from './lib/nav'
 import { TreeContext, type TreeCtx } from './lib/tree'
@@ -46,6 +47,8 @@ export default function App() {
   }
   const expand = useCallback((id: string) => setExpanded((s) => (s.has(id) ? s : new Set(s).add(id))), [])
   const changed = useCallback(() => setTreeVersion((v) => v + 1), [])
+  // Any change to folders or files (rename, import, new subfolder) also refreshes the folder list.
+  useEffect(() => { if (treeVersion) refresh() }, [treeVersion, refresh])
   const tree: TreeCtx = useMemo(() => ({
     expanded,
     toggle: (id) => setExpanded((s) => flip(s, id)),
@@ -75,6 +78,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<FoldersPage folders={folders} error={error} onCreated={() => { refresh(); changed() }} />} />
           <Route path="/folders/:id" element={<FolderPage folders={folders} error={error} />} />
+          <Route path="/trash" element={<TrashPage folders={folders} error={error} />} />
           <Route path="/settings" element={<SettingsPage onModelChanged={() => setModelVersion((v) => v + 1)} />} />
         </Routes>
       </div>

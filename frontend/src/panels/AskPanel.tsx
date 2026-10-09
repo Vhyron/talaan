@@ -7,6 +7,7 @@ import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { chatScope, useFolder } from '../lib/folderContext'
 import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
+import { movedPath, onRenamed } from '../lib/renamed'
 import ChatHistory from './ChatHistory'
 
 type Msg =
@@ -41,6 +42,20 @@ function useFolderChat(key: string) {
     if (mounted.current) rerender((n) => n + 1)
   }, [])
   const update = useCallback((fn: (c: Chat) => Chat) => put(key, fn(chatByFolder.get(key) ?? EMPTY)), [key, put])
+  // Sources in every chat of this Space follow a file rename (the server already updated the saved chats).
+  const folderId = key.split('::')[0]
+  useEffect(() => onRenamed(({ folderId: fid, from, to }) => {
+    if (fid !== folderId) return
+    for (const [k, c] of chatByFolder) {
+      if (!k.startsWith(`${fid}::`)) continue
+      put(k, {
+        ...c,
+        messages: c.messages.map((m) => m.role !== 'assistant' ? m : {
+          ...m, res: { ...m.res, sources: m.res.sources.map((src) => ({ ...src, path: movedPath(src.path, from, to) })) },
+        }),
+      })
+    }
+  }), [folderId, put])
   return [chatByFolder.get(key) ?? EMPTY, update, put] as const
 }
 

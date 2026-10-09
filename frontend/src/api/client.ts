@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, ChatSession, ChatSessionSummary, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome, TrashItem, Turn,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -38,7 +38,6 @@ export const api = {
   folders: () => json<Folder[]>('/folders'),
   createFolder: (body: FolderCreate) => send<Folder>('POST', '/folders', body),
   folder: (id: string) => json<Folder>(f(id)),
-  renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
   files: (id: string) => json<FileEntry[]>(`${f(id)}/files`),
   file: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`).then((r) => r.text()),
   /** `path` is the file's name, or its relative path when `keepPaths` (e.g. "Interviews/a.md"). */
@@ -49,10 +48,27 @@ export const api = {
     form.append('keep_paths', String(Boolean(opts.keepPaths)))
     return json<FileEntry[]>(`${f(id)}/import`, { method: 'POST', body: form })
   },
+  deleteFile: (id: string, path: string) => req(`${f(id)}/files/${filePath(path)}`, { method: 'DELETE' }),
   dirs: (id: string) => json<string[]>(`${f(id)}/dirs`),
+  /** Change a folder's display name; its id (and grants, audit, chat) stays. */
+  renameFolder: (id: string, name: string) => send<Folder>('PATCH', f(id), { name }),
+  /** Rename a file or subfolder in place; `name` is the new last segment. */
+  renamePath: (id: string, path: string, name: string) => send<{ path: string }>('POST', `${f(id)}/rename`, { path, name }),
+  /** Trash (user only): move a folder, file or subfolder there; restore or delete for good. */
+  trashFolder: (id: string) => send<TrashItem>('DELETE', f(id)),
+  trashPath: (id: string, path: string) => send<TrashItem>('POST', `${f(id)}/trash`, { path }),
+  trash: () => json<TrashItem[]>('/trash'),
+  restore: (tid: string) => send<TrashItem>('POST', `/trash/${encodeURIComponent(tid)}/restore`),
+  purge: (tid: string) => req(`/trash/${encodeURIComponent(tid)}`, { method: 'DELETE' }).then(() => undefined),
   createDir: (id: string, path: string) => send<{ path: string }>('POST', `${f(id)}/dirs`, { path }),
 
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
+  /** Home-page chat across every folder the AI may read (read-only). */
+  /** Home chat across all folders. `session_id` continues the saved thread; null starts a new one. */
+  askAll: (question: string, history: Turn[] = [], session_id: string | null = null) =>
+    send<AskResponse>('POST', '/ask', { question, history, session_id }),
+  /** The saved home chat thread, if any. */
+  homeChat: () => json<ChatSession | null>('/chat'),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
   /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */

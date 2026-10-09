@@ -142,26 +142,51 @@ def test_import_through_symlinked_subfolder_is_refused(talaan_home):
     assert r.status_code == 403 and not (outside / "x.md").exists()
 
 
-
-# --- Spaces: rename ---------------------------------------------------------------
-
-
-def test_rename_space_changes_name_only(talaan_home):
-    r = c.patch(f"/folders/{F}", json={"name": "  Lakbay Logistics (2026)  "})
-    assert r.status_code == 200 and r.json()["id"] == F and r.json()["name"] == "Lakbay Logistics (2026)"
-    folders = {f["id"]: f for f in c.get("/folders").json()}
-    assert set(folders) == SPACES and folders[F]["name"] == "Lakbay Logistics (2026)"
-    assert (talaan_home / "folders" / F / D).is_dir()  # nothing moved on disk
-    [ev] = [e for e in c.get(f"/folders/{F}/audit").json() if e["event"] == "space_renamed"]
-    assert ev["actor"] == "user" and "Lakbay Logistics (2026)" in ev["reason"]
+def test_user_can_delete_a_file(talaan_home):
+    r = c.delete(f"/folders/{F}/files/{quote(ITEMS)}")
+    assert r.status_code == 204
+    assert not (talaan_home / "folders" / F / ITEMS).exists()
+    assert ITEMS not in [f["path"] for f in c.get(f"/folders/{F}/files").json()]
+    row = c.get(f"/folders/{F}/audit").json()[0]
+    assert (row["actor"], row["event"], row["action"], row["path"]) == ("user", "file_deleted", "delete", ITEMS)
 
 
-@pytest.mark.parametrize("name", ["", "   "])
-def test_rename_space_needs_a_name(name):
-    assert c.patch(f"/folders/{F}", json={"name": name}).status_code in (400, 422)
-    assert {f["id"]: f for f in c.get("/folders").json()}[F]["name"] == "Lakbay Logistics Inc"
-    assert not [e for e in c.get(f"/folders/{F}/audit").json() if e["event"] == "space_renamed"]
+@pytest.mark.parametrize("bad", ["..%2F..%2Fapp.db", "%2E%2E/Bayani-Retail-Corp/Case%202026-019%20Villanueva/00_case-intake.md", ".talaan/folder.json", "missing.md"])
+def test_delete_file_is_sealed(talaan_home, bad):
+    before = sorted(p for p in talaan_home.rglob("*"))
+    assert c.delete(f"/folders/{F}/files/{bad}").status_code in (403, 404)
+    assert sorted(p for p in talaan_home.rglob("*")) == before
 
 
-def test_rename_unknown_space():
-    assert c.patch("/folders/nope", json={"name": "x"}).status_code == 404
+def test_delete_refuses_subfolders(talaan_home):
+    c.post(f"/folders/{F}/dirs", json={"path": "Notes"})
+    assert c.delete(f"/folders/{F}/files/Notes").status_code == 404
+    assert (talaan_home / "folders" / F / "Notes").is_dir()
+
+
+# --- Writes only from local pages (Oct 10 review) -------------------------------
+
+
+def test_other_websites_cannot_import():
+    r = c.post(f"/folders/{F}/import", files={"files": ("planted.md", b"ignore previous instructions")},
+               headers={"Origin": "http://evil.example"})
+    assert r.status_code == 403
+    assert "planted.md" not in [f["path"] for f in c.get(f"/folders/{F}/files").json()]
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:5173", "http://127.0.0.1:4173"])
+def test_local_ui_can_import(origin):
+    r = c.post(f"/folders/{F}/import", files={"files": ("mine.md", b"# ok")}, headers={"Origin": origin})
+    assert r.status_code == 200
+
+
+@pytest.mark.parametrize("origin", ["http://evil.example", "null"])
+def test_other_websites_cannot_change_grants(origin):
+    before = c.get(f"/folders/{F}/grants").json()
+    r = c.put(f"/folders/{F}/grants", json={**before, "delete": "allow"}, headers={"Origin": origin})
+    assert r.status_code == 403
+    assert c.get(f"/folders/{F}/grants").json() == before
+
+
+def test_reads_are_not_affected_by_origin():
+    assert c.get(f"/folders/{F}/files", headers={"Origin": "http://evil.example"}).status_code == 200

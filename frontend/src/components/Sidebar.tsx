@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, ChevronsDownUp, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, PanelLeftOpen, Pencil, Upload as UploadIcon, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, ChevronsDownUp, FileText, Folder as FolderIcon, FolderInput, FolderOpen, FolderPlus, PanelLeftClose, Pencil, Trash2, PanelLeftOpen, Upload as UploadIcon, X } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import { fileLabel } from '../lib/format'
@@ -11,6 +11,7 @@ import { useImportDialog } from '../lib/importDialog'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 import { splitImportable, type Upload } from '../lib/upload'
 import { useFilePicker } from '../lib/useFilePicker'
+import { renamePath } from '../lib/renamed'
 
 // Whether a mouse/touch button is currently held anywhere on the page.
 let pointerIsDown = false
@@ -79,7 +80,6 @@ export default function Sidebar({ folders, error, activeId, activeDir, currentPa
   // Desktop only: below `lg` the sidebar is already a drawer.
   const [collapsed, setCollapsed] = usePersistentFlag('talaan.sidebar.collapsed')
   const [width, startResize] = useSidebarWidth()
-  const [renaming, setRenaming] = useState<string | null>(null)
 
   function openFolder(f: Folder) {
     tree.expand(f.id)
@@ -174,18 +174,7 @@ export default function Sidebar({ folders, error, activeId, activeDir, currentPa
                 const active = f.id === activeId
                 return (
                   <div key={f.id}>
-                    <Row
-                      depth={0}
-                      selected={active && activeDir === ''}
-                      actions={renaming !== f.id && (
-                        <>
-                          <button onClick={() => setRenaming(f.id)} className={actionBtn} aria-label={`Rename ${f.name}`} title="Rename Space">
-                            <Pencil size={13} />
-                          </button>
-                          <DirActions folderId={f.id} dir="" label={f.name} />
-                        </>
-                      )}
-                    >
+                    <Row depth={0} selected={active && activeDir === ''} actions={<><Rename kind="folder" folderId={f.id} path="" current={f.name} /><MoveToTrash kind="folder" folderId={f.id} path="" name={f.name} active={active} /><DirActions folderId={f.id} dir="" label={f.name} /></>}>
                       <button
                         onClick={() => tree.toggle(f.id)}
                         className="grid h-6 w-5 shrink-0 place-items-center rounded hover:bg-panel"
@@ -194,20 +183,15 @@ export default function Sidebar({ folders, error, activeId, activeDir, currentPa
                       >
                         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                       </button>
-                      {renaming === f.id ? (
-                        <RenameSpace folder={f} onDone={() => setRenaming(null)} />
-                      ) : (
-                        <button
-                          onClick={() => openFolder(f)}
-                          onDoubleClick={() => setRenaming(f.id)}
-                          className={`flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug ${active ? 'font-semibold' : ''}`}
-                          aria-current={active ? 'page' : undefined}
-                          title={`${f.name} (double-click to rename)`}
-                        >
-                          {expanded ? <FolderOpen size={15} className="mt-0.5 shrink-0" /> : <FolderIcon size={15} className="mt-0.5 shrink-0" />}
-                          <span className="line-clamp-2 break-words">{f.name}</span>
-                        </button>
-                      )}
+                      <button
+                        onClick={() => openFolder(f)}
+                        className={`flex min-w-0 flex-1 items-start gap-1.5 py-1.5 text-left leading-snug ${active ? 'font-semibold' : ''}`}
+                        aria-current={active ? 'page' : undefined}
+                        title={f.name}
+                      >
+                        {expanded ? <FolderOpen size={15} className="mt-0.5 shrink-0" /> : <FolderIcon size={15} className="mt-0.5 shrink-0" />}
+                        <span className="line-clamp-2 break-words">{f.name}</span>
+                      </button>
                     </Row>
                     {expanded && (
                       <FolderTree
@@ -226,6 +210,13 @@ export default function Sidebar({ folders, error, activeId, activeDir, currentPa
         })}
       </nav>
       <div className="shrink-0 border-t border-line p-3">
+        <button
+          onClick={() => { nav.setOpen(false); navigate('/trash') }}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
+          title="Deleted files and folders: restore or delete for good"
+        >
+          <Trash2 size={15} /> Trash
+        </button>
         <button
           onClick={() => { nav.setOpen(false); importDialog.open() }}
           className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-medium hover:bg-panel"
@@ -313,7 +304,7 @@ function Children({ node, depth, ...props }: TreeProps & { node: Node; depth: nu
         const open = tree.dirOpen(key)
         return (
           <div key={d.path}>
-            <Row depth={depth} selected={d.path === activeDir} actions={<DirActions folderId={folderId} dir={d.path} />}>
+            <Row depth={depth} selected={d.path === activeDir} actions={<><Rename kind="subfolder" folderId={folderId} path={d.path} current={d.name} /><MoveToTrash kind="subfolder" folderId={folderId} path={d.path} name={d.name} /><DirActions folderId={folderId} dir={d.path} /></>}>
               <button
                 onClick={() => tree.toggleDir(key)}
                 className="grid h-6 w-4 shrink-0 place-items-center self-start rounded hover:bg-white"
@@ -341,7 +332,7 @@ function Children({ node, depth, ...props }: TreeProps & { node: Node; depth: nu
         )
       })}
       {node.files.map((path) => (
-        <Row key={path} depth={depth} selected={path === currentPath}>
+        <Row key={path} depth={depth} selected={path === currentPath} actions={<><Rename kind="file" folderId={folderId} path={path} current={path.split('/').pop() ?? path} /><MoveToTrash kind="file" folderId={folderId} path={path} name={fileLabel(path)} /></>}>
           <button
             onClick={() => onOpenFile(path)}
             title={path}
@@ -359,46 +350,6 @@ function Children({ node, depth, ...props }: TreeProps & { node: Node; depth: nu
 // Space is always reserved and the buttons only fade in, so hovering a row never
 // narrows its label (which made long names re-wrap and the tree jump).
 const actionBtn = 'grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100'
-
-/** Inline rename of a Space's display name: Enter saves, Escape or clicking away cancels. */
-function RenameSpace({ folder, onDone }: { folder: Folder; onDone: () => void }) {
-  const tree = useTree()
-  const [name, setName] = useState(folder.name)
-  const [error, setError] = useState<string | null>(null)
-
-  async function save(e: FormEvent) {
-    e.preventDefault()
-    const clean = name.trim()
-    if (!clean || clean === folder.name) return onDone()
-    try {
-      await api.renameFolder(folder.id, clean)
-      tree.foldersChanged()
-      onDone()
-    } catch (err) {
-      setError((err as Error).message)
-    }
-  }
-
-  return (
-    <form
-      onSubmit={save}
-      onBlur={(e) => { if (!error && !e.currentTarget.contains(e.relatedTarget as Element | null)) onDone() }}
-      onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone() } }}
-      className="min-w-0 flex-1 py-1"
-    >
-      <input
-        autoFocus
-        value={name}
-        maxLength={120}
-        onChange={(e) => setName(e.target.value)}
-        onFocus={(e) => e.currentTarget.select()}
-        aria-label={`New name for ${folder.name}`}
-        className="w-full min-w-0 rounded border border-brand bg-white px-2 py-1 text-xs outline-none"
-      />
-      {error && <p role="alert" className="mt-1 text-xs text-red-700">{error}</p>}
-    </form>
-  )
-}
 
 /** "New subfolder" and "Import here" for a folder (dir "") or one of its subfolders. */
 function DirActions({ folderId, dir, label }: { folderId: string; dir: string; label?: string }) {
@@ -495,6 +446,161 @@ function DirActions({ folderId, dir, label }: { folderId: string; dir: string; l
             </form>
           )}
           {note && <p role="status" className={`mt-1 text-xs ${noteIsError ? 'text-red-700' : 'text-brand-text'}`}>{note}</p>}
+        </div>
+      )}
+    </>
+  )
+}
+
+/**
+ * Rename a folder (its display name only: grants, audit and chat stay with it), a
+ * subfolder or a file (in place; open tabs, saved chat sources and pending approvals
+ * follow, and the folder is re-indexed). Only the user can rename; the AI can't.
+ */
+function Rename({ kind, folderId, path, current }: { kind: 'folder' | 'subfolder' | 'file'; folderId: string; path: string; current: string }) {
+  const tree = useTree()
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(current)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const isFolder = kind === 'folder'
+  const isFile = kind === 'file'
+
+  function start() {
+    setName(current)
+    setError(null)
+    setEditing(true)
+  }
+
+  function cancel() {
+    setEditing(false)
+    setError(null)
+  }
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    const clean = name.trim()
+    if (!clean || clean === current) return cancel()
+    setSaving(true)
+    try {
+      if (isFolder) await api.renameFolder(folderId, clean)
+      else await renamePath(folderId, path, clean)
+      tree.changed()
+      setEditing(false)
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={start}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-ink lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+        aria-label={`Rename ${current}`}
+        title={`Rename ${kind}`}
+      >
+        <Pencil size={13} />
+      </button>
+      {editing && (
+        <div className="basis-full px-2 pb-1.5" onClick={(e) => e.stopPropagation()}>
+          <form
+            onSubmit={save}
+            onBlur={(e) => { if (!saving && !error && !e.currentTarget.contains(e.relatedTarget as Element | null)) cancelLater() }}
+            onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel() } }}
+            className="flex gap-1"
+          >
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => { setName(e.target.value); setError(null) }}
+              // Select the name without its extension, so typing keeps the file type.
+              onFocus={(e) => {
+                const dot = isFile ? current.lastIndexOf('.') : -1
+                e.currentTarget.setSelectionRange(0, dot > 0 ? dot : current.length)
+              }}
+              aria-label={`New name for ${current}`}
+              className="min-w-0 flex-1 rounded border border-line bg-white px-2 py-1 text-xs outline-none focus:border-brand"
+            />
+            <button disabled={saving} className="rounded bg-brand px-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? '…' : 'Save'}</button>
+            <button type="button" onClick={cancel} className="grid w-6 shrink-0 place-items-center rounded text-muted hover:bg-white hover:text-ink" aria-label="Cancel rename">
+              <X size={13} />
+            </button>
+          </form>
+          {error && <p role="alert" className="mt-1 text-xs text-red-700">{error}</p>}
+          {isFolder && !error && <p className="mt-1 text-[11px] text-muted">Changes the name shown in Talaan. Permissions, audit log and chat stay with this folder.</p>}
+        </div>
+      )}
+    </>
+  )
+
+  // Like the new-subfolder box: wait for a click to finish so the row under it doesn't jump away.
+  function cancelLater() {
+    if (!pointerIsDown) return cancel()
+    document.addEventListener('pointerup', () => setTimeout(cancel, 0), { once: true })
+  }
+}
+
+/**
+ * Move a folder, subfolder or file to the Trash, after an inline confirm. It can be restored
+ * from the Trash page. Only the user can do this; the AI's own delete stays a proposal
+ * governed by the Delete permission.
+ */
+function MoveToTrash({ kind, folderId, path, name, active }: {
+  kind: 'folder' | 'subfolder' | 'file'; folderId: string; path: string; name: string; active?: boolean
+}) {
+  const tree = useTree()
+  const navigate = useNavigate()
+  const [confirming, setConfirming] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function trash() {
+    setBusy(true)
+    try {
+      if (kind === 'folder') await api.trashFolder(folderId)
+      else await api.trashPath(folderId, path)
+      setConfirming(false)
+      tree.changed()
+      if (kind === 'folder' && active) navigate('/')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => { setConfirming(true); setError(null) }}
+        className="grid h-6 w-6 shrink-0 place-items-center rounded text-muted transition-opacity hover:bg-white hover:text-red-700 lg:opacity-0 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100"
+        aria-label={`Move ${name} to Trash`}
+        title={`Delete ${kind}`}
+      >
+        <Trash2 size={13} />
+      </button>
+      {confirming && (
+        <div
+          className="basis-full px-2 pb-1.5"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setConfirming(false) } }}
+        >
+          <div role="alertdialog" aria-label={`Move ${name} to Trash?`} className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+            <p>
+              Move <span className="font-semibold break-words">{name}</span> to Trash?
+              {kind === 'folder' ? ' The whole folder goes; its permissions, audit log and chats are kept.' : ''} You can restore it from Trash.
+            </p>
+            {error && <p role="alert" className="mt-1 text-red-700">{error}</p>}
+            <div className="mt-1.5 flex gap-1">
+              <button autoFocus onClick={trash} disabled={busy} className="rounded bg-red-700 px-2 py-1 font-semibold text-white disabled:opacity-50">
+                {busy ? 'Moving…' : 'Move to Trash'}
+              </button>
+              <button onClick={() => setConfirming(false)} className="rounded px-2 py-1 hover:bg-white">Cancel</button>
+            </div>
+          </div>
         </div>
       )}
     </>

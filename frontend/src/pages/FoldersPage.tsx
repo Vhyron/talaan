@@ -4,6 +4,7 @@ import { FolderInput, Lock, Plus } from 'lucide-react'
 import { api } from '../api/client'
 import type { Folder, Mode } from '../api/types'
 import Sidebar from '../components/Sidebar'
+import HomeChat from '../components/HomeChat'
 import { DropZone } from '../components/ImportDrop'
 import { useImportDialog } from '../lib/importDialog'
 import { noun, SHOW_MODE } from '../lib/folderContext'
@@ -22,10 +23,14 @@ export default function FoldersPage({ folders, error, onCreated }: {
       <Sidebar folders={folders} error={error} />
       <DropZone onFiles={(u) => { setCreating(null); importDialog.open(u) }}>
       <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-10 sm:py-8">
+        {/* The all-folders chat grows in place from here; the folders sit below it. */}
+        <HomeChat folders={folders} />
+
+        <section id="folders" className="mt-8 scroll-mt-6 sm:scroll-mt-8" aria-label="Your folders">
         <div className="flex flex-wrap items-end gap-3">
           <div className="mr-auto w-full sm:w-auto">
             <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Your Spaces</h1>
-            <p className="mt-1 text-muted">Each Space is sealed. The AI only sees the one you open.</p>
+            <p className="mt-1 text-muted">Each Space is sealed: its chat only sees that Space.</p>
           </div>
           {SHOW_MODE ? (
             <>
@@ -48,7 +53,6 @@ export default function FoldersPage({ folders, error, onCreated }: {
 
         {creating && <NewFolder mode={creating} onDone={() => { setCreating(null); onCreated() }} onCancel={() => setCreating(null)} />}
 
-
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">
           {folders.map((f) => (
             <li key={f.id}>
@@ -65,6 +69,7 @@ export default function FoldersPage({ folders, error, onCreated }: {
             </li>
           ))}
         </ul>
+        </section>
       </main>
       </DropZone>
     </div>

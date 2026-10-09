@@ -20,6 +20,9 @@ from app.policy.grants import get_grants
 from app.schemas import AskResponse, ChatMessage, ChatSession, ChatSessionSummary, Grant
 
 TITLE_CHARS = 60
+# The home-page chat (all folders) is saved under this scope. Folder ids are slugs ([A-Za-z0-9._-]),
+# so no folder can have it; folder routes only ever read their own folder_id.
+ALL = "*"
 
 TITLE_SYSTEM = """Write a short title (3 to 6 words) for a chat that starts with the user's question below.
 Plain words only: no quotes, no punctuation at the end, no names that are not in the question."""
@@ -146,3 +149,11 @@ def auto_title(folder_id: str, sid: str, question: str) -> None:
     with connect() as db:
         db.execute("UPDATE chat_sessions SET title = ?, title_source = 'model'"
                    " WHERE id = ? AND folder_id = ? AND title_source = 'question'", (title, sid, folder_id))
+
+
+def clear_home() -> None:
+    """The home chat keeps one thread: starting a new one replaces it. The audit log of every
+    folder it read keeps the questions and answers."""
+    with connect() as db:
+        db.execute("DELETE FROM chat_messages WHERE folder_id = ?", (ALL,))
+        db.execute("DELETE FROM chat_sessions WHERE folder_id = ?", (ALL,))

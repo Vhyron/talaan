@@ -82,17 +82,6 @@ def create_folder(body: FolderCreate) -> Folder:
     return _meta(path)
 
 
-def rename_folder(folder_id: str, name: str) -> Folder:
-    """Changes the Space's display name only. Its id (the directory on disk) stays, so grants,
-    audit, chats and the index keep pointing at it."""
-    path = folder_root(folder_id)
-    folder = _meta(path).model_copy(update={"name": name.strip()})
-    if not folder.name:
-        raise HTTPException(400, "Give the Space a name")
-    _write_meta(path, folder)
-    return folder
-
-
 def scope_dir(folder_id: str, scope: str | None) -> str | None:
     """A chat scope: an existing subfolder of this Space, Space-relative. None for the whole Space.
     Same checks as every other path (no ../, symlinks out or .talaan/); a bad scope is refused."""
@@ -192,6 +181,14 @@ def file_path(folder_id: str, path: str) -> Path:
     if not target.is_file():
         raise HTTPException(404, "File not found")
     return target
+
+
+def delete_file(folder_id: str, path: str) -> str:
+    """User-only delete from the file tree. Files only; sealed like every other access."""
+    target = file_path(folder_id, path)
+    rel_path = rel(folder_root(folder_id), target)
+    target.unlink()
+    return rel_path
 
 
 def _free_name(directory: Path, base: str) -> Path:
