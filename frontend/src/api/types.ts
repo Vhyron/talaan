@@ -178,6 +178,10 @@ export type VoiceStatus = {
   problem: 'library' | 'model' | null
   message: string | null
   fix: string | null
+  downloading: boolean // the in-app model download is running
+  downloaded_mb: number | null
+  total_mb: number | null
+  download_error: string | null
 }
 
 /** Something the user moved to the Trash. `path` is where it was ("" for a whole folder). */

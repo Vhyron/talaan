@@ -446,6 +446,14 @@ def voice_status() -> VoiceStatus:
     return voice.whisper.status()
 
 
+@app.post("/system/voice/download")
+def voice_download() -> VoiceStatus:
+    """Fetch the configured speech model (the one-time download); poll GET /system/voice for progress."""
+    if not voice.whisper.status().ready:
+        voice.whisper.start_download()
+    return voice.whisper.status()
+
+
 @app.get("/system/tier")
 def system_tier() -> SystemTier:
     return selection.system_tier()

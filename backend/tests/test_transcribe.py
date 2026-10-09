@@ -151,7 +151,7 @@ def test_voice_status_ready(monkeypatch):
     import faster_whisper.utils
     monkeypatch.setattr(faster_whisper.utils, "download_model", lambda *a, **k: "/cache/small")
     r = c.get("/system/voice").json()
-    assert r == {"ready": True, "model": "small", "problem": None, "message": None, "fix": None}
+    assert r["ready"] is True and r["model"] == "small" and r["problem"] is None and r["downloading"] is False
 
 
 def test_voice_status_model_missing_never_downloads(monkeypatch):
@@ -181,3 +181,71 @@ def test_voice_status_library_missing(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", no_faster_whisper)
     r = whisper.status()
     assert r.ready is False and r.problem == "library" and r.fix == "cd backend; uv sync"
+
+
+# --- In-app download (the Voice note dialog's Download button) ---------------------
+
+
+@pytest.fixture
+def fake_download(monkeypatch):
+    """download_model that never goes online: lookups miss until the fake fetch 'finishes'."""
+    import threading
+    import faster_whisper.utils
+
+    state = {"cached": False, "fetches": 0, "fail": False}
+    release = threading.Event()
+
+    def download_model(size, local_files_only=False, **kw):
+        if local_files_only:
+            if state["cached"]:
+                return "/cache/small"
+            raise OSError("not in cache")
+        state["fetches"] += 1
+        release.wait(5)
+        if state["fail"]:
+            raise OSError("offline")
+        state["cached"] = True
+        return "/cache/small"
+
+    monkeypatch.setattr(faster_whisper.utils, "download_model", download_model)
+    monkeypatch.setitem(whisper._job, "running", False)
+    monkeypatch.setitem(whisper._job, "error", None)
+    yield state, release
+    release.set()
+
+
+def wait_until_idle():
+    import time
+    for _ in range(100):
+        if not whisper._job["running"]:
+            return
+        time.sleep(0.02)
+    pytest.fail("download thread did not finish")
+
+
+def test_download_runs_once_and_reports_progress(fake_download):
+    state, release = fake_download
+    r = c.post("/system/voice/download").json()
+    assert r["downloading"] is True and r["total_mb"] == 465 and r["downloaded_mb"] is not None
+    assert c.post("/system/voice/download").json()["downloading"] is True  # second click: same job
+    release.set()
+    wait_until_idle()
+    assert state["fetches"] == 1
+    assert c.get("/system/voice").json()["ready"] is True
+
+
+def test_failed_download_is_reported(fake_download):
+    state, release = fake_download
+    state["fail"] = True
+    c.post("/system/voice/download")
+    release.set()
+    wait_until_idle()
+    r = c.get("/system/voice").json()
+    assert r["ready"] is False and r["downloading"] is False and "internet" in r["download_error"]
+
+
+def test_download_skipped_when_ready(fake_download):
+    state, _ = fake_download
+    state["cached"] = True
+    assert c.post("/system/voice/download").json()["ready"] is True
+    assert state["fetches"] == 0

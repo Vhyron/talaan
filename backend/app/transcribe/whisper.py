@@ -3,7 +3,8 @@
 The model is loaded for each transcription and released afterwards, so it doesn't
 hold memory while the chat model is answering (docs/05-models.md, Light tier).
 
-Pre-download the model once, while online:
+Pre-download the model once, while online, from the Voice note dialog's
+Download button or the terminal:
 
     uv run python -m app.transcribe.whisper --download
 """
@@ -58,8 +59,58 @@ def choose_language(probs: list[tuple[str, float]], allowed: list[str]) -> str:
 
 
 DOWNLOAD_COMMAND = "cd backend; uv run python -m app.transcribe.whisper --download"
-# Approximate download sizes of the CTranslate2 Whisper models.
-MODEL_SIZE = {"tiny": "75 MB", "base": "145 MB", "small": "465 MB", "medium": "1.5 GB", "large-v3-turbo": "1.6 GB", "large-v3": "3 GB"}
+# Approximate download sizes (MB) of the CTranslate2 Whisper models.
+MODEL_MB = {"tiny": 75, "base": 145, "small": 465, "medium": 1500, "large-v3-turbo": 1600, "large-v3": 3000}
+
+
+def _size_label(mb: int) -> str:
+    return f"{mb / 1000:g} GB" if mb >= 1000 else f"{mb} MB"
+
+
+# The in-app download (Voice note dialog's Download button): one at a time, in a
+# background thread, so the dialog can poll status() for progress.
+_download_lock = threading.Lock()
+_job: dict = {"running": False, "error": None}
+
+
+def _cache_dir() -> Path | None:
+    """The model's Hugging Face cache folder (it grows while downloading)."""
+    from faster_whisper.utils import _MODELS
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    repo_id = _MODELS.get(config.WHISPER_MODEL, config.WHISPER_MODEL)
+    if "/" not in repo_id:
+        return None
+    return Path(HF_HUB_CACHE) / ("models--" + repo_id.replace("/", "--"))
+
+
+def _downloaded_mb() -> float | None:
+    folder = _cache_dir()
+    if folder is None or not folder.exists():
+        return 0.0 if folder else None
+    # blobs/ holds the real bytes, including the .incomplete file being written.
+    total = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file() and not f.is_symlink())
+    return round(total / 2**20, 1)
+
+
+def start_download() -> None:
+    """Start fetching the model in the background; no-op if a download is running."""
+    with _download_lock:
+        if _job["running"]:
+            return
+        _job.update(running=True, error=None)
+
+    def work() -> None:
+        from faster_whisper.utils import download_model
+
+        try:
+            download_model(config.WHISPER_MODEL)  # files only; doesn't load it into memory
+        except Exception:
+            _job["error"] = "Couldn't download the speech model. Check the internet connection and try again."
+        finally:
+            _job["running"] = False
+
+    threading.Thread(target=work, daemon=True, name="whisper-download").start()
 
 
 def status() -> "VoiceStatus":
@@ -80,15 +131,26 @@ def status() -> "VoiceStatus":
             message="The speech-to-text library (faster-whisper) isn't installed.",
             fix="cd backend; uv sync",
         )
+    if _job["running"]:
+        total = MODEL_MB.get(model)
+        done = _downloaded_mb()
+        return VoiceStatus(
+            ready=False, model=model, problem="model", downloading=True,
+            message=f"Downloading the speech model ('{model}'). Keep this laptop online until it finishes.",
+            downloaded_mb=min(done, total * 0.99) if done is not None and total else done,
+            total_mb=total,
+        )
     try:
         download_model(model, local_files_only=True)
     except Exception:
+        size = f", about {_size_label(MODEL_MB[model])}" if model in MODEL_MB else ""
         return VoiceStatus(
             ready=False, model=model, problem="model",
-            message=f"The speech model ('{model}'{', about ' + MODEL_SIZE[model] if model in MODEL_SIZE else ''}) "
-                    "hasn't been downloaded to this laptop yet. "
+            message=f"The speech model ('{model}'{size}) hasn't been downloaded to this laptop yet. "
                     "Download it once while online; after that voice notes work offline.",
             fix=DOWNLOAD_COMMAND,
+            total_mb=MODEL_MB.get(model),
+            download_error=_job["error"],
         )
     return VoiceStatus(ready=True, model=model)
 

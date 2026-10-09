@@ -333,6 +333,10 @@ class VoiceStatus(BaseModel):
     problem: Literal["library", "model"] | None = None
     message: str | None = None  # plain-language explanation for the user
     fix: str | None = None  # command that fixes it
+    downloading: bool = False  # the in-app model download is running
+    downloaded_mb: float | None = None
+    total_mb: float | None = None  # approximate model size
+    download_error: str | None = None  # why the last in-app download failed
 
 
 class SystemTier(BaseModel):

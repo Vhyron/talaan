@@ -70,7 +70,7 @@ talaan/
       audit/             Audit log writer, reader and export
       index/             extract.py, chunk.py (B2); store.py: per-folder index.db, FTS5 + embeddings, retrieve (B3)
       llm/               (planned, B1, B4–B6) Ollama client, prompts, tool calls
-      transcribe/        (planned, D1) faster-whisper wrapper
+      transcribe/        faster-whisper wrapper, readiness check and in-app model download (D1)
       system/            (planned, D7) hardware tier detection
     tests/
     pyproject.toml
@@ -108,6 +108,8 @@ talaan/
 | GET | `/folders/{id}/audit` | Audit log, newest first |
 | GET | `/folders/{id}/audit/export?format=json\|csv` | Audit log download |
 | POST | `/folders/{id}/transcribe` | Audio → transcript draft (needs Create) |
+| GET | `/system/voice` | Is speech-to-text ready? Includes download progress while the model is fetched |
+| POST | `/system/voice/download` | Fetch the configured Whisper model in the background (the one-time download); poll `GET /system/voice` |
 | GET | `/system/tier` | Detected hardware tier and recommended models |
 
 ## Run locally

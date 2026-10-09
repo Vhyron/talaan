@@ -43,6 +43,8 @@ ollama pull gemma4:e4b             # High   (19 GB+ RAM, e.g. 24/32 GB)
 cd backend; uv run python -m app.transcribe.whisper --download; cd ..
 ```
 
+The speech model can also be fetched from the app: open **Voice note** and click **Download speech model**. The dialog shows progress and enables recording when it finishes.
+
 Pull the embedding model plus the chat model for your tier; pulling more is fine (switch on the Settings page). Pinned tags live in `backend/app/llm/models.py` and are final after the B1 bake-off (05-models.md). Pull models before the venue; the Wi-Fi there may be slow.
 
 **`npm ci` vs `npm install`:** use `npm ci` to install. Use `npm install <pkg>` only when adding a dependency, then commit `package-lock.json` and add the library to the disclosure list (06-demo-and-pitch.md). The backend equivalent is `uv add <pkg>`, which updates `uv.lock`.
@@ -224,5 +226,6 @@ Do this on the demo laptop, at least once the evening before and again at the ve
 | `git push` → `403 Permission … denied to <work account>` | Git Credential Manager uses one saved GitHub login for every folder | In the partition's gitconfig (e.g. `~/.gitconfig-personal`) set `[credential "https://github.com"] username = <your account>`; optionally `gitHubAuthModes = device` and complete the code in a browser window signed in to that account |
 | Voice note fails with `open() got an unexpected keyword argument 'metadata_errors'` | PyAV 19 removed an argument faster-whisper 1.2 still passes | `uv sync` (the lockfile pins `av<19`); don't upgrade `av` past 18 |
 | Voice note comes out in the wrong language (e.g. Chinese) or as random words | Whisper guessed the language from a very short or quiet clip | Fixed: it now only chooses among `WHISPER_LANGUAGES`, refuses clips under 1.5 s and drops segments it rates as non-speech. Speak for a few seconds, close to the mic |
-| Voice note fails offline / tries to download | Whisper model not cached | Run the download command in section 2 while online |
+| Voice note fails offline / tries to download | Whisper model not cached | While online, click **Download speech model** in the Voice note dialog, or run the download command in section 2 |
+| Recording "Laptop audio" says no audio was shared | Audio sharing was off in the browser's share picker, or the browser can't share audio | Use Chrome or Edge. Pick the meeting **tab** and turn on "Share tab audio" (a whole-screen share needs "Share system audio"). Desktop-app audio (e.g. the Zoom app) works on Windows; on macOS it depends on the Chrome and macOS versions, so run the meeting in a browser tab. Safari and Firefox can't share audio, so use Microphone there |
 | `git add -A` stages thousands of files | Branch made from a commit without `.gitignore` | Unstage (`git reset`), branch from current `dev`, add paths explicitly |
