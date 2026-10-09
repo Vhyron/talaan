@@ -27,6 +27,10 @@ class FolderCreate(BaseModel):
     mode: Mode
 
 
+class DirCreate(BaseModel):
+    path: str = Field(min_length=1, max_length=255)  # folder-relative, e.g. "Interviews/2026-09"
+
+
 class FileEntry(BaseModel):
     path: str
     size: int
