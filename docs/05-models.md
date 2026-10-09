@@ -1,6 +1,6 @@
-# 05 · Models per hardware tier
+# 05 · Models per hardware class
 
-**Rule:** the same embedding model on every tier, so an index built on one machine works on any other and switching tiers never means re-indexing.
+**Rule:** the same embedding model with every chat model, so an index built on one machine works on any other and switching models never means re-indexing.
 
 ## Pinned tags
 
@@ -8,26 +8,26 @@
 
 | Role | Tag | Ollama digest | Size | Tested |
 |---|---|---|---|---|
-| Embeddings (every tier) | `qwen3-embedding:0.6b` | `ac6da0dfba84` | 0.64 GB (Q8_0) | Yes, 8 GB M2 |
-| Chat, Light | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
-| Chat, Standard | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | Yes, bake-off 23/27 on 32 GB + 4 GB GPU (see below); not yet on a 16 GB laptop |
-| Chat, Pro | `gemma4:26b` | — | — | **No** |
-| Alternate (Standard) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
-| Alternate (Pro) | `qwen3.5:9b` | — | — | **No** |
+| Embeddings (every chat model) | `qwen3-embedding:0.6b` | `ac6da0dfba84` | 0.64 GB (Q8_0) | Yes, 8 GB M2 |
+| Chat, Budget (8 GB) | `qwen3.5:2b` | `0689d44085e0` | 2.68 GB (Q8_0) | Yes, bake-off 21/27 (see below) |
+| Chat, Mid (12 GB) | `qwen3.5:4b` | `d8b0f5e9760c` | 3.32 GB (Q4_K_M) | Yes, bake-off 24/27 |
+| Chat, High (16 GB+) | `gemma4:e4b` | `dc35e8d9c606` | 6.6 GB | Yes, bake-off 23/27 on 32 GB + 4 GB GPU (see below); not yet on a 16 GB laptop |
+
+**2026-10-10: cut to these three chat models**, all bake-off tested. The untested `gemma4:26b` and `qwen3.5:9b` are no longer offered. Thinking mode is off on every call (see below); the Ask panel never turns it on.
 
 Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking off.
 
-**If a 16 GB+ bake-off arrives before midnight**, the Standard row may switch to `qwen3.5:4b` (one line in `models.py` + this table). Untested tags stay selectable but must be labelled untested in the submission.
+## Hardware classes
 
-## Tiers
+Not plans or subscriptions: every model runs locally and free. The class only says what hardware a model is sized for. API ids stay `light` / `standard` / `pro`.
 
-| Tier | Typical device | Chat model | Embeddings | Speech-to-text |
+| Class | Typical device | Chat model | Embeddings | Speech-to-text |
 |---|---|---|---|---|
-| Light | 8 GB RAM, no GPU | `qwen3.5:2b` (~2.7 GB) | `qwen3-embedding:0.6b` | faster-whisper `base` or `small` |
-| **Standard** | 16 GB RAM, Apple Silicon 16 GB, or 8–10 GB GPU | **`gemma4:e4b`** (needs ~10 GB VRAM or 16 GB unified memory) | `qwen3-embedding:0.6b` | faster-whisper `small` |
-| Pro | 32 GB unified or 16–24 GB GPU | `gemma4:26b` (mixture of experts, ~4B active parameters, so fast for its quality) | `qwen3-embedding:0.6b` | faster-whisper `large-v3-turbo` |
+| Budget | 8 GB RAM, no GPU | `qwen3.5:2b` (~2.7 GB) | `qwen3-embedding:0.6b` | faster-whisper `small` |
+| Mid | 12 GB RAM | `qwen3.5:4b` (~3.3 GB; slow on 8 GB, 31 s median) | `qwen3-embedding:0.6b` | faster-whisper `small` |
+| **High** | 16 GB RAM, Apple Silicon 16 GB, or 8 GB+ GPU | **`gemma4:e4b`** (needs ~10 GB VRAM or 16 GB unified memory) | `qwen3-embedding:0.6b` | faster-whisper `small` |
 
-**Alternates for the bake-off:** `qwen3.5:4b` (Standard), `qwen3.5:9b` (Pro).
+**Automatic** runs the class model for this device if installed, else the largest installed one of the three that fits, else any installed one of the three. Other installed Ollama models are never picked.
 
 ## Why these
 
@@ -36,9 +36,9 @@ Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking 
 - **qwen3-embedding:0.6b:** 100+ languages, 32K context, ~639 MB download, fits every tier. EmbeddingGemma is lighter but caps input at 2K tokens, too short for long hearing minutes.
 - **faster-whisper** over Gemma's built-in audio: more predictable, gives timestamps, clear size steps per tier.
 
-## Features per tier
+## Features per hardware class
 
-| Feature | Light | Standard | Pro |
+| Feature | Budget | Mid | High |
 |---|---|---|---|
 | Search and short answers with sources | Yes | Yes | Yes |
 | Timeline with contradictions | Risky | Yes | Yes |
@@ -56,7 +56,7 @@ Runtime: Ollama 0.34.2. `num_ctx` 16384 for chat, 2048 for embeddings; thinking 
 
 - **Set `num_ctx` explicitly** on every request. Ollama's default context is small and long prompts are silently truncated.
 - **Thinking mode off for action calls.** It slows responses and can break strict JSON. Keep it only for the timeline if it helps.
-- **Memory with several models loaded:** on Light, transcribe first, unload Whisper, then answer.
+- **Memory with several models loaded:** on Budget, transcribe first, unload Whisper, then answer.
 - **Never change the embedding model** without re-indexing every folder.
 - **Disclose every model tag** in the submission.
 
@@ -99,16 +99,16 @@ Full answers are saved in `backend/scripts/bakeoff_results/`. "Correct" is a key
 
 ## Model switching (in the app)
 
-Pinned tags live in one place: `backend/app/llm/models.py` (tier table + bake-off alternates). The app picks the chat model in this order:
+Pinned tags live in one place: `backend/app/llm/models.py` (three-row table, no alternates). The app picks the chat model in this order:
 
 1. `CHAT_MODEL` env var (dev override, must be a pinned tag)
 2. The user's choice (`PUT /system/model`), saved in `app.db`
-3. The detected tier's model, if installed
+3. The detected hardware class's model, if installed
 4. The largest installed pinned model that fits this machine, then any installed pinned model
 
 - `GET /system/tier` reports RAM/GPU, recommended tier, the active model and every pinned option (installed / fits / active).
 - `PUT /system/model {"chat_model": "qwen3.5:4b"}` switches (unloads the old model, loads the new one); `{"chat_model": null}` returns to automatic. Unpinned or not-installed tags are rejected. A model above the machine's tier is allowed but reported as `fits: false`.
-- The **embedding model is not switchable**: same tag on every tier, so indexes stay valid.
+- The **embedding model is not switchable**: same tag with every chat model, so indexes stay valid.
 - Every answer logs the exact `model_tag`, so the audit log shows which model produced it.
 - Measured on an 8 GB M2: embeddings at `num_ctx` 8192 evicted the chat model; at 2048 both stay loaded on the GPU.
 
@@ -118,4 +118,4 @@ Every model call (chat, embed, load, unload) prints one line to the backend term
 
 ## Tier detection (P2)
 
-On first run: read total RAM and GPU presence → map to Light / Standard / Pro → `ollama pull` that tier's models → show which features are available.
+On first run: read total RAM and GPU presence → map to Budget / Mid / High → `ollama pull` that class's models → show which features are available.

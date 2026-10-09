@@ -22,18 +22,16 @@ class TierSpec:
     whisper_model: str
 
 
-# Ordered smallest to largest; the order matters for fallback.
+# Ordered smallest to largest; the order matters for fallback. Only bake-off tested models.
+# Tier ids stay light/standard/pro in the API; the UI calls them Budget / Mid / High hardware.
 TIERS: list[TierSpec] = [
-    TierSpec("light", "Light", 8, "qwen3.5:2b", "small"),  # digest 0689d44085e0, bake-off tested on 8 GB M2
-    TierSpec("standard", "Standard", 16, "gemma4:e4b", "small"),  # digest dc35e8d9c606, bake-off tested on 32 GB + 4 GB GPU
-    TierSpec("pro", "Pro", 32, "gemma4:26b", "large-v3-turbo"),  # not yet bake-off tested
+    TierSpec("light", "Budget", 8, "qwen3.5:2b", "small"),  # digest 0689d44085e0, bake-off 21/27 on 8 GB M2
+    TierSpec("standard", "Mid", 12, "qwen3.5:4b", "small"),  # digest d8b0f5e9760c, bake-off 24/27 on 8 GB M2 (slow there)
+    TierSpec("pro", "High", 16, "gemma4:e4b", "small"),  # digest dc35e8d9c606, bake-off 23/27 on 32 GB + 4 GB GPU
 ]
 
-# Bake-off alternates the user may also pick. Each one counts as the tier it sits under.
-ALTERNATES: dict[str, TierId] = {
-    "qwen3.5:4b": "standard",  # digest d8b0f5e9760c, bake-off tested on 8 GB M2
-    "qwen3.5:9b": "pro",
-}
+# No alternates: these three are the only chat models the app runs.
+ALTERNATES: dict[str, TierId] = {}
 
 TIER_BY_ID = {t.id: t for t in TIERS}
 TIER_ORDER: list[TierId] = [t.id for t in TIERS]

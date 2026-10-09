@@ -9,6 +9,7 @@ import json
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -160,31 +161,39 @@ def watch_models(interval: float = 2.0) -> None:
     threading.Thread(target=_watch_models, args=(interval,), daemon=True, name="ollama-watch").start()
 
 
-def _stream_chat(body: dict, prompt: str) -> dict:
-    """LLM_LIVE_LOG: stream /api/chat to the terminal, then return the same shape as a non-stream call."""
+Delta = Callable[[str, str], None]  # (kind "thinking" | "content", text) as tokens arrive
+
+
+def _stream_chat(body: dict, prompt: str, on_delta: Delta | None = None) -> dict:
+    """Stream /api/chat: to the terminal (LLM_LIVE_LOG) and/or `on_delta`; returns a non-stream-shaped result."""
+    if not config.LLM_LIVE_LOG:
+        return _stream_chat_inner(body, prompt, on_delta, live=False)
     with _live_lock:
-        return _stream_chat_locked(body, prompt)
+        return _stream_chat_inner(body, prompt, on_delta, live=True)
 
 
-def _stream_chat_locked(body: dict, prompt: str) -> dict:
+def _stream_chat_inner(body: dict, prompt: str, on_delta: Delta | None, live: bool) -> dict:
+    out = _out if live else (lambda _text: None)
     url = f"{config.OLLAMA_BASE_URL}/api/chat"
     schema = " | json schema" if "format" in body else ""
     est = len(prompt) // 4  # rough token estimate; Ollama reports the real count at the end
-    _out(f"\n{_BOLD}== {body['model']} | num_ctx {config.NUM_CTX} | think {body['think']}{schema} "
-         f"| ~{est:,} prompt tok =={_RESET}\n")
+    out(f"\n{_BOLD}== {body['model']} | num_ctx {config.NUM_CTX} | think {body['think']}{schema} "
+        f"| ~{est:,} prompt tok =={_RESET}\n")
     if config.LLM_LIVE_PROMPT:
-        _out(f"{_BOLD}-- prompt --{_RESET}\n{_DIM}{prompt}{_RESET}\n{_BOLD}-- output --{_RESET}\n")
-    label = "loading model + processing prompt" if not _loaded(body["model"]) else "processing prompt"
+        out(f"{_BOLD}-- prompt --{_RESET}\n{_DIM}{prompt}{_RESET}\n{_BOLD}-- output --{_RESET}\n")
+    label = "processing prompt" if not live or _loaded(body["model"]) else "loading model + processing prompt"
     t0 = time.perf_counter()
     stop = threading.Event()
     ticker = threading.Thread(target=_status, args=(stop, label, t0), daemon=True)
-    ticker.start()
+    if live:
+        ticker.start()
 
     def first_token() -> None:
         if not stop.is_set():
             stop.set()
-            ticker.join()
-            _out(f"{_CLEAR}{_CYAN}[{label}: {time.perf_counter() - t0:.1f}s]{_RESET}\n")
+            if live:
+                ticker.join()
+                out(f"{_CLEAR}{_CYAN}[{label}: {time.perf_counter() - t0:.1f}s]{_RESET}\n")
 
     content, thinking, last, in_thinking = [], [], {}, False
     try:
@@ -201,17 +210,21 @@ def _stream_chat_locked(body: dict, prompt: str) -> dict:
                 if t := msg.get("thinking"):
                     first_token()
                     if not in_thinking:
-                        _out(f"{_DIM}[thinking] ")
+                        out(f"{_DIM}[thinking] ")
                         in_thinking = True
                     thinking.append(t)
-                    _out(t)
+                    out(t)
+                    if on_delta:
+                        on_delta("thinking", t)
                 if c := msg.get("content"):
                     first_token()
                     if in_thinking:
-                        _out(f"{_RESET}\n")
+                        out(f"{_RESET}\n")
                         in_thinking = False
                     content.append(c)
-                    _out(c)
+                    out(c)
+                    if on_delta:
+                        on_delta("content", c)
     except httpx.TimeoutException as e:
         raise OllamaError(f"{body['model']} took longer than {CHAT_TIMEOUT:.0f}s and was stopped. "
                           "Try a smaller model or a shorter prompt (thinking mode is slow).") from e
@@ -219,8 +232,8 @@ def _stream_chat_locked(body: dict, prompt: str) -> dict:
         raise OllamaError(f"Ollama is not reachable at {config.OLLAMA_BASE_URL}. Start it with `ollama serve`.") from e
     finally:
         first_token()
-        _out(_RESET)
-    _out(f"\n{_BOLD}-- {_stats(last, time.perf_counter() - t0)} --{_RESET}\n")
+        out(_RESET)
+    out(f"\n{_BOLD}-- {_stats(last, time.perf_counter() - t0)} --{_RESET}\n")
     last["message"] = {"role": "assistant", "content": "".join(content), "thinking": "".join(thinking)}
     return last
 
@@ -241,8 +254,10 @@ def chat(
     think: bool = False,
     model: str | None = None,
     temperature: float = 0.0,
+    on_delta: Delta | None = None,
 ) -> ChatResult:
-    """One chat turn. Pass `schema` for constrained JSON output; keep `think` off for JSON calls."""
+    """One chat turn. Pass `schema` for constrained JSON output; keep `think` off for action calls.
+    `on_delta` receives tokens as they generate (streams the request); the result is the same either way."""
     from app.llm.selection import active_chat_model  # avoid an import cycle with selection
 
     tag = model or active_chat_model().tag
@@ -260,7 +275,8 @@ def chat(
     prompt = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
     t0 = time.perf_counter()
     try:
-        d = _stream_chat(body, prompt) if config.LLM_LIVE_LOG else _post("/api/chat", body, CHAT_TIMEOUT)
+        d = (_stream_chat(body, prompt, on_delta) if config.LLM_LIVE_LOG or on_delta
+             else _post("/api/chat", body, CHAT_TIMEOUT))
     except OllamaError as e:
         trace.record("chat", tag, seconds=time.perf_counter() - t0, num_ctx=config.NUM_CTX, think=think,
                      prompt=prompt, error=str(e))

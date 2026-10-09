@@ -14,7 +14,7 @@ How to install, run, test and reset Talaan on a team laptop. Commands are PowerS
 
 If `uv` isn't found after a pip install, use `python -m uv` in place of `uv` everywhere below, or add Python's user `Scripts` folder to PATH.
 
-Hardware: the app detects RAM/GPU and picks the chat model for your tier automatically (Light 8 GB, Standard 16 GB, Pro 32 GB; see [05-models.md](05-models.md)). Keep ~15 GB disk free for models and dependencies.
+Hardware: the app detects RAM/GPU and picks the chat model automatically (Budget 8 GB `qwen3.5:2b`, Mid 12 GB `qwen3.5:4b`, High 16 GB+ `gemma4:e4b`; see [05-models.md](05-models.md)). Keep ~15 GB disk free for models and dependencies.
 
 ## 2. One-time setup
 
@@ -33,8 +33,9 @@ cd frontend; npm ci; cd ..
 
 # Models: one-time download, the only step that needs internet
 ollama pull qwen3-embedding:0.6b   # every tier, always
-ollama pull qwen3.5:2b             # Light   (8 GB RAM)
-ollama pull gemma4:e4b             # Standard (16 GB RAM / Apple 16 GB / 8-10 GB GPU)
+ollama pull qwen3.5:2b             # Budget (8 GB RAM)
+ollama pull qwen3.5:4b             # Mid    (12 GB RAM)
+ollama pull gemma4:e4b             # High   (16 GB+ RAM / Apple 16 GB / 8-10 GB GPU)
 
 # Speech-to-text model for voice notes (faster-whisper "small", ~464 MB)
 cd backend; uv run python -m app.transcribe.whisper --download; cd ..

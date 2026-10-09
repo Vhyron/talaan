@@ -1,6 +1,8 @@
 """Talaan API. Routes not yet implemented return fixture data (see app/fixtures.py)."""
 
+import json
 import logging
+import queue
 import tempfile
 import threading
 from contextlib import asynccontextmanager
@@ -11,7 +13,7 @@ from typing import Literal
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response, StreamingResponse
 
 from app import config
 from app import fixtures as fx
@@ -144,6 +146,34 @@ def build_index(folder_id: str) -> IndexStatus:
 @app.post("/folders/{folder_id}/ask")
 def ask(folder_id: str, body: AskRequest) -> AskResponse:
     return ask_mod.ask(folder_id, body.question, body.path, body.history)
+
+
+@app.post("/folders/{folder_id}/ask/stream")
+def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
+    """Same as /ask, as NDJSON lines while it works: `status` and `answer` (live text, display only),
+    then `done` with the final AskResponse, or `error`."""
+    _folder(folder_id)
+    events: queue.Queue[dict | None] = queue.Queue()
+
+    def work() -> None:
+        try:
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, emit=events.put)
+            events.put({"type": "done", "response": res.model_dump(mode="json")})
+        except OllamaError as e:
+            events.put({"type": "error", "message": str(e)})
+        except Exception:
+            logging.getLogger("talaan").exception("ask/stream failed")
+            events.put({"type": "error", "message": "Something went wrong answering this question. Please ask again."})
+        finally:
+            events.put(None)
+
+    threading.Thread(target=work, daemon=True, name="ask-stream").start()
+
+    def lines():
+        while (event := events.get()) is not None:
+            yield json.dumps(event) + "\n"
+
+    return StreamingResponse(lines(), media_type="application/x-ndjson")
 
 
 @app.post("/folders/{folder_id}/timeline")

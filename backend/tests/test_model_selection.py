@@ -6,6 +6,7 @@ from app.system.tier import Hardware
 
 M2_8GB = Hardware(ram_gb=8, gpu="Apple Silicon (unified memory)", vram_gb=0, free_disk_gb=20)
 MAC_16GB = Hardware(ram_gb=16, gpu="Apple Silicon (unified memory)", vram_gb=0, free_disk_gb=50)
+PC_12GB = Hardware(ram_gb=12, gpu=None, vram_gb=0, free_disk_gb=50)
 PC_RTX_16GB = Hardware(ram_gb=16, gpu="RTX 4080 (16 GB)", vram_gb=16, free_disk_gb=200)
 ALL = ["qwen3.5:2b", "qwen3.5:4b", "gemma4:e4b", "gemma4:26b", "qwen3-embedding:0.6b"]
 
@@ -15,14 +16,21 @@ def no_env_override(monkeypatch):
     monkeypatch.setattr(config, "CHAT_MODEL", None)
 
 
-@pytest.mark.parametrize(("hw", "tag"), [(M2_8GB, "qwen3.5:2b"), (MAC_16GB, "gemma4:e4b"), (PC_RTX_16GB, "gemma4:26b")])
+@pytest.mark.parametrize(("hw", "tag"), [(M2_8GB, "qwen3.5:2b"), (PC_12GB, "qwen3.5:4b"), (MAC_16GB, "gemma4:e4b"),
+                                         (PC_RTX_16GB, "gemma4:e4b")])
 def test_auto_picks_tier_model(hw, tag):
     assert selection.resolve(hw, ALL) == selection.Active(tag, "auto")
 
 
 def test_falls_back_to_largest_installed_that_fits():
-    # 16 GB Mac, Standard's gemma4:e4b not pulled: use the Standard alternate before dropping to Light.
+    # 16 GB Mac, High's gemma4:e4b not pulled: use Mid's qwen3.5:4b before dropping to Budget.
     assert selection.resolve(MAC_16GB, ["qwen3.5:2b", "qwen3.5:4b"]).tag == "qwen3.5:4b"
+
+
+def test_only_the_three_pinned_models_are_offered():
+    assert set(selection.allowed_chat_models()) == {"qwen3.5:2b", "qwen3.5:4b", "gemma4:e4b"}
+    # gemma4:26b may be installed, but Automatic never picks an unlisted model
+    assert selection.resolve(PC_RTX_16GB, ["gemma4:26b", "qwen3.5:2b"]).tag == "qwen3.5:2b"
 
 
 def test_too_big_installed_model_still_used_when_nothing_fits():

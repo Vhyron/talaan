@@ -1,5 +1,5 @@
 import type {
-  AppSettings, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
+  AppSettings, AskEvent, AskRequest, AskResponse, AuditEvent, FileEntry, Folder, FolderCreate, Grants, Health, IndexStatus, LlmCall, Outcome,
   Proposal, SystemTier, TimelineResponse, VoiceStatus,
 } from './types'
 
@@ -54,6 +54,31 @@ export const api = {
   reindex: (id: string) => send<IndexStatus>('POST', `${f(id)}/index`),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
+  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */
+  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void) => {
+    const r = await req(`${f(id)}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, ...opts }),
+    })
+    const reader = r.body!.pipeThrough(new TextDecoderStream()).getReader()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += value
+      const lines = buf.split('\n')
+      buf = lines.pop() ?? ''
+      for (const line of lines) {
+        if (!line.trim()) continue
+        const e = JSON.parse(line) as AskEvent
+        if (e.type === 'done') return e.response
+        if (e.type === 'error') throw new ApiError(503, e.message)
+        onEvent(e)
+      }
+    }
+    throw new ApiError(502, 'The answer stopped before it finished. Please ask again.')
+  },
   timeline: (id: string) => send<TimelineResponse>('POST', `${f(id)}/timeline`),
 
   grants: (id: string) => json<Grants>(`${f(id)}/grants`),

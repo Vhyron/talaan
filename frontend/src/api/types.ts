@@ -35,6 +35,12 @@ export type Source = { path: string; start: number; end: number; snippet: string
 export type Turn = { role: 'user' | 'assistant'; content: string }
 /** `path` is the file open in the viewer; the backend re-checks it against the folder. */
 export type AskRequest = { question: string; path?: string; history?: Turn[] }
+/** Lines from POST /ask/stream. `answer` is live text for display; `done` carries the final answer. */
+export type AskEvent =
+  | { type: 'status'; text: string }
+  | { type: 'answer'; text: string }
+  | { type: 'done'; response: AskResponse }
+  | { type: 'error'; message: string }
 
 /** Result of building or refreshing a folder's index. */
 export type IndexStatus = {
@@ -107,6 +113,8 @@ export type SystemTier = {
   tiers: Tier[]
   ollama_running: boolean
   active_chat_model: string | null
+  /** What "Automatic" runs here: the best installed pinned model that fits */
+  auto_chat_model: string | null
   /** env var, Settings page choice, or hardware tier detection */
   active_source: 'env' | 'user' | 'auto'
   embed_installed: boolean

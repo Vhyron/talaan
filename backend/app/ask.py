@@ -11,7 +11,7 @@ follow-up questions; it is never a source and never reaches the action call.
 
 import difflib
 import re
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Annotated
 
 from fastapi import HTTPException
@@ -283,7 +283,59 @@ def outcome_text(o: Outcome) -> str:
     return f"That was blocked: {o.reason or what}. Nothing was changed."
 
 
-def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = ()) -> AskResponse:
+Emit = Callable[[dict], None]
+
+
+class AnswerStream:
+    """Pulls the "answer" string out of the JSON the model is still writing, so the UI can show it live.
+    Display only: the final answer (citations mapped, refusals applied) replaces it when the call ends."""
+
+    KEY = re.compile(r'"answer"\s*:\s*"')
+    ESCAPES = {"n": "\n", "t": "\t", "r": "", "b": "", "f": "", '"': '"', "\\": "\\", "/": "/"}
+
+    def __init__(self, emit: Emit):
+        self.emit, self.buf, self.sent, self.closed = emit, "", 0, False
+
+    def __call__(self, kind: str, text: str) -> None:
+        if kind != "content" or self.closed:
+            return
+        self.buf += text
+        m = self.KEY.search(self.buf)
+        if not m:
+            return
+        out, i, buf = [], m.end(), self.buf
+        while i < len(buf):
+            ch = buf[i]
+            if ch == '"':
+                self.closed = True
+                break
+            if ch == "\\":
+                if i + 1 >= len(buf):
+                    break  # escape not complete yet
+                if buf[i + 1] == "u":
+                    if i + 6 > len(buf):
+                        break
+                    try:
+                        out.append(chr(int(buf[i + 2:i + 6], 16)))
+                    except ValueError:
+                        pass
+                    i += 6
+                    continue
+                out.append(self.ESCAPES.get(buf[i + 1], buf[i + 1]))
+                i += 2
+                continue
+            out.append(ch)
+            i += 1
+        decoded = "".join(out)
+        if len(decoded) > self.sent:
+            self.emit({"type": "answer", "text": decoded[self.sent:]})
+            self.sent = len(decoded)
+
+
+def ask(folder_id: str, question: str, path: str | None = None, history: Sequence[Turn] = (),
+        emit: Emit | None = None) -> AskResponse:
+    """`emit` (the streaming endpoint) gets status lines and the answer text as it generates."""
+    status = (lambda text: emit({"type": "status", "text": text})) if emit else (lambda text: None)
     folder = folders.get_folder(folder_id)
     audit.log_event(folder_id, "user", "question", reason=question)
 
@@ -304,6 +356,7 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     history = () if is_action else history
     # A follow-up ("what about her meds?") is retrieved together with the previous question.
     prev = next((t.content for t in reversed(history) if t.role == "user"), "")
+    status(f"Searching {folder.name}")
     hits = index.retrieve(folder_id, f"{prev}\n{question}" if prev else question, k=None)
     if out_of_scope(folder_id, question, hits, relevance=focus is None):
         if config.LLM_LIVE_LOG:  # the terminal otherwise shows only an embed, which looks like nothing ran
@@ -323,8 +376,12 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     if not chosen:
         chosen = pick_context(boost(hits, None if is_action else path))
     docs = context_block(chosen)
+    files = len({h.path for h in chosen})
+    status(f"Reading {len(chosen)} {'passage' if len(chosen) == 1 else 'passages'} from "
+           f"{files} {'file' if files == 1 else 'files'}")
 
     if is_action:
+        status("Drafting the change for the policy check")
         r = client.chat(
             [{"role": "system", "content": ACTION_SYSTEM.format(folder=folder.name)},
              {"role": "user", "content": f"{docs}\n\nRequest: {question}"}],
@@ -350,7 +407,7 @@ def ask(folder_id: str, question: str, path: str | None = None, history: Sequenc
     r = client.chat(
         [{"role": "system", "content": SYSTEM.format(folder=folder.name)},
          {"role": "user", "content": f"{history_block(history)}{docs}\n\n{looking}Question: {question}\n\n{reminder}"}],
-        schema=Answer)
+        schema=Answer, on_delta=AnswerStream(emit) if emit else None)
     if r.data is None:
         return reply(AskResponse(answer="The model did not return a usable answer. Please ask again."), r.model)
     try:

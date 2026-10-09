@@ -260,6 +260,7 @@ class SystemTier(BaseModel):
     tiers: list[Tier]
     ollama_running: bool = False
     active_chat_model: str | None = None
+    auto_chat_model: str | None = None  # what "Automatic" runs on this machine with what's installed
     active_source: Literal["env", "user", "auto"] = "auto"  # env var, Setup page choice, or tier detection
     embed_installed: bool = False
     models: list[ModelOption] = []

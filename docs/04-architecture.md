@@ -96,6 +96,7 @@ talaan/
 | POST | `/folders/{id}/import` | Add .md, .txt or .pdf files |
 | POST | `/folders/{id}/index` | Build or refresh the index |
 | POST | `/folders/{id}/ask` | Question → answer with sources, or proposed action |
+| POST | `/folders/{id}/ask/stream` | Same as `/ask`, streamed as NDJSON: `status`, `answer` (live text, display only), then `done` (the final answer) or `error`. Thinking mode is never used |
 | POST | `/folders/{id}/timeline` | Timeline with sources |
 | GET / PUT | `/folders/{id}/grants` | Read or change permissions |
 | GET | `/folders/{id}/proposals` | Pending actions awaiting approval, with diffs |

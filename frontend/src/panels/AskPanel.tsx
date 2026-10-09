@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ban, ClipboardCheck, Eye, Lock, SendHorizontal } from 'lucide-react'
+import { Ban, ClipboardCheck, Eye, Loader2, Lock, SendHorizontal } from 'lucide-react'
 import { api } from '../api/client'
 import type { AskResponse, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
@@ -7,7 +7,16 @@ import { useElapsed } from '../lib/useElapsed'
 import { useFolder } from '../lib/folderContext'
 import { useIndexStatus, type IndexState } from '../lib/useIndexStatus'
 
-type Msg = { role: 'user'; text: string } | { role: 'assistant'; res: AskResponse } | { role: 'error'; text: string }
+type Msg =
+  | { role: 'user'; text: string }
+  | { role: 'assistant'; res: AskResponse }
+  | { role: 'error'; text: string }
+
+/** What the model is doing right now, shown while the answer streams in. */
+type Live = { status: string; answer: string }
+
+/** Live text is shown before citations are mapped, so hide the raw [S3] markers until the final answer. */
+const withoutMarkers = (text: string) => text.replace(/\s*\[S[\d,;\sS]*\]?/g, '')
 
 /** Turns sent back with the next question, so follow-ups ("what about her meds?") make sense. */
 const HISTORY_TURNS = 4
@@ -38,12 +47,13 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
   const [messages, setMessages] = useState<Msg[]>([])
   const [question, setQuestion] = useState('')
   const [busy, setBusy] = useState(false)
+  const [live, setLive] = useState<Live | null>(null)
   const elapsed = useElapsed(busy)
   const end = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
-  }, [messages, busy])
+  }, [messages, busy, live?.answer])
 
   async function send() {
     const q = question.trim()
@@ -52,14 +62,23 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     setQuestion('')
     setMessages((m) => [...m, { role: 'user', text: q }])
     setBusy(true)
+    setLive({ status: 'Starting', answer: '' })
     try {
-      const res = await api.ask(folder.id, q, { path: currentPath, history })
+      const res = await api.askStream(folder.id, q, { path: currentPath, history }, (e) => {
+        setLive((l) => {
+          if (!l) return l
+          if (e.type === 'status') return { ...l, status: e.text }
+          if (e.type === 'answer') return { ...l, answer: l.answer + e.text }
+          return l
+        })
+      })
       setMessages((m) => [...m, { role: 'assistant', res }])
       if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
     } catch (e) {
       setMessages((m) => [...m, { role: 'error', text: (e as Error).message }])
     } finally {
       setBusy(false)
+      setLive(null)
     }
   }
 
@@ -91,11 +110,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           }
           return <Answer key={i} res={m.res} onShowApprovals={onShowApprovals} />
         })}
-        {busy && (
-          <div className="rounded-xl bg-white px-3 py-2 text-muted">
-            Reading this {folder.mode} on this laptop… {elapsed}s
-          </div>
-        )}
+        {busy && live && <LiveAnswer live={live} elapsed={elapsed} />}
         <div ref={end} />
       </div>
 
@@ -148,6 +163,19 @@ function IndexPill({ index, onRetry }: { index: IndexState; onRetry: () => void 
     <span className={`${base} bg-brand-soft text-brand-text`}>
       Indexed · {files} {files === 1 ? 'file' : 'files'}
     </span>
+  )
+}
+
+function LiveAnswer({ live, elapsed }: { live: Live; elapsed: number }) {
+  const answer = withoutMarkers(live.answer)
+  const status = answer ? 'Writing the answer' : live.status
+  return (
+    <div className="space-y-2 rounded-xl bg-white px-3 py-2" aria-live="polite">
+      <p className="flex items-center gap-1.5 text-xs text-muted">
+        <Loader2 size={12} className="animate-spin" /> {status}… {elapsed}s
+      </p>
+      {answer && <p className="leading-6">{answer}<span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-text-bottom" /></p>}
+    </div>
   )
 }
 

@@ -60,7 +60,12 @@ def resolve(hw: hw_tier.Hardware, installed: list[str]) -> Active:
     saved = _saved_choice()
     if saved in allowed and saved in installed:
         return Active(saved, "user")
+    return auto_pick(hw, installed)
 
+
+def auto_pick(hw: hw_tier.Hardware, installed: list[str]) -> Active:
+    """"Automatic": the best of the pinned models that is installed and fits this machine."""
+    allowed = allowed_chat_models()
     rec = TIER_BY_ID[hw_tier.recommended(hw)].chat_model
     if rec in installed:
         return Active(rec, "auto")
@@ -99,6 +104,7 @@ def system_tier() -> SystemTier:
         ],
         ollama_running=bool(installed),
         active_chat_model=active.tag,
+        auto_chat_model=auto_pick(hw, installed).tag,
         active_source=active.source,
         embed_installed=EMBED_MODEL in installed,
         models=[
