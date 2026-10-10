@@ -1,6 +1,6 @@
 """Put Talaan into a known, demo-ready state.
 
-    uv run scripts/seed_demo.py --reset     # restore the 3 demo Spaces, clear their
+    uv run scripts/seed_demo.py --reset     # restore the 4 demo Spaces, clear their
                                             # grants, proposals, audit and chat history
     uv run scripts/seed_demo.py --fresh --yes
                                             # wipe TALAAN_HOME entirely, then seed
@@ -25,7 +25,7 @@ from app.policy.grants import init_grants  # noqa: E402
 
 DEMO_DATA = Path(__file__).resolve().parents[2] / "demo-data"
 # Demo folders from before Spaces (one sealed folder per case or chart). --reset removes them.
-NAMES = {"Lakbay-Logistics-Inc": "Lakbay Logistics Inc.", "Bayani-Retail-Corp": "Bayani Retail Corp."}
+NAMES = {"Lakbay-Logistics-Inc": "Lakbay Logistics Inc.", "Bayani-Retail-Corp": "Bayani Retail Corp.", "Talaan-Hackathon-Team": "Talaan Hackathon Team"}
 LEGACY = ("Case-2026-014_Dela-Cruz", "Case-2026-019_Villanueva", "Chart_A-Bautista", "Chart_M-Reyes")
 # Only these may exist in TALAAN_HOME before a full wipe. Anything else means the
 # path is probably wrong (e.g. TALAAN_HOME pointed at a real directory).

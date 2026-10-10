@@ -1,13 +1,13 @@
 # "Built with Talaan" demo
 
-A demo where Talaan is our own team's note taker. The Space `Talaan Hackathon Team/` holds our project brief, requirements, schedule, ticket board and an earlier meeting. In the demo we add the notes of our final Discord call as a voice note, then ask Talaan what's left.
+A demo where Talaan is our own team's note taker. The Space [`demo-data/Talaan-Hackathon-Team/`](../demo-data/Talaan-Hackathon-Team/README.md) holds our project brief, requirements, schedule, ticket board and an earlier meeting. It's seeded with the other demo Spaces (setup step 6, or `seed_demo.py --reset`). In the demo we add the notes of our final Discord call as a voice note, then ask Talaan what's left.
 
-This folder is outside `demo-data/` on purpose: `seed_demo.py` doesn't load it, so importing it live is part of the demo. All content is our own project info, nothing sensitive.
+This folder holds only the script and a backup transcript, so the model never reads them.
 
 ## Setup (before recording)
 
 1. Run the app as in [docs/09-runbook.md](../docs/09-runbook.md). Voice notes model downloaded (Settings).
-2. Do a dry run: **Import folder** → pick `demo-import/Talaan Hackathon Team` → mode Case. Ask the two questions below once so the models are warm. Then move the Space to the Trash so the recording starts clean.
+2. Do a dry run: open the Space, ask the questions below once so the models are warm. Then `cd backend; uv run scripts/seed_demo.py --reset` so the recording starts clean (removes the dry-run voice note, chats and audit rows).
 3. Record the Discord call (lines below) as an audio file, or have the team ready to say them live while Talaan records laptop audio + mic.
 4. Wi-Fi off.
 
@@ -30,7 +30,7 @@ If transcription fails on the day, drag `backup/2026-10-10_discord-final-sync.md
 | Time | On screen | Say |
 |---|---|---|
 | 0:00–0:07 | Talaan home, Wi-Fi icon off | "We built Talaan, and we ran our whole hackathon on it. Wi-Fi is off. Everything you'll see runs on this laptop." |
-| 0:07–0:17 | **Import folder** → `Talaan Hackathon Team` → Space opens: project, tickets, meetings | "Here are our notes: the brief, the requirements, the schedule and our ticket board, imported as one sealed Space." |
+| 0:07–0:17 | Open `Talaan Hackathon Team` → project, tickets, meetings | "Here are our notes: the brief, the requirements, the schedule and our ticket board, in one sealed Space." |
 | 0:17–0:22 | Permission panel | "Talaan can read them. Anything it writes needs our approval. It can never delete." |
 | 0:22–0:37 | Voice note → record laptop audio (Discord call plays) → stop → transcript preview → **Approve** | "We just finished our last Discord call. Talaan transcribed it locally with Whisper, and it only saves the notes after we approve." |
 | 0:37–0:52 | Ask: **"Based on today's call, what's left for the team?"** Answer with sources | "All requirements are done. What's left: submit before 10, then registration at Cyberzone SM Makati at noon. Every line cites its file." |
