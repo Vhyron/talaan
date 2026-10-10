@@ -62,7 +62,7 @@ Get-ChildItem demo-data -Directory | Copy-Item -Recurse -Destination "$HOME\Tala
 mkdir -p ~/Talaan/folders && cp -r demo-data/*/ ~/Talaan/folders/
 ```
 
-You should see three Spaces: `Lakbay-Logistics-Inc`, `Bayani-Retail-Corp` and `Santos-Family-Clinic`. `seed_demo.py --reset` also removes the four pre-Spaces demo folders (`Case-2026-014_Dela-Cruz` and so on) if they are still there.
+You should see four Spaces: `Lakbay-Logistics-Inc`, `Bayani-Retail-Corp`, `Santos-Family-Clinic` and `Talaan-Hackathon-Team`. `seed_demo.py --reset` also removes the four pre-Spaces demo folders (`Case-2026-014_Dela-Cruz` and so on) if they are still there.
 
 To keep data somewhere else, set `TALAAN_HOME` before starting the backend (e.g. `$env:TALAAN_HOME = "D:\talaan-data"`). The app creates `folders\` and `app.db` there.
 

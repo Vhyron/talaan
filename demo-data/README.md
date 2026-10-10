@@ -14,6 +14,7 @@ A **Space** is one sealed top-level folder (its own `index.db`, grants and audit
 | `Santos-Family-Clinic/Chart M Reyes` | Clinic cameo: medication history, allergy, referral |
 | `Santos-Family-Clinic/Chart A Bautista` | Scope test: same clinic Space, outside the Reyes chart's scope (Q9) |
 | `Santos-Family-Clinic/protocols` | Clinic prescribing checklist (Space-level file) |
+| `Talaan-Hackathon-Team` | "Built with Talaan" demo: our own project notes. Script and Discord call lines in [demo-import/README.md](../demo-import/README.md) |
 
 Two layers of isolation show in the demo: **Spaces are hard-sealed** (Q4: Villanueva is in a different Space's index), and **a subfolder chat is scoped** (Q9: Bautista is in the same Space, but the Reyes chat's retrieval and name check only see `Chart M Reyes/` and the README).
 

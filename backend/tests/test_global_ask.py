@@ -30,7 +30,7 @@ def test_new_spaces_are_in_the_home_chat_by_default():
 
 
 def test_spaces_left_out_of_the_home_chat_are_not_searched(model):
-    for fid in (CASE, CHART, VILLA):
+    for fid in (CASE, CHART, VILLA, "Talaan-Hackathon-Team"):
         set_grants(fid, Grants(home_chat=False))
     r = ask("Which clients have a penicillin allergy?")
     assert r["refused"] and r["answer"] == global_ask.NO_SPACES and model.calls == []

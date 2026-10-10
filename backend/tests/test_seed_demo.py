@@ -20,7 +20,7 @@ F = "Lakbay-Logistics-Inc"
 D = "Case 2026-014 Dela Cruz"
 SANTOS = f"{D}/2026-09-13_interview_R-Santos.md"
 ITEMS = f"{D}/2026-10-02_open-items.md"
-SPACES = ["Bayani-Retail-Corp", "Lakbay-Logistics-Inc", "Santos-Family-Clinic"]
+SPACES = ["Bayani-Retail-Corp", "Lakbay-Logistics-Inc", "Santos-Family-Clinic", "Talaan-Hackathon-Team"]
 
 
 def run(*args):

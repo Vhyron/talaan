@@ -11,7 +11,7 @@ c = TestClient(app)
 F = "Lakbay-Logistics-Inc"
 D = "Case 2026-014 Dela Cruz"
 ITEMS = f"{D}/2026-10-02_open-items.md"
-SPACES = {"Lakbay-Logistics-Inc", "Bayani-Retail-Corp", "Santos-Family-Clinic"}
+SPACES = {"Lakbay-Logistics-Inc", "Bayani-Retail-Corp", "Santos-Family-Clinic", "Talaan-Hackathon-Team"}
 
 
 def test_lists_demo_folders():
