@@ -11,7 +11,7 @@ def get_grants(folder_id: str) -> Grants:
     with connect() as db:
         row = db.execute("SELECT * FROM grants WHERE folder_id = ?", (folder_id,)).fetchone()
     if row is None:
-        return Grants()  # defaults: read allow, suggest/create need approval, delete never
+        return Grants()  # defaults: read allow, suggest/create need approval, delete never, in home chat
     g = Grants(**{k: row[k] for k in FIELDS}, home_chat=bool(row["home_chat"]))
     if g.read == Grant.NEEDS_APPROVAL:  # Read is Allow or Never; fail closed on an older stored value
         g.read = Grant.NEVER
@@ -51,6 +51,7 @@ def init_grants(folder_id: str) -> None:
     """Store the defaults explicitly when a folder is created."""
     with connect() as db:
         db.execute(
-            'INSERT OR IGNORE INTO grants (folder_id, read, suggest_edits, create_drafts, "delete") VALUES (?, ?, ?, ?, ?)',
-            (folder_id, *(getattr(Grants(), k).value for k in FIELDS)),
+            'INSERT OR IGNORE INTO grants (folder_id, read, suggest_edits, create_drafts, "delete", home_chat)'
+            ' VALUES (?, ?, ?, ?, ?, ?)',
+            (folder_id, *(getattr(Grants(), k).value for k in FIELDS), int(Grants().home_chat)),
         )

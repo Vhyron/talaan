@@ -103,9 +103,9 @@ class Grants(BaseModel):
     suggest_edits: Grant = Grant.NEEDS_APPROVAL
     create_drafts: Grant = Grant.NEEDS_APPROVAL
     delete: Grant = Grant.NEVER
-    # Whether the home-page chat (the one cross-Space reader) may search this Space. Off until the
-    # user turns it on, so a Space is sealed by default even from the home chat.
-    home_chat: bool = False
+    # Whether the home-page chat (the one cross-Space reader, read only) may search this Space.
+    # On for new Spaces; the user can turn it off to seal a Space even from the home chat.
+    home_chat: bool = True
 
 
 # --- Policy outcome --------------------------------------------------------
@@ -164,6 +164,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[Source] = []
     refused: bool = False
+    detail: str | None = None  # why a refusal happened, for the user; `answer` stays "I can only see X."
     outcome: Outcome | None = None
     proposal_id: str | None = None
     session_id: str | None = None  # the saved chat this turn belongs to

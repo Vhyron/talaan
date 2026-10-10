@@ -276,18 +276,30 @@ def ask(folder_id: str, body: AskRequest, tasks: BackgroundTasks) -> AskResponse
     return res
 
 
+class _Stopped(Exception):
+    """Raised in the ask thread once the streaming client has disconnected."""
+
+
 @app.post("/folders/{folder_id}/ask/stream")
 def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
     """Same as /ask, as NDJSON lines while it works: `status` and `answer` (live text, display only),
     then `done` with the final AskResponse, or `error`."""
     _folder(folder_id)
     events: queue.Queue[dict | None] = queue.Queue()
+    stopped = threading.Event()  # the client went away (Stop pressed): stop generating at the next token
+
+    def emit(event: dict) -> None:
+        if stopped.is_set():
+            raise _Stopped
+        events.put(event)
 
     def work() -> None:
         try:
-            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=events.put,
+            res = ask_mod.ask(folder_id, body.question, body.path, body.history, body.session_id, emit=emit,
                               scope=body.scope)
             events.put({"type": "done", "response": res.model_dump(mode="json")})
+        except _Stopped:
+            return
         except OllamaError as e:
             events.put({"type": "error", "message": str(e)})
         except Exception:
@@ -306,8 +318,11 @@ def ask_stream(folder_id: str, body: AskRequest) -> StreamingResponse:
     threading.Thread(target=work, daemon=True, name="ask-stream").start()
 
     def lines():
-        while (event := events.get()) is not None:
-            yield json.dumps(event) + "\n"
+        try:
+            while (event := events.get()) is not None:
+                yield json.dumps(event) + "\n"
+        finally:
+            stopped.set()
 
     return StreamingResponse(lines(), media_type="application/x-ndjson")
 
@@ -402,19 +417,12 @@ def audit_export(folder_id: str, format: Literal["json", "csv"] = "json") -> Res
 # --- Voice (D1) and system (D7) ------------------------------------------------
 
 
-@app.post("/folders/{folder_id}/transcribe")
-async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
-    """Audio -> local transcript -> create_draft through the policy engine.
-
-    The transcript is never written directly: with the default grants it becomes a
-    proposal the user approves, and with Create drafts set to Never it is blocked.
-    """
-    root = folders.folder_root(folder_id)
+async def _transcribe_upload(folder_id: str | None, audio: UploadFile, extra_hotwords: str = "") -> "voice.Transcript":
+    """Transcribe an upload on this laptop. Names from `folder_id`'s own files (if given) help spelling."""
     suffix = Path(audio.filename or "").suffix.lower()
     if suffix not in voice.AUDIO_TYPES:
         raise HTTPException(415, f"Audio must be one of: {', '.join(sorted(voice.AUDIO_TYPES))}")
 
-    recorded = datetime.now()
     # The upload is staged outside every client folder and deleted right after.
     with tempfile.TemporaryDirectory(prefix="talaan-audio-") as tmp:
         staged = Path(tmp) / f"audio{suffix}"
@@ -423,9 +431,10 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
             folders.file_path(folder_id, f.path).read_text(encoding="utf-8", errors="replace")
             for f in folders.list_files(folder_id)
             if f.path.endswith((".md", ".txt"))
-        ]
+        ] if folder_id else []
         try:
-            transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, voice.folder_vocabulary(texts))
+            hotwords = ", ".join(h for h in (extra_hotwords, voice.folder_vocabulary(texts)) if h)
+            transcript = await run_in_threadpool(voice.whisper.transcribe_file, staged, hotwords)
         except voice.whisper.TooShort as e:
             raise HTTPException(422, str(e))
         except Exception as e:  # undecodable audio, missing model, ...
@@ -433,14 +442,44 @@ async def transcribe(folder_id: str, audio: UploadFile) -> Outcome:
 
     if not transcript.text:
         raise HTTPException(422, "No speech detected in the recording")
+    return transcript
+
+
+@app.post("/folders/{folder_id}/transcribe")
+async def transcribe(folder_id: str, audio: UploadFile, dir: str = Form("")) -> Outcome:
+    """Audio -> local transcript -> create_draft through the policy engine.
+
+    `dir` is the subfolder that was open when recording ("" = the Space's top level);
+    the draft is proposed there. The transcript is never written directly: with the
+    default grants it becomes a proposal the user approves, and with Create drafts set
+    to Never it is blocked.
+    """
+    root = folders.folder_root(folder_id)
+    subdir = folders.scope_dir(folder_id, dir) or ""  # same sealing checks as every path
+    recorded = datetime.now()
+    transcript = await _transcribe_upload(folder_id, audio)
 
     action = CreateDraftAction(
         action="create_draft",
-        path=voice.draft_name(root, recorded),
+        path=voice.draft_name(root, recorded, subdir),
         content=voice.to_markdown(transcript, recorded),
         reason=f"Voice note ({transcript.duration:.0f}s) transcribed on this laptop",
     )
     return engine.handle(folder_id, action, model_tag=transcript.model)
+
+
+@app.post("/voice/dictate")
+async def dictate(audio: UploadFile, folder_id: str | None = Form(None), wake: bool = Form(False)) -> dict[str, str]:
+    """Hold-to-talk and the "Hey Tala" wake phrase: audio -> text, on this laptop.
+
+    Nothing is saved, proposed or logged here; the text only goes anywhere if it becomes a
+    question, which is audited then. With `folder_id`, names from that Space's own files
+    help spelling (never another Space's). `wake` also biases Whisper toward "Tala".
+    """
+    if folder_id:
+        folders.folder_root(folder_id)  # 404 for an unknown Space
+    extra = "Hey Tala, Tala Tala" if wake else ""
+    return {"text": (await _transcribe_upload(folder_id, audio, extra)).text}
 
 
 @app.get("/system/voice")

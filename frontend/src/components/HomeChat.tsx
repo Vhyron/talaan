@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowDown, Clock, Library, MessageSquare, Minimize2, RotateCcw, SendHorizontal, WifiOff } from 'lucide-react'
 import type { Folder, Source } from '../api/types'
@@ -8,6 +8,8 @@ import ChatHistory from '../panels/ChatHistory'
 import { fileLabel } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import Mascot from './Mascot'
+import ChatMarkdown from './ChatMarkdown'
+import HoldToTalk from './HoldToTalk'
 import { usePersistentFlag } from '../lib/usePersistentFlag'
 
 /** A citation from the home chat: names its folder and opens the file there with the lines highlighted. */
@@ -28,12 +30,11 @@ function GlobalSourceChip({ source, n, folders }: { source: Source; n: number; f
   )
 }
 
-function withChips(answer: string, sources: Source[], folders: Folder[]): ReactNode[] {
-  return answer.split(/(\[S\d+\])/g).map((part, i) => {
-    const m = part.match(/^\[S(\d+)\]$/)
-    const src = m && sources[Number(m[1]) - 1]
-    return src ? <GlobalSourceChip key={i} source={src} n={Number(m[1])} folders={folders} /> : part
-  })
+function chipFor(sources: Source[], folders: Folder[]) {
+  return (n: number) => {
+    const src = sources[n - 1]
+    return src && <GlobalSourceChip source={src} n={n} folders={folders} />
+  }
 }
 
 function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
@@ -45,8 +46,9 @@ function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
 }) {
   const [question, setQuestion] = useState('')
   const input = useRef<HTMLTextAreaElement>(null)
-  const send = () => {
-    const q = question.trim()
+  // `spoken`: a voice question, added to anything already typed.
+  const send = (spoken?: string) => {
+    const q = (spoken ? `${question.trimEnd()} ${spoken}` : question).trim()
     if (!q || busy) return
     setQuestion('')
     onAsk(q)
@@ -64,7 +66,8 @@ function QuestionBox({ busy, rows, placeholder, className = '', onAsk }: {
         placeholder={placeholder}
         className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-1.5 text-sm outline-none"
       />
-      <button onClick={send} disabled={busy || !question.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+      <HoldToTalk onSend={(t) => (busy ? setQuestion((q) => `${q.trimEnd()} ${t}`.trim()) : send(t))} />
+      <button onClick={() => send()} disabled={busy || !question.trim()} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
         <SendHorizontal size={16} />
       </button>
     </div>
@@ -152,7 +155,7 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
         <div className="mr-auto min-w-0">
           <h2 className="flex items-center gap-2 font-bold"><Library size={17} className="text-brand-text" /> Ask across all Spaces</h2>
           <p className={`mt-0.5 text-xs text-muted ${expanded ? 'hidden sm:block' : ''}`}>
-            Reads only the Spaces you include (Permissions › Include in home chat; off by default). Each answer names the Space it came from.
+            Reads only the Spaces you include (Permissions › Include in home chat; on for new Spaces). Each answer names the Space it came from.
           </p>
         </div>
         <span className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap text-brand-text">
@@ -200,12 +203,12 @@ export default function HomeChat({ folders }: { folders: Folder[] }) {
           <div ref={list} className="-mx-1 min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-3 text-sm" aria-live="polite">
             {messages.map((m, i) =>
               m.role === 'user' ? (
-                <div key={i} className="chat-in ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 break-words text-white">{m.text}</div>
+                <div key={i} className="chat-in ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 leading-6 break-words whitespace-pre-wrap text-white">{m.text}</div>
               ) : m.role === 'error' ? (
-                <div key={i} className="chat-in rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 text-warn-text">{m.text}</div>
+                <div key={i} className="chat-in rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 break-words whitespace-pre-wrap text-warn-text">{m.text}</div>
               ) : (
-                <div key={i} className={`chat-in rounded-xl bg-white px-3 py-2 leading-6 break-words ${m.res.refused ? 'text-muted' : ''}`}>
-                  {withChips(m.res.answer, m.res.sources, folders)}
+                <div key={i} className={`chat-in rounded-xl bg-white px-3 py-2 ${m.res.refused ? 'text-muted' : ''}`}>
+                  <ChatMarkdown text={m.res.answer} cite={chipFor(m.res.sources, folders)} />
                 </div>
               ),
             )}

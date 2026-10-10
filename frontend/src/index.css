@@ -36,6 +36,30 @@ body { @apply bg-white text-ink font-sans antialiased; }
 .prose-talaan th, .prose-talaan td { @apply border border-line px-2 py-1 text-left; }
 .prose-talaan code { @apply rounded bg-panel px-1 font-mono text-[13px]; }
 
+/* Chat answers rendered from Markdown: compact, so short answers still read like chat */
+.chat-md { @apply leading-6 break-words; }
+.chat-md > * + * { @apply mt-2; }
+.chat-md h1, .chat-md h2, .chat-md h3, .chat-md h4 { @apply font-bold; }
+.chat-md h1, .chat-md h2 { @apply text-base; }
+.chat-md ul { @apply list-disc space-y-0.5 pl-5; }
+.chat-md ol { @apply list-decimal space-y-0.5 pl-5; }
+.chat-md li > ul, .chat-md li > ol { @apply mt-0.5; }
+.chat-md li > p + p { @apply mt-1; }
+.chat-md a { @apply text-brand-text underline; }
+.chat-md blockquote { @apply border-l-2 border-line pl-3 text-muted; }
+.chat-md code { @apply rounded bg-panel px-1 font-mono text-[12px]; }
+.chat-md pre { @apply overflow-x-auto rounded-lg bg-panel p-2; }
+.chat-md pre code { @apply bg-transparent p-0; }
+.chat-md table { @apply block max-w-full overflow-x-auto text-xs; }
+.chat-md th, .chat-md td { @apply border border-line px-2 py-1 text-left align-top; }
+.chat-md th { @apply bg-panel font-semibold; }
+.chat-md hr { @apply border-line; }
+/* Typing cursor after the last word while an answer streams in */
+.chat-md.typing > :is(p, h1, h2, h3, h4, blockquote):last-child::after,
+.chat-md.typing > :is(ul, ol):last-child > li:last-child::after {
+  content: ""; @apply ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-text-bottom;
+}
+
 /* Lines cited by a source chip */
 .source-hit { @apply -mx-2 rounded bg-warn-soft px-2 outline-2 outline-amber-300; }
 

@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, SquarePen } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Ban, Check, ClipboardCheck, Clock, Eye, Loader2, Lock, MessageSquare, SendHorizontal, Square, SquarePen } from 'lucide-react'
 import { api } from '../api/client'
 import type { AskResponse, ChatSession, ChatSessionSummary, ProposalStatus, Source, Turn } from '../api/types'
 import SourceChip from '../components/SourceChip'
+import ChatMarkdown from '../components/ChatMarkdown'
 import Mascot from '../components/Mascot'
+import HoldToTalk from '../components/HoldToTalk'
 import { ago } from '../lib/format'
 import { useElapsed } from '../lib/useElapsed'
 import { chatScope, useFolder } from '../lib/folderContext'
@@ -15,6 +17,8 @@ type Msg =
   | { role: 'user'; text: string }
   | { role: 'assistant'; res: AskResponse; proposalStatus?: ProposalStatus | null }
   | { role: 'error'; text: string }
+  /** You pressed Stop: whatever was written so far, not saved or sent back as history. */
+  | { role: 'stopped'; text: string }
 
 /** What the model is doing right now, shown while the answer streams in. */
 type Live = { status: string; answer: string }
@@ -30,6 +34,8 @@ const EMPTY: Chat = { sessionId: null, messages: [], busy: false }
 // so switching away and coming back shows it again (like tabsByFolder in FolderPage). An answer
 // that arrives after you moved to another scope lands in the chat it was asked in.
 const chatByFolder = new Map<string, Chat>()
+/** The question still being answered per chat, so Stop can cancel it. */
+const runningByChat = new Map<string, AbortController>()
 
 function useFolderChat(key: string) {
   const [, rerender] = useState(0)
@@ -82,20 +88,24 @@ function historyOf(messages: Msg[]): Turn[] {
   return turns.slice(-HISTORY_TURNS)
 }
 
-/** Turn "… [S1] … [S2]" into text with inline source chips. */
-function withChips(answer: string, sources: Source[]): ReactNode[] {
-  return answer.split(/(\[S\d+\])/g).map((part, i) => {
-    const m = part.match(/^\[S(\d+)\]$/)
-    const src = m && sources[Number(m[1]) - 1]
-    return src ? <SourceChip key={i} source={src} n={Number(m[1])} /> : part
-  })
+/** "[S1]" in an answer becomes a clickable source chip. */
+function chipFor(sources: Source[]) {
+  return (n: number) => {
+    const src = sources[n - 1]
+    return src && <SourceChip source={src} n={n} />
+  }
 }
 
-export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => void }) {
+export default function AskPanel({ onShowApprovals, onShow }: {
+  onShowApprovals: () => void
+  /** Open the Ask card: a voice question can arrive while it's closed. */
+  onShow?: () => void
+}) {
   const { folder, currentPath, dir, openDir, version, bump } = useFolder()
   const index = useIndexStatus()
   const scope = chatScope(currentPath, dir)
-  const [chat, update, put] = useFolderChat(`${folder.id}::${scope.key}`)
+  const chatKey = `${folder.id}::${scope.key}`
+  const [chat, update, put] = useFolderChat(chatKey)
   const { messages, busy, sessionId } = chat
   const [question, setQuestion] = useState('')
   const [view, setView] = useState<'chat' | 'history'>('chat')
@@ -103,6 +113,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
   const elapsed = useElapsed(busy)
   const end = useRef<HTMLDivElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
@@ -147,12 +158,15 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
     }).catch(() => {})
   }, [folder.id, sessionId, waiting, version, update])
 
-  async function send() {
-    const q = question.trim()
+  // `spoken`: a voice question, added to anything already typed.
+  async function send(spoken?: string) {
+    const q = (spoken ? `${question.trimEnd()} ${spoken}` : question).trim()
     if (!q || busy || index.state === 'indexing') return
     const history = historyOf(messages)
     setQuestion('')
     update((c) => ({ ...c, busy: true, live: { status: 'Starting', answer: '' }, messages: [...c.messages, { role: 'user', text: q }] }))
+    const ctrl = new AbortController()
+    runningByChat.set(chatKey, ctrl)
     try {
       const res = await api.askStream(folder.id, q, { path: currentPath, scope: dir || null, history, session_id: sessionId }, (e) => {
         update((c) => {
@@ -161,12 +175,22 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           if (e.type === 'answer') return { ...c, live: { ...c.live, answer: c.live.answer + e.text } }
           return c
         })
-      })
+      }, ctrl.signal)
       update((c) => ({ sessionId: res.session_id ?? c.sessionId, busy: false, messages: [...c.messages, { role: 'assistant', res }] }))
       if (res.outcome) bump() // a proposal or blocked action changes Approvals/Audit
     } catch (e) {
-      update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
+      if (ctrl.signal.aborted) {
+        update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'stopped', text: withoutMarkers(c.live?.answer ?? '') }] }))
+      } else {
+        update((c) => ({ ...c, busy: false, live: undefined, messages: [...c.messages, { role: 'error', text: (e as Error).message }] }))
+      }
+    } finally {
+      if (runningByChat.get(chatKey) === ctrl) runningByChat.delete(chatKey)
     }
+  }
+
+  function stop() {
+    runningByChat.get(chatKey)?.abort()
   }
 
   function newChat() {
@@ -219,7 +243,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
           folderId={folder.id}
           emptyText={`No saved chats in this ${folder.mode} yet. Every question you ask is saved here.`}
           activeId={sessionId}
-          activeCount={messages.filter((m) => m.role !== 'error').length}
+          activeCount={messages.filter((m) => m.role !== 'error' && m.role !== 'stopped').length}
           onOpen={resume}
           onDeleted={(sid) => {
             if (sid === sessionId) update(() => EMPTY)
@@ -256,10 +280,18 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             )}
             {messages.map((m, i) => {
               if (m.role === 'user') {
-                return <div key={i} className="ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 text-white">{m.text}</div>
+                return <div key={i} className="ml-8 rounded-xl rounded-tr-sm bg-brand-dark px-3 py-2 leading-6 break-words whitespace-pre-wrap text-white">{m.text}</div>
+              }
+              if (m.role === 'stopped') {
+                return (
+                  <div key={i} className="space-y-1 rounded-xl bg-white px-3 py-2">
+                    {m.text && <ChatMarkdown text={m.text} />}
+                    <p className="flex items-center gap-1.5 text-xs text-muted"><Square size={11} /> Stopped</p>
+                  </div>
+                )
               }
               if (m.role === 'error') {
-                return <div key={i} className="rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 text-warn-text">{m.text}</div>
+                return <div key={i} className="rounded-xl border border-warn-text/30 bg-warn-soft px-3 py-2 break-words whitespace-pre-wrap text-warn-text">{m.text}</div>
               }
               return <Answer key={i} res={m.res} proposalStatus={m.proposalStatus} onShowApprovals={onShowApprovals} />
             })}
@@ -273,6 +305,7 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
             </p>
             <div className="flex items-end gap-2 rounded-xl border border-line bg-white p-2 focus-within:border-brand">
               <textarea
+                ref={input}
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
@@ -281,9 +314,23 @@ export default function AskPanel({ onShowApprovals }: { onShowApprovals: () => v
                 className="flex-1 resize-none bg-transparent outline-none"
                 placeholder={currentPath ? 'e.g. Summarize this note' : 'e.g. Summarize this · What is still open?'}
               />
-              <button onClick={send} disabled={busy || !question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
-                <SendHorizontal size={16} />
-              </button>
+              <HoldToTalk
+                folderId={folder.id}
+                onSend={(t) => {
+                  onShow?.() // "Hey Tala" may be heard while the Ask card is closed
+                  if (busy || index.state === 'indexing') setQuestion((q) => `${q.trimEnd()} ${t}`.trim()) // ask when ready
+                  else void send(t)
+                }}
+              />
+              {busy ? (
+                <button onClick={stop} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand-dark text-white" aria-label="Stop" title="Stop">
+                  <Square size={14} fill="currentColor" />
+                </button>
+              ) : (
+                <button onClick={() => void send()} disabled={!question.trim() || index.state === 'indexing'} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-brand text-white disabled:opacity-40" aria-label="Send">
+                  <SendHorizontal size={16} />
+                </button>
+              )}
             </div>
           </div>
         </>
@@ -299,7 +346,7 @@ function LiveAnswer({ live, elapsed }: { live: Live; elapsed: number }) {
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <Loader2 size={12} className="animate-spin" /> {answer ? 'Writing the answer' : live.status}… {elapsed}s
       </p>
-      {answer && <p className="leading-6">{answer}<span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-brand align-text-bottom" /></p>}
+      {answer && <ChatMarkdown text={answer} typing />}
     </div>
   )
 }
@@ -346,7 +393,10 @@ function Answer({ res, proposalStatus, onShowApprovals }: {
     return (
       <div className="flex gap-2 rounded-xl border border-line bg-white px-3 py-2 text-muted">
         <Lock size={15} className="mt-0.5 shrink-0" />
-        <span className="font-medium">{res.answer}</span>
+        <div>
+          <p className="font-medium whitespace-pre-wrap">{res.answer}</p>
+          {res.detail && <p className="mt-1 text-xs leading-5">{res.detail}</p>}
+        </div>
       </div>
     )
   }
@@ -354,7 +404,7 @@ function Answer({ res, proposalStatus, onShowApprovals }: {
   const decided = o?.status === 'pending' && proposalStatus ? DECIDED[proposalStatus] : undefined
   return (
     <div className="space-y-2 rounded-xl bg-white px-3 py-2">
-      <p className="leading-6">{withChips(res.answer, res.sources)}</p>
+      <ChatMarkdown text={res.answer} cite={chipFor(res.sources)} />
 
       {o?.status === 'blocked' && (
         <div className="flex gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-800">

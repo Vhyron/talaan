@@ -72,10 +72,11 @@ export const api = {
   homeChat: () => json<ChatSession | null>('/chat'),
   ask: (id: string, question: string, opts: Omit<AskRequest, 'question'> = {}) =>
     send<AskResponse>('POST', `${f(id)}/ask`, { question, ...opts }),
-  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer. */
-  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void) => {
+  /** Like `ask`, but calls `onEvent` as the answer is written. Resolves with the final answer; `signal` stops it. */
+  askStream: async (id: string, question: string, opts: Omit<AskRequest, 'question'>, onEvent: (e: AskEvent) => void, signal?: AbortSignal) => {
     const r = await req(`${f(id)}/ask/stream`, {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, ...opts }),
     })
@@ -117,10 +118,20 @@ export const api = {
   audit: (id: string) => json<AuditEvent[]>(`${f(id)}/audit`),
   auditExportUrl: (id: string, format: 'json' | 'csv') => `/api${f(id)}/audit/export?format=${format}`,
 
-  transcribe: (id: string, audio: Blob, filename = 'recording.webm') => {
+  /** `dir`: the subfolder the draft is proposed in ("" = the Space's top level). */
+  transcribe: (id: string, audio: Blob, filename = 'recording.webm', dir = '') => {
     const form = new FormData()
     form.append('audio', audio, filename)
+    form.append('dir', dir)
     return json<Outcome>(`${f(id)}/transcribe`, { method: 'POST', body: form })
+  },
+  /** Hold-to-talk: speech -> text for the chat box. Nothing is saved. */
+  dictate: (audio: Blob, filename: string, folderId?: string, wake = false) => {
+    const form = new FormData()
+    form.append('audio', audio, filename)
+    if (folderId) form.append('folder_id', folderId)
+    if (wake) form.append('wake', 'true') // spell "Tala" right
+    return json<{ text: string }>('/voice/dictate', { method: 'POST', body: form })
   },
 
   voiceStatus: () => json<VoiceStatus>('/system/voice'),
